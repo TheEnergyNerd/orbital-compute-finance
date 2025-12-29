@@ -207,7 +207,7 @@
       <div class="comparison-col orbital">
         <h4>Orbital Inputs</h4>
         <ul>
-          <li><strong>Launch:</strong> If you're vertically integrated, you have complete control over launch. You don't outsource the risk to anybody else, and you're tied to an enviable cost curve (\$60,000/kg with space shuttle in the past, to \$1,500/kg with Falcon currently, to \$10-20/kg with Starship in the future).</li>
+          <li><strong>Launch:</strong> If you're vertically integrated, you have complete control over launch. You don't outsource the risk to anybody else, and you're tied to an enviable cost curve ($60,000/kg with space shuttle in the past, to $1,500/kg with Falcon currently, to $10-20/kg with Starship in the future).</li>
           <li><strong>Manufacturing:</strong> You set up production lines and factories. You work with learning curves where volume drives the cost down. You build where logistics and labor already work best.</li>
           <li><strong>Power:</strong> You have access to nearly 24/7 power in Dawn-Dusk Sun Synchronous Orbit. The permissions problem is almost entirely gone, you don't have to interconnect with the grid, and you don't have to rely on fuel.</li>
           <li><strong>Cooling:</strong> You do radiative cooling into space. You don't have to waste so much energy on it and deal with water rights. The engineering is challenging, but solvable.</li>
@@ -219,7 +219,7 @@
 
     <p>To deal with this massive rift in constraints and situations, we need to create a new standard to measure setting up data centers against. The Levelized Cost of Compute (LCOC). This is inspired by a metric used in the energy industry, the Levelized Cost of Energy. It's a standard metric that compares generation/storage assets in power that have different cost structures. It helps you measure a natural gas plant (lower capex, volatile fuel) versus a solar + battery farm (higher upfront investment, lower marginal cost) versus a nuclear plant (huge capex but a potential much larger operating life). LCOE accounts for construction, financing, fuel, O&M, capacity factor, and the rate of return.</p>
 
-    <p>With the LCOC we take it a step further, factoring in the time value of money. The current metrics — \$/GPU-hour, \$/rack/month, \$/W capture cost at a certain moment for a certain project structure. The LCOC is a measure of \$/delivered GPU-hour with a standard SLA (service level agreement) with 99.9% uptime. This means we factor the capital expenditure (servers, power systems, cooling infrastructure, land/launch costs), operating expenses (power, maintenance, staffing, replacement cycles), financing costs (cost of capital, debt service), and depreciation schedules. Time is money and LCOC factors that in. The denominator is actual useful output after accounting for utilization rates, cooling overhead, and downtime. LCOC is workload agnostic, just like LCOE. You can use it on inference or training, the same way you can use energy for lights or heat pump. With LCOC, we can compare apples to apples in radically different architectures.</p>
+    <p>With the LCOC we take it a step further, factoring in the time value of money. The current metrics — $/GPU-hour, $/rack/month, $/W capture cost at a certain moment for a certain project structure. The LCOC is a measure of $/delivered GPU-hour with a standard SLA (service level agreement) with 99.9% uptime. This means we factor the capital expenditure (servers, power systems, cooling infrastructure, land/launch costs), operating expenses (power, maintenance, staffing, replacement cycles), financing costs (cost of capital, debt service), and depreciation schedules. Time is money and LCOC factors that in. The denominator is actual useful output after accounting for utilization rates, cooling overhead, and downtime. LCOC is workload agnostic, just like LCOE. You can use it on inference or training, the same way you can use energy for lights or heat pump. With LCOC, we can compare apples to apples in radically different architectures.</p>
 
     <div class="highlight">
       Naive metrics favor ground infrastructure. Terrestrial data centers look cheap if you ignore the interconnection queue & permitting that delays revenue, PUE overhead that eats your power budget, and the fact that land and power costs escalate while your hardware depreciates. On the other hand, orbital looks expensive when you ignore the collapsing launch costs, the fact that you have free power after deployment, and that you have basically 0 permitting or interconnection delays. <strong>LCOC forces you to account for cost trajectories, time value of money, and the full lifecycle of the asset.</strong>
@@ -296,11 +296,14 @@
   
   <script>
     document.addEventListener("DOMContentLoaded", function() {
-      renderMathInElement(document.body, {
-        delimiters: [
-          {left: '$$', right: '$$', display: true},
-          {left: '$', right: '$', display: false}
-        ]
+      // Only render math inside formula blocks, not the entire page
+      document.querySelectorAll('.formula-block').forEach(function(el) {
+        renderMathInElement(el, {
+          delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false}
+          ]
+        });
       });
       
       const ctx = document.getElementById('lcoc-chart').getContext('2d');
