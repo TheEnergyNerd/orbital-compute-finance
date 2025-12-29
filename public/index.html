@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <title>Orbital Compute Simulator</title>
+  <script type="module" src="/src/main.ts"></script>
+</head>
+<body>
+<div class="app">
+  
+  <div class="main">
+    <div class="main-header">
+      <div class="tabs">
+        <button class="tab active" data-tab="world">World</button>
+        <button class="tab" data-tab="core">Core</button>
+        <button class="tab" data-tab="market">Market</button>
+        <button class="tab" data-tab="constraints">Constraints</button>
+        <button class="tab" data-tab="physics">Physics</button>
+        <button class="tab" data-tab="futures">Futures</button>
+        <button class="tab" data-tab="sandbox">Sandbox</button>
+        <a href="/finance/" class="tab finance-link">Finance</a>
+      </div>
+      <div class="header-badges">
+        <div class="badge-item">
+          <span class="badge-label">Crossover</span>
+          <span class="badge-value orbital" id="badge-crossover">--</span>
+        </div>
+        <div class="badge-item">
+          <span class="badge-label">Fleet 2050</span>
+          <span class="badge-value warning" id="badge-fleet50">--</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="main-content">
+      <!-- WORLD TAB -->
+      <div class="tab-panel active" data-tab="world">
+        <div class="world-container">
+          <iframe id="world-iframe" src="/orbital-visualization-example.html" style="width: 100%; height: calc(100vh - 120px); border: none; border-radius: 6px;"></iframe>
+        </div>
+
+        <!-- Core Charts for World Tab -->
+        <div class="world-summary" style="padding: 16px;">
+          <div class="charts">
+            <div class="chart-card wide tall">
+              <div class="chart-header">
+                <div class="chart-title">LCOC with Uncertainty ($/GPU-hr)</div>
+                <div class="chart-desc">Orbital vs Ground market price. Bands = scenario range.</div>
+                <div class="sla-note">SLA: 99.9% uptime (8.76 hrs/yr downtime)</div>
+              </div>
+              <div class="chart-box"><canvas id="c-lcoc-world"></canvas></div>
+              <div class="legend">
+                <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+                <div class="legend-item"><div class="legend-dot" style="background:rgba(26,138,106,0.3)"></div>Orbital range</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (market)</div>
+              </div>
+            </div>
+            <div class="chart-card wide tall">
+              <div class="chart-header">
+                <div class="chart-title">Inference Cost ($/M tokens, Llama 70B eq.)</div>
+                <div class="chart-desc">Orbital vs Ground inference pricing. Same model as LCOC.</div>
+              </div>
+              <div class="chart-box"><canvas id="c-inference-world"></canvas></div>
+              <div class="legend">
+                <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+                <div class="legend-item"><div class="legend-dot" style="background:rgba(26,138,106,0.3)"></div>Orbital range</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (market)</div>
+              </div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-header">
+                <div class="chart-title">Orbital Fleet (TW)</div>
+                <div class="chart-desc">All shells: LEO, MEO, GEO, Cislunar</div>
+              </div>
+              <div class="chart-box"><canvas id="c-fleet-world"></canvas></div>
+              <div class="legend">
+                <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>LEO</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>MEO</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>GEO</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cislunar</div>
+              </div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-header">
+                <div class="chart-title">Carbon (gCO₂/TFLOP-hr)</div>
+                <div class="chart-desc">Orbital = embodied; Ground = grid + embodied</div>
+              </div>
+              <div class="chart-box"><canvas id="c-carbon-world"></canvas></div>
+              <div class="legend">
+                <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- CORE TAB -->
+      <div class="tab-panel" data-tab="core">
+        <div class="kpis">
+          <div class="kpi orbital"><div class="kpi-label">Orb 2026</div><div class="kpi-value" id="kpi-orb25">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Gnd 2026</div><div class="kpi-value" id="kpi-gnd25">--</div></div>
+          <div class="kpi orbital"><div class="kpi-label">Orb 2030</div><div class="kpi-value" id="kpi-orb30">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Gnd 2030</div><div class="kpi-value" id="kpi-gnd30">--</div></div>
+          <div class="kpi orbital"><div class="kpi-label">Orb 2040</div><div class="kpi-value" id="kpi-orb40">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Gnd 2040</div><div class="kpi-value" id="kpi-gnd40">--</div></div>
+          <div class="kpi orbital"><div class="kpi-label">Orb 2050</div><div class="kpi-value" id="kpi-orb50">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Gnd 2050</div><div class="kpi-value" id="kpi-gnd50">--</div></div>
+        </div>
+        <div class="charts">
+          <div class="chart-card wide tall">
+            <div class="chart-header">
+              <div class="chart-title">LCOC with Uncertainty ($/GPU-hr)</div>
+              <div class="chart-desc">Orbital vs Ground market price. Bands = scenario range.</div>
+              <div class="sla-note">SLA: 99.9% uptime (8.76 hrs/yr downtime)</div>
+            </div>
+            <div class="chart-box"><canvas id="c-lcoc"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:rgba(26,138,106,0.3)"></div>Orbital range</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (market)</div>
+            </div>
+          </div>
+          <div class="chart-card wide tall">
+            <div class="chart-header">
+              <div class="chart-title">Inference Cost ($/M tokens, Llama 70B eq.)</div>
+              <div class="chart-desc">Orbital vs Ground inference pricing. Same model as LCOC.</div>
+            </div>
+            <div class="chart-box"><canvas id="c-inference"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:rgba(26,138,106,0.3)"></div>Orbital range</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (market)</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Orbital Fleet (TW)</div>
+              <div class="chart-desc">All shells: LEO, MEO, GEO, Cislunar</div>
+            </div>
+            <div class="chart-box"><canvas id="c-fleet"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>LEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>MEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>GEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cislunar</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Carbon (gCO₂/TFLOP-hr)</div>
+              <div class="chart-desc">Orbital = embodied; Ground = grid + embodied</div>
+            </div>
+            <div class="chart-box"><canvas id="c-carbon"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- MARKET TAB -->
+      <div class="tab-panel" data-tab="market">
+        <div class="kpis">
+          <div class="kpi warning"><div class="kpi-label">Peak Premium</div><div class="kpi-value" id="kpi-peakPrem">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Premium 2035</div><div class="kpi-value" id="kpi-prem35">--</div></div>
+          <div class="kpi accent"><div class="kpi-label">Unmet 2035</div><div class="kpi-value" id="kpi-unmet35">--</div></div>
+        </div>
+        <div class="charts">
+          <div class="chart-card wide tall">
+            <div class="chart-header">
+              <div class="chart-title">Supply vs Demand (GW)</div>
+              <div class="chart-desc">Gap drives scarcity premium. Orbital-eligible demand = total × eligible share.</div>
+            </div>
+            <div class="chart-box"><canvas id="c-supplyDemand"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Total Demand</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>Ground Supply</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Total Supply</div>
+            </div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <div class="chart-title">Scarcity Premium (×)</div>
+              <div class="chart-desc">Price multiplier from unmet demand</div>
+            </div>
+            <div class="chart-box"><canvas id="c-scarcity"></canvas></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- CONSTRAINTS TAB -->
+      <div class="tab-panel" data-tab="constraints">
+        <div class="kpis">
+          <div class="kpi accent"><div class="kpi-label">BW Util 2035</div><div class="kpi-value" id="kpi-bwUtil">--</div></div>
+          <div class="kpi orbital"><div class="kpi-label">Platforms 2035</div><div class="kpi-value" id="kpi-plat35">--</div></div>
+          <div class="kpi purple"><div class="kpi-label">Platforms 2050</div><div class="kpi-value" id="kpi-plat50">--</div></div>
+        </div>
+        <div class="charts">
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <div class="chart-title">Shell Utilization (%)</div>
+              <div class="chart-desc">LEO: 300k, MEO: 50k, GEO: 1.8k, Cislunar: 700k capacity</div>
+            </div>
+            <div class="chart-box"><canvas id="c-shellUtil"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>LEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>MEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>GEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cislunar</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Bandwidth Utilization (%)</div>
+              <div class="chart-desc">Available / needed. Low = stranded capacity.</div>
+            </div>
+            <div class="chart-box"><canvas id="c-bwUtil"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Bandwidth Capacity (Tbps)</div>
+              <div class="chart-desc">Ground segment optical links</div>
+            </div>
+            <div class="chart-box"><canvas id="c-bandwidth"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Stranded Capex Penalty (×)</div>
+              <div class="chart-desc">LCOC multiplier from underutilization</div>
+            </div>
+            <div class="chart-box"><canvas id="c-stranded"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Radiator Mass (kg/kW)</div>
+              <div class="chart-desc">Droplet: 50× lighter thermal system</div>
+            </div>
+            <div class="chart-box"><canvas id="c-thermal"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Bottleneck Analysis</div>
+              <div class="chart-desc">Dominant constraint each period</div>
+            </div>
+            <div class="chart-box"><canvas id="c-bottleneck"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>Thermal</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>Power</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Bandwidth</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Orbital Slots</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Demand</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- PHYSICS TAB -->
+      <div class="tab-panel" data-tab="physics">
+        <div class="kpis">
+          <div class="kpi orbital"><div class="kpi-label">LEO Power</div><div class="kpi-value" id="kpi-leo">--</div></div>
+          <div class="kpi purple"><div class="kpi-label">Cislunar</div><div class="kpi-value" id="kpi-cis">--</div></div>
+          <div class="kpi accent"><div class="kpi-label">Mass 2035</div><div class="kpi-value" id="kpi-mass">--</div></div>
+        </div>
+        <div class="charts">
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Mass Breakdown (kg)</div>
+              <div class="chart-desc">Droplet radiators 50× lighter</div>
+            </div>
+            <div class="chart-box"><canvas id="c-mass"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>Solar/Reactor</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Battery</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Compute</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Radiator</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>Structure</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Launch Cost ($/kg)</div>
+              <div class="chart-desc">Learning curve to $15/kg floor</div>
+            </div>
+            <div class="chart-box"><canvas id="c-launch"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Compute Efficiency (GFLOPS/W)</div>
+              <div class="chart-desc">AI learning rate drives improvement</div>
+            </div>
+            <div class="chart-box"><canvas id="c-efficiency"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground</div>
+            </div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <div class="chart-title">Platform Power by Shell (MW)</div>
+              <div class="chart-desc">Fission/fusion enable 10-1000× power jump</div>
+            </div>
+            <div class="chart-box"><canvas id="c-power"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>LEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>MEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>GEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cislunar</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Specific Power (W/kg)</div>
+              <div class="chart-desc">Key figure of merit for orbital</div>
+            </div>
+            <div class="chart-box"><canvas id="c-specPower"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Power Budget (%)</div>
+              <div class="chart-desc">Compute vs thermal vs housekeeping</div>
+            </div>
+            <div class="chart-box"><canvas id="c-powerBudget"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Compute</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>Thermal</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>Housekeeping</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Data Rate per Platform (Gbps)</div>
+              <div class="chart-desc">Link budget based on compute output</div>
+            </div>
+            <div class="chart-box"><canvas id="c-dataRate"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Radiation: Reliability Overhead (%)</div>
+              <div class="chart-desc">SEU-driven redundancy by shell (improves with rad-hard tech)</div>
+            </div>
+            <div class="chart-box"><canvas id="c-reliability"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>LEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>MEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>GEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cislunar</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">EROL (Energy Return on Launch)</div>
+              <div class="chart-desc">Lifetime energy output vs launch energy</div>
+            </div>
+            <div class="chart-box"><canvas id="c-erol"></canvas></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- FUTURES TAB -->
+      <div class="tab-panel" data-tab="futures">
+        <div class="kpis">
+          <div class="kpi orbital"><div class="kpi-label">Aggressive</div><div class="kpi-value" id="kpi-crossAgg">--</div></div>
+          <div class="kpi accent"><div class="kpi-label">Baseline</div><div class="kpi-value" id="kpi-crossBase">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Conservative</div><div class="kpi-value" id="kpi-crossCons">--</div></div>
+        </div>
+        <div class="charts">
+          <div class="chart-card wide tall">
+            <div class="chart-header">
+              <div class="chart-title">LCOC Scenarios ($/GPU-hr)</div>
+              <div class="chart-desc">Deployment ramp timing under different assumptions</div>
+            </div>
+            <div class="chart-box"><canvas id="c-lcocScenarios"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:rgba(26,138,106,0.3)"></div>Orbital range</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>Ground (market)</div>
+            </div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <div class="chart-title">Carbon Scenarios (gCO₂/TFLOP-hr)</div>
+              <div class="chart-desc">Emissions trajectory under each scenario</div>
+            </div>
+            <div class="chart-box"><canvas id="c-carbonScenarios"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:rgba(26,138,106,0.3)"></div>Orbital range</div>
+            </div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <div class="chart-title">Efficiency Scenarios (GFLOPS/W)</div>
+              <div class="chart-desc">Compute efficiency improvement</div>
+            </div>
+            <div class="chart-box"><canvas id="c-effScenarios"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:rgba(26,138,106,0.3)"></div>Orbital range</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- SANDBOX TAB -->
+      <div class="tab-panel" data-tab="sandbox">
+        <div class="sandbox-grid">
+          <div class="sandbox-section">
+            <div class="section-title">Breakthroughs</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Droplet Radiators</span><span class="slider-val"><span id="v-dropletYear">2030</span></span></div>
+              <input type="range" id="dropletYear" min="2026" max="2040" value="2030">
+              <div class="toggle-effect" id="eff-droplet">50× lighter thermal, MW-class platforms</div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-lbl">Space Fission</div>
+                <div class="toggle-effect" id="eff-fission">10-100× orbital power only</div>
+              </div>
+              <div class="toggle-group">
+                <input type="number" class="year-input" id="year-fission" value="2035" min="2028" max="2050">
+                <label class="toggle"><input type="checkbox" id="tog-fission" checked><span class="toggle-track"></span></label>
+              </div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-lbl">Ground SMR Buildout</div>
+                <div class="toggle-effect" id="eff-smr">Ground supply +10-25 GW/yr</div>
+              </div>
+              <div class="toggle-group">
+                <input type="number" class="year-input" id="year-smr" value="2032" min="2028" max="2050">
+                <label class="toggle"><input type="checkbox" id="tog-smr" checked><span class="toggle-track"></span></label>
+              </div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-lbl">Fusion Power</div>
+                <div class="toggle-effect" id="eff-fusion">GW stations, 100× ground</div>
+              </div>
+              <div class="toggle-group">
+                <input type="number" class="year-input" id="year-fusion" value="2045" min="2035" max="2050">
+                <label class="toggle"><input type="checkbox" id="tog-fusion"><span class="toggle-track"></span></label>
+              </div>
+            </div>
+          </div>
+          
+          <div class="sandbox-section">
+            <div class="section-title">Thermal</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Emissivity</span><span class="slider-val"><span id="v-emissivity">0.85</span></span></div>
+              <input type="range" id="emissivity" min="70" max="95" value="85">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Op Temp</span><span class="slider-val"><span id="v-opTemp">350</span><span class="unit">K</span></span></div>
+              <input type="range" id="opTemp" min="300" max="400" value="350">
+            </div>
+          </div>
+          
+          <div class="sandbox-section">
+            <div class="section-title">Power</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Solar Eff</span><span class="slider-val"><span id="v-solarEff">32</span><span class="unit">%</span></span></div>
+              <input type="range" id="solarEff" min="20" max="50" value="32">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Base Power</span><span class="slider-val"><span id="v-basePower">300</span><span class="unit">kW</span></span></div>
+              <input type="range" id="basePower" min="100" max="800" value="300">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Compute %</span><span class="slider-val"><span id="v-computeFrac">68</span><span class="unit">%</span></span></div>
+              <input type="range" id="computeFrac" min="50" max="80" value="68">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Battery Dens</span><span class="slider-val"><span id="v-battDens">280</span><span class="unit">Wh/kg</span></span></div>
+              <input type="range" id="battDens" min="200" max="500" value="280">
+            </div>
+          </div>
+          
+          <div class="sandbox-section">
+            <div class="section-title">Compute</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Rad Penalty</span><span class="slider-val"><span id="v-radPen">35</span><span class="unit">%</span></span></div>
+              <input type="range" id="radPen" min="10" max="60" value="35">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">AI Learn Rate</span><span class="slider-val"><span id="v-aiLearn">20</span><span class="unit">%/yr</span></span></div>
+              <input type="range" id="aiLearn" min="5" max="35" value="20">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Sat Lifetime</span><span class="slider-val"><span id="v-satLife">8</span><span class="unit">yrs</span></span></div>
+              <input type="range" id="satLife" min="3" max="15" value="8">
+            </div>
+          </div>
+          
+          <div class="sandbox-section">
+            <div class="section-title">Economics</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Launch $/kg</span><span class="slider-val">$<span id="v-launchCost">1500</span></span></div>
+              <input type="range" id="launchCost" min="200" max="2500" value="1500">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Launch Learn</span><span class="slider-val"><span id="v-launchLearn">30</span><span class="unit">%</span></span></div>
+              <input type="range" id="launchLearn" min="10" max="50" value="30">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Launch Floor</span><span class="slider-val">$<span id="v-launchFloor">15</span><span class="unit">/kg</span></span></div>
+              <input type="range" id="launchFloor" min="5" max="50" value="15">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Mfg Mult</span><span class="slider-val"><span id="v-prodMult">2.5</span><span class="unit">×</span></span></div>
+              <input type="range" id="prodMult" min="10" max="50" value="25">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Maint Cost</span><span class="slider-val"><span id="v-maintCost">15</span><span class="unit">%/yr</span></span></div>
+              <input type="range" id="maintCost" min="5" max="30" value="15">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">WACC Orbital</span><span class="slider-val"><span id="v-waccOrbital">12</span><span class="unit">%</span></span></div>
+              <input type="range" id="waccOrbital" min="6" max="20" value="12">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">WACC Ground</span><span class="slider-val"><span id="v-waccGround">8</span><span class="unit">%</span></span></div>
+              <input type="range" id="waccGround" min="4" max="15" value="8">
+            </div>
+          </div>
+          
+          <div class="sandbox-section">
+            <div class="section-title ground">Ground</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">PUE</span><span class="slider-val ground"><span id="v-groundPue">1.30</span></span></div>
+              <input type="range" class="ground" id="groundPue" min="110" max="180" value="130">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Energy Cost</span><span class="slider-val ground">$<span id="v-energyCost">0.065</span><span class="unit">/kWh</span></span></div>
+              <input type="range" class="ground" id="energyCost" min="30" max="120" value="65">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Energy Escal</span><span class="slider-val ground"><span id="v-energyEscal">3</span><span class="unit">%/yr</span></span></div>
+              <input type="range" class="ground" id="energyEscal" min="0" max="8" value="3">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Queue Delay</span><span class="slider-val ground"><span id="v-interconnect">36</span><span class="unit">mo</span></span></div>
+              <input type="range" class="ground" id="interconnect" min="12" max="60" value="36">
+            </div>
+          </div>
+          
+          <div class="sandbox-section">
+            <div class="section-title">Bandwidth</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">2026 BW</span><span class="slider-val"><span id="v-bandwidth">50</span><span class="unit">Tbps</span></span></div>
+              <input type="range" id="bandwidth" min="10" max="200" value="50">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">BW Growth</span><span class="slider-val"><span id="v-bwGrowth">35</span><span class="unit">%/yr</span></span></div>
+              <input type="range" id="bwGrowth" min="10" max="60" value="35">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Batch Eligible</span><span class="slider-val"><span id="v-orbitalEligibleShare">35</span><span class="unit">%</span></span></div>
+              <input type="range" id="orbitalEligibleShare" min="10" max="80" value="35">
+            </div>
+          </div>
+          
+          <div class="sandbox-section">
+            <div class="section-title ground">Market</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">2026 Demand</span><span class="slider-val ground"><span id="v-demand2025">65</span><span class="unit">GW</span></span></div>
+              <input type="range" class="ground" id="demand2025" min="20" max="150" value="65">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Demand Growth</span><span class="slider-val ground"><span id="v-demandGrowth">45</span><span class="unit">%/yr</span></span></div>
+              <input type="range" class="ground" id="demandGrowth" min="15" max="80" value="45">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">2026 Supply</span><span class="slider-val ground"><span id="v-supply2025">480</span><span class="unit">GW</span></span></div>
+              <input type="range" class="ground" id="supply2025" min="200" max="800" value="480">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Build Rate</span><span class="slider-val ground"><span id="v-supplyGrowth">15</span><span class="unit">GW/yr</span></span></div>
+              <input type="range" class="ground" id="supplyGrowth" min="5" max="40" value="15">
+            </div>
+          </div>
+          
+          <div class="sandbox-section derived-section">
+            <div class="section-title">Derived Values</div>
+            <div class="derived-grid">
+              <div class="derived-item">
+                <span class="derived-label">Rad Power</span>
+                <span class="derived-value" id="d-radPower">--</span>
+                <span class="derived-unit">W/m²</span>
+              </div>
+              <div class="derived-item">
+                <span class="derived-label">Rad Mass</span>
+                <span class="derived-value" id="d-radMass">--</span>
+                <span class="derived-unit">kg/MW</span>
+              </div>
+              <div class="derived-item">
+                <span class="derived-label">Launch LEO</span>
+                <span class="derived-value" id="d-launchLeo">--</span>
+                <span class="derived-unit">$/kg</span>
+              </div>
+              <div class="derived-item">
+                <span class="derived-label">Launch GEO</span>
+                <span class="derived-value" id="d-launchGeo">--</span>
+                <span class="derived-unit">$/kg</span>
+              </div>
+              <div class="derived-item">
+                <span class="derived-label">Sat Power</span>
+                <span class="derived-value" id="d-satPower">--</span>
+                <span class="derived-unit">kW</span>
+              </div>
+              <div class="derived-item">
+                <span class="derived-label">Sat Mass</span>
+                <span class="derived-value" id="d-satMass">--</span>
+                <span class="derived-unit">kg</span>
+              </div>
+              <div class="derived-item">
+                <span class="derived-label">Demand '35</span>
+                <span class="derived-value" id="d-demand35">--</span>
+                <span class="derived-unit">GW</span>
+              </div>
+              <div class="derived-item">
+                <span class="derived-label">Supply '35</span>
+                <span class="derived-value" id="d-supply35">--</span>
+                <span class="derived-unit">GW</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LCOC Chart for Sandbox Tab -->
+        <div class="sandbox-summary" style="padding: 16px;">
+          <div class="charts">
+            <div class="chart-card wide tall">
+              <div class="chart-header">
+                <div class="chart-title">LCOC with Uncertainty ($/GPU-hr)</div>
+                <div class="chart-desc">Orbital vs Ground market price. Bands = scenario range.</div>
+                <div class="sla-note">SLA: 99.9% uptime (8.76 hrs/yr downtime)</div>
+              </div>
+              <div class="chart-box"><canvas id="c-lcoc-sandbox"></canvas></div>
+              <div class="legend">
+                <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+                <div class="legend-item"><div class="legend-dot" style="background:rgba(26,138,106,0.3)"></div>Orbital range</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (market)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</html>

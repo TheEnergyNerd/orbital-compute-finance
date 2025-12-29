@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orbital Compute Economics</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    :root {
+      --bg: #f7f7f7; --surface: #ffffff; --surface2: #f0f0f0; --surface3: #e5e5e5;
+      --border: #d0d0d0; --text: #1a1a1a; --muted: #666666;
+      --orbital: #0066cc; --ground: #cc3333; --accent: #0066cc; --warning: #cc8800;
+      --purple: #6633cc; --orange: #cc6600; --pink: #cc3366;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; -webkit-font-smoothing: antialiased; }
+    .app { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+    .main { display: flex; flex-direction: column; min-width: 0; }
+    .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 10; border-left: 3px solid var(--orbital); }
+    .sidebar-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; letter-spacing: -0.01em; }
+    .sidebar-title .badge { font-size: 9px; background: var(--orbital); color: white; padding: 2px 6px; border-radius: 3px; font-weight: 600; letter-spacing: 0.02em; }
+    .sidebar-subtitle { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .sidebar-content { padding: 12px; }
+    .section { background: var(--surface2); border-radius: 4px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border); }
+    .derived-section { background: var(--surface2); border-radius: 4px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border); }
+    .derived-section summary { cursor: pointer; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    .derived-section summary::before { content: ''; width: 2px; height: 10px; background: var(--accent); display: inline-block; margin-right: 8px; vertical-align: middle; }
+    .derived-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .derived-item { display: flex; flex-direction: column; padding: 6px; background: var(--surface); border-radius: 3px; border: 1px solid var(--border); }
+    .derived-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+    .derived-value { font-size: 14px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+    .derived-unit { font-size: 10px; color: var(--muted); }
+    .section-title { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .section-title::before { content: ''; width: 2px; height: 10px; background: var(--orbital); }
+    .section-title.ground::before { background: var(--ground); }
+    .slider-val.ground { color: var(--ground); }
+    input[type="range"].ground::-webkit-slider-thumb { background: var(--ground); }
+    .slider-row { margin-bottom: 10px; }
+    .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .slider-lbl { font-size: 11px; }
+    .slider-val { font-size: 12px; font-weight: 600; color: var(--orbital); font-variant-numeric: tabular-nums; }
+    .slider-val .unit { color: var(--muted); font-size: 10px; margin-left: 2px; font-weight: 400; }
+    input[type="range"] { width: 100%; height: 4px; background: var(--border); border-radius: 2px; appearance: none; cursor: pointer; }
+    input[type="range"]::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--orbital); border: 2px solid var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+    .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-lbl { font-size: 11px; }
+    .toggle-group { display: flex; align-items: center; gap: 8px; }
+    .toggle { position: relative; width: 34px; height: 18px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-track { position: absolute; cursor: pointer; inset: 0; background: var(--border); border-radius: 9px; transition: 0.2s; }
+    .toggle-track::before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background: var(--surface); border-radius: 50%; transition: 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .toggle input:checked + .toggle-track { background: var(--orbital); }
+    .toggle input:checked + .toggle-track::before { transform: translateX(16px); background: white; }
+    .year-input { width: 58px; background: var(--surface); border: 1px solid var(--border); border-radius: 3px; color: var(--orbital); font-family: inherit; font-size: 11px; font-weight: 600; padding: 3px 6px; text-align: center; font-variant-numeric: tabular-nums; }
+    .year-input:disabled { opacity: 0.4; }
+    .toggle-effect { font-size: 9px; color: var(--muted); margin-top: 2px; }
+    .toggle-effect.active { color: var(--orbital); }
+    .main { display: flex; flex-direction: column; overflow: hidden; }
+    .main-header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+    .tab { padding: 8px 14px; background: transparent; border: 1px solid transparent; border-radius: 4px; color: var(--muted); font-size: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.05em; }
+    .tab:hover { background: var(--surface2); color: var(--text); }
+    .tab.active { background: var(--orbital); color: white; }
+    .header-badges { display: flex; gap: 12px; flex-wrap: wrap; }
+    .badge-item { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--surface2); border-radius: 4px; border: 1px solid var(--border); }
+    .badge-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+    .badge-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .badge-value.orbital { color: var(--orbital); }
+    .badge-value.warning { color: var(--warning); }
+    .main-content { flex: 1; overflow-y: auto; padding: 16px; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .kpi { 
+      background: linear-gradient(180deg, var(--surface) 0%, var(--surface2) 100%);
+      border: 1px solid var(--border); 
+      border-radius: 4px; 
+      padding: 12px;
+      border-top: 2px solid var(--orbital);
+    }
+    .kpi-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+    .kpi-value { font-size: 20px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .kpi.orbital .kpi-value { color: var(--orbital); }
+    .kpi.ground .kpi-value { color: var(--ground); }
+    .kpi.accent .kpi-value { color: var(--accent); }
+    .kpi.warning .kpi-value { color: var(--warning); }
+    .kpi.purple .kpi-value { color: var(--purple); }
+    .kpi.orbital { border-top-color: var(--orbital); }
+    .kpi.ground { border-top-color: var(--ground); }
+    .kpi.accent { border-top-color: var(--accent); }
+    .kpi.warning { border-top-color: var(--warning); }
+    .kpi.purple { border-top-color: var(--purple); }
+    .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+    .chart-card { 
+      background: var(--surface); 
+      border: 1px solid var(--border); 
+      border-radius: 4px; 
+      padding: 14px; 
+      min-width: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .chart-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .chart-card.wide { grid-column: span 2; }
+    .chart-header { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    .chart-title { font-size: 11px; font-weight: 600; }
+    .chart-desc { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .chart-box { height: 200px; min-width: 0; }
+    .chart-card.tall .chart-box { height: 280px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+    .sla-note { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    
+    /* Responsive layouts */
+    @media (max-width: 1200px) { 
+      .charts { grid-template-columns: 1fr; } 
+      .chart-card.wide { grid-column: span 1; } 
+    }
+    @media (max-width: 1000px) {
+      .app { grid-template-columns: 220px 1fr; }
+      .sidebar-content { padding: 8px; }
+      .section { padding: 10px; }
+    }
+    @media (max-width: 800px) { 
+      .app { grid-template-columns: 1fr; } 
+      .sidebar { 
+        position: relative; 
+        height: auto; 
+        max-height: 40vh;
+        overflow-y: auto;
+        border-right: none; 
+        border-bottom: 1px solid var(--border); 
+      }
+      .main { min-width: 0; overflow-x: hidden; }
+      .main-content { padding: 10px; overflow-x: auto; }
+      .kpis { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .tabs { flex-wrap: wrap; gap: 2px; }
+      .tab { padding: 6px 10px; font-size: 10px; }
+      .header-badges { display: none; }
+      .charts { grid-template-columns: 1fr; gap: 10px; }
+      .chart-card { padding: 10px; }
+      .chart-box { height: 180px; }
+    }
+    @media (max-width: 600px) {
+      body { font-size: 12px; }
+      .sidebar-content { padding: 8px; }
+      .section { padding: 10px; margin-bottom: 8px; }
+      .slider-row { margin-bottom: 8px; }
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+      .kpi { padding: 8px; }
+      .kpi-value { font-size: 14px; }
+      .chart-card { padding: 10px; }
+      .chart-box { height: 180px; }
+      .chart-card.tall .chart-box { height: 220px; }
+      .legend { gap: 8px; }
+      .legend-item { font-size: 9px; }
+      .tab { padding: 6px 10px; font-size: 10px; }
+      .main-header { padding: 8px 12px; }
+    }
+    
+    /* LCOC Hero Header */
+    .lcoc-hero {
+      background: linear-gradient(135deg, var(--orbital) 0%, #004d99 100%);
+      color: white;
+      padding: 16px 24px;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .lcoc-hero-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .lcoc-main { }
+    .lcoc-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
+    .lcoc-value { font-size: 42px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+    .lcoc-stats { display: flex; gap: 24px; }
+    .lcoc-stat { display: flex; flex-direction: column; padding: 8px 16px; background: rgba(255,255,255,0.1); border-radius: 6px; }
+    .lcoc-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.8; }
+    .lcoc-stat-value { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .lcoc-advantage { color: #7dffb3; }
+    .lcoc-whitepaper-link { 
+      font-size: 12px; 
+      font-weight: 500; 
+      color: white; 
+      text-decoration: none; 
+      padding: 10px 18px; 
+      background: rgba(255,255,255,0.15); 
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .lcoc-whitepaper-link:hover { background: rgba(255,255,255,0.25); }
+    @media (max-width: 800px) {
+      .lcoc-hero { padding: 12px 16px; }
+      .lcoc-value { font-size: 32px; }
+      .lcoc-stats { gap: 12px; }
+      .lcoc-stat { padding: 6px 12px; }
+      .lcoc-whitepaper-link { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="lcoc-hero">
+  <div class="lcoc-hero-inner">
+    <div class="lcoc-main">
+      <div class="lcoc-label">Baseline LCOC Crossover</div>
+      <div class="lcoc-value" id="hero-crossover">2031</div>
+    </div>
+    <div class="lcoc-stats">
+      <div class="lcoc-stat">
+        <span class="lcoc-stat-label">Orbital 2035</span>
+        <span class="lcoc-stat-value" id="hero-orb35">$0.42</span>
+      </div>
+      <div class="lcoc-stat">
+        <span class="lcoc-stat-label">Ground 2035</span>
+        <span class="lcoc-stat-value" id="hero-gnd35">$0.58</span>
+      </div>
+      <div class="lcoc-stat">
+        <span class="lcoc-stat-label">Advantage</span>
+        <span class="lcoc-stat-value lcoc-advantage" id="hero-adv">28%</span>
+      </div>
+    </div>
+    <a href="/finance/whitepaper.html" class="lcoc-whitepaper-link">Read Whitepaper →</a>
+  </div>
+</div>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">Orbital Compute </div>
+      <div class="sidebar-subtitle">Physics-Based Analysis</div>
+    </div>
+    <div class="sidebar-content">
+      
+      <div class="section">
+        <div class="section-title">Breakthroughs</div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Droplet Radiators</span><span class="slider-val"><span id="v-dropletYear">2030</span></span></div>
+          <input type="range" id="dropletYear" min="2026" max="2040" value="2030">
+          <div class="toggle-effect" id="eff-droplet">50× lighter thermal, MW-class platforms</div>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-lbl">Space Fission</div>
+            <div class="toggle-effect" id="eff-fission">10-100× orbital power only</div>
+          </div>
+          <div class="toggle-group">
+            <input type="number" class="year-input" id="year-fission" value="2035" min="2028" max="2050">
+            <label class="toggle"><input type="checkbox" id="tog-fission" checked><span class="toggle-track"></span></label>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-lbl">Ground SMR Buildout</div>
+            <div class="toggle-effect" id="eff-smr">Ground supply +10-25 GW/yr</div>
+          </div>
+          <div class="toggle-group">
+            <input type="number" class="year-input" id="year-smr" value="2032" min="2028" max="2050">
+            <label class="toggle"><input type="checkbox" id="tog-smr" checked><span class="toggle-track"></span></label>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-lbl">Fusion Power</div>
+            <div class="toggle-effect" id="eff-fusion">GW stations, 100× ground</div>
+          </div>
+          <div class="toggle-group">
+            <input type="number" class="year-input" id="year-fusion" value="2045" min="2035" max="2050">
+            <label class="toggle"><input type="checkbox" id="tog-fusion"><span class="toggle-track"></span></label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Thermal</div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Emissivity</span><span class="slider-val"><span id="v-emissivity">0.85</span></span></div>
+          <input type="range" id="emissivity" min="70" max="95" value="85">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Op Temp</span><span class="slider-val"><span id="v-opTemp">350</span><span class="unit">K</span></span></div>
+          <input type="range" id="opTemp" min="300" max="400" value="350">
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Power</div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Solar Eff</span><span class="slider-val"><span id="v-solarEff">32</span><span class="unit">%</span></span></div>
+          <input type="range" id="solarEff" min="20" max="50" value="32">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Base Power</span><span class="slider-val"><span id="v-basePower">300</span><span class="unit">kW</span></span></div>
+          <input type="range" id="basePower" min="100" max="800" value="300">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Compute %</span><span class="slider-val"><span id="v-computeFrac">68</span><span class="unit">%</span></span></div>
+          <input type="range" id="computeFrac" min="50" max="80" value="68">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Battery Dens</span><span class="slider-val"><span id="v-battDens">280</span><span class="unit">Wh/kg</span></span></div>
+          <input type="range" id="battDens" min="200" max="500" value="280">
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Compute</div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Rad Penalty</span><span class="slider-val"><span id="v-radPen">35</span><span class="unit">%</span></span></div>
+          <input type="range" id="radPen" min="10" max="60" value="35">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">AI Learn Rate</span><span class="slider-val"><span id="v-aiLearn">20</span><span class="unit">%/yr</span></span></div>
+          <input type="range" id="aiLearn" min="5" max="35" value="20">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Sat Lifetime</span><span class="slider-val"><span id="v-satLife">8</span><span class="unit">yrs</span></span></div>
+          <input type="range" id="satLife" min="3" max="15" value="8">
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Economics</div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Launch $/kg</span><span class="slider-val">$<span id="v-launchCost">1500</span></span></div>
+          <input type="range" id="launchCost" min="200" max="2500" value="1500">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Launch Learn</span><span class="slider-val"><span id="v-launchLearn">30</span><span class="unit">%</span></span></div>
+          <input type="range" id="launchLearn" min="10" max="50" value="30">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Floor $/kg</span><span class="slider-val">$<span id="v-launchFloor">15</span></span></div>
+          <input type="range" id="launchFloor" min="5" max="100" value="15">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Prod Mult</span><span class="slider-val"><span id="v-prodMult">2.5</span><span class="unit">×</span></span></div>
+          <input type="range" id="prodMult" min="10" max="50" value="25">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Maint Cost</span><span class="slider-val"><span id="v-maintCost">15</span><span class="unit">%/yr</span></span></div>
+          <input type="range" id="maintCost" min="5" max="30" value="15">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">WACC Orbital</span><span class="slider-val"><span id="v-waccOrbital">12</span><span class="unit">%</span></span></div>
+          <input type="range" id="waccOrbital" min="5" max="25" value="12">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">WACC Ground</span><span class="slider-val ground"><span id="v-waccGround">8</span><span class="unit">%</span></span></div>
+          <input type="range" class="ground" id="waccGround" min="3" max="15" value="8">
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Infrastructure</div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Base BW</span><span class="slider-val"><span id="v-bandwidth">50</span><span class="unit">Tbps</span></span></div>
+          <input type="range" id="bandwidth" min="10" max="200" value="50">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">BW Growth</span><span class="slider-val"><span id="v-bwGrowth">35</span><span class="unit">%/yr</span></span></div>
+          <input type="range" id="bwGrowth" min="15" max="50" value="35">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">BW $/Gbps</span><span class="slider-val">$<span id="v-bwCost">50</span><span class="unit">k</span></span></div>
+          <input type="range" id="bwCost" min="10" max="200" value="50">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">BW/TFLOP</span><span class="slider-val"><span id="v-gbpsPerTflop">10</span><span class="unit">Mbps</span></span></div>
+          <input type="range" id="gbpsPerTflop" min="1" max="50" value="10">
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title ground">Ground DC</div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Ground PUE</span><span class="slider-val ground"><span id="v-groundPue">1.30</span></span></div>
+          <input type="range" class="ground" id="groundPue" min="105" max="180" value="130">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Energy $/kWh</span><span class="slider-val ground">$<span id="v-energyCost">0.065</span></span></div>
+          <input type="range" class="ground" id="energyCost" min="30" max="150" value="65">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Energy Escal</span><span class="slider-val ground"><span id="v-energyEscal">3</span><span class="unit">%/yr</span></span></div>
+          <input type="range" class="ground" id="energyEscal" min="0" max="10" value="3">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Build Delay</span><span class="slider-val ground"><span id="v-interconnect">36</span><span class="unit">mo</span></span></div>
+          <input type="range" class="ground" id="interconnect" min="6" max="48" value="36">
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title ground">Market</div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">2025 Demand</span><span class="slider-val ground"><span id="v-demand2025">65</span><span class="unit">GW</span></span></div>
+          <input type="range" class="ground" id="demand2025" min="30" max="150" value="65">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Demand Growth</span><span class="slider-val ground"><span id="v-demandGrowth">45</span><span class="unit">%/yr</span></span></div>
+          <input type="range" class="ground" id="demandGrowth" min="20" max="80" value="45">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Batch Eligible</span><span class="slider-val"><span id="v-orbitalEligibleShare">35</span><span class="unit">%</span></span></div>
+          <input type="range" id="orbitalEligibleShare" min="10" max="80" value="35">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">2025 Supply</span><span class="slider-val ground"><span id="v-supply2025">480</span><span class="unit">GW</span></span></div>
+          <input type="range" class="ground" id="supply2025" min="200" max="800" value="480">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Build Rate</span><span class="slider-val ground"><span id="v-supplyGrowth">15</span><span class="unit">GW/yr</span></span></div>
+          <input type="range" class="ground" id="supplyGrowth" min="5" max="40" value="15">
+        </div>
+      </div>
+      
+      <details class="derived-section">
+        <summary class="section-title">Derived Values</summary>
+        <div class="derived-grid">
+          <div class="derived-item">
+            <span class="derived-label">Rad Power</span>
+            <span class="derived-value" id="d-radPower">--</span>
+            <span class="derived-unit">W/m²</span>
+          </div>
+          <div class="derived-item">
+            <span class="derived-label">Rad Mass</span>
+            <span class="derived-value" id="d-radMass">--</span>
+            <span class="derived-unit">kg/MW</span>
+          </div>
+          <div class="derived-item">
+            <span class="derived-label">Launch LEO</span>
+            <span class="derived-value" id="d-launchLeo">--</span>
+            <span class="derived-unit">$/kg</span>
+          </div>
+          <div class="derived-item">
+            <span class="derived-label">Launch GEO</span>
+            <span class="derived-value" id="d-launchGeo">--</span>
+            <span class="derived-unit">$/kg</span>
+          </div>
+          <div class="derived-item">
+            <span class="derived-label">Sat Power</span>
+            <span class="derived-value" id="d-satPower">--</span>
+            <span class="derived-unit">kW</span>
+          </div>
+          <div class="derived-item">
+            <span class="derived-label">Sat Mass</span>
+            <span class="derived-value" id="d-satMass">--</span>
+            <span class="derived-unit">kg</span>
+          </div>
+          <div class="derived-item">
+            <span class="derived-label">Demand '35</span>
+            <span class="derived-value" id="d-demand35">--</span>
+            <span class="derived-unit">GW</span>
+          </div>
+          <div class="derived-item">
+            <span class="derived-label">Supply '35</span>
+            <span class="derived-value" id="d-supply35">--</span>
+            <span class="derived-unit">GW</span>
+          </div>
+        </div>
+      </details>
+      
+    </div>
+  </div>
+  
+  <div class="main">
+    <div class="main-header">
+      <div class="tabs">
+        <button class="tab active" data-tab="core">Core</button>
+        <button class="tab" data-tab="market">Market</button>
+        <button class="tab" data-tab="constraints">Constraints</button>
+        <button class="tab" data-tab="physics">Physics</button>
+        <button class="tab" data-tab="futures">Futures</button>
+      </div>
+      <div class="header-badges">
+        <div class="badge-item">
+          <span class="badge-label">Crossover</span>
+          <span class="badge-value orbital" id="badge-crossover">--</span>
+        </div>
+        <div class="badge-item">
+          <span class="badge-label">Fleet 2050</span>
+          <span class="badge-value warning" id="badge-fleet50">--</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="main-content">
+      <!-- CORE TAB -->
+      <div class="tab-panel active" data-tab="core">
+        <div class="kpis">
+          <div class="kpi orbital"><div class="kpi-label">Orb 2025</div><div class="kpi-value" id="kpi-orb25">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Gnd 2025</div><div class="kpi-value" id="kpi-gnd25">--</div></div>
+          <div class="kpi orbital"><div class="kpi-label">Orb 2030</div><div class="kpi-value" id="kpi-orb30">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Gnd 2030</div><div class="kpi-value" id="kpi-gnd30">--</div></div>
+          <div class="kpi orbital"><div class="kpi-label">Orb 2040</div><div class="kpi-value" id="kpi-orb40">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Gnd 2040</div><div class="kpi-value" id="kpi-gnd40">--</div></div>
+          <div class="kpi orbital"><div class="kpi-label">Orb 2050</div><div class="kpi-value" id="kpi-orb50">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Gnd 2050</div><div class="kpi-value" id="kpi-gnd50">--</div></div>
+        </div>
+        <div class="charts">
+          <div class="chart-card wide tall">
+            <div class="chart-header">
+              <div class="chart-title">LCOC with Uncertainty ($/GPU-hr)</div>
+              <div class="chart-desc">Orbital vs Ground market price. Bands = scenario range.</div>
+              <div class="sla-note">SLA: 99.9% uptime (8.76 hrs/yr downtime)</div>
+            </div>
+            <div class="chart-box"><canvas id="c-lcoc"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:rgba(0,102,204,0.3)"></div>Orbital range</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (market)</div>
+            </div>
+          </div>
+          <div class="chart-card wide tall">
+            <div class="chart-header">
+              <div class="chart-title">Inference Cost ($/M tokens, Llama 70B eq.)</div>
+              <div class="chart-desc">Orbital vs Ground inference pricing. Same model as LCOC.</div>
+            </div>
+            <div class="chart-box"><canvas id="c-inference"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:rgba(0,102,204,0.3)"></div>Orbital range</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (market)</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Orbital Fleet (TW)</div>
+              <div class="chart-desc">All shells: LEO, MEO, GEO, Cislunar</div>
+            </div>
+            <div class="chart-box"><canvas id="c-fleet"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>LEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>MEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>GEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cislunar</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Carbon (gCO₂/TFLOP-hr)</div>
+              <div class="chart-desc">Orbital = embodied; Ground = grid + embodied</div>
+            </div>
+            <div class="chart-box"><canvas id="c-carbon"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- MARKET TAB -->
+      <div class="tab-panel" data-tab="market">
+        <div class="kpis">
+          <div class="kpi warning"><div class="kpi-label">Peak Premium</div><div class="kpi-value" id="kpi-peakPrem">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Premium 2035</div><div class="kpi-value" id="kpi-prem35">--</div></div>
+          <div class="kpi accent"><div class="kpi-label">Unmet 2035</div><div class="kpi-value" id="kpi-unmet35">--</div></div>
+        </div>
+        <div class="charts">
+          <div class="chart-card wide tall">
+            <div class="chart-header">
+              <div class="chart-title">Supply vs Demand (GW)</div>
+              <div class="chart-desc">Gap drives scarcity premium. Orbital-eligible demand = total × eligible share.</div>
+            </div>
+            <div class="chart-box"><canvas id="c-supplyDemand"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Total Demand</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>Ground Supply</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Total Supply</div>
+            </div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <div class="chart-title">Scarcity Premium (×)</div>
+              <div class="chart-desc">Price multiplier from unmet demand</div>
+            </div>
+            <div class="chart-box"><canvas id="c-scarcity"></canvas></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- CONSTRAINTS TAB -->
+      <div class="tab-panel" data-tab="constraints">
+        <div class="kpis">
+          <div class="kpi accent"><div class="kpi-label">BW Util 2035</div><div class="kpi-value" id="kpi-bwUtil">--</div></div>
+          <div class="kpi orbital"><div class="kpi-label">Platforms 2035</div><div class="kpi-value" id="kpi-plat35">--</div></div>
+          <div class="kpi purple"><div class="kpi-label">Platforms 2050</div><div class="kpi-value" id="kpi-plat50">--</div></div>
+        </div>
+        <div class="charts">
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <div class="chart-title">Shell Utilization (%)</div>
+              <div class="chart-desc">LEO: 300k, MEO: 50k, GEO: 1.8k, Cislunar: 700k capacity</div>
+            </div>
+            <div class="chart-box"><canvas id="c-shellUtil"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>LEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>MEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>GEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cislunar</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Bandwidth Utilization (%)</div>
+              <div class="chart-desc">Available / needed. Low = stranded capacity.</div>
+            </div>
+            <div class="chart-box"><canvas id="c-bwUtil"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Bandwidth Capacity (Tbps)</div>
+              <div class="chart-desc">Ground segment optical links</div>
+            </div>
+            <div class="chart-box"><canvas id="c-bandwidth"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Stranded Capex Penalty (×)</div>
+              <div class="chart-desc">LCOC multiplier from underutilization</div>
+            </div>
+            <div class="chart-box"><canvas id="c-stranded"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Radiator Mass (kg/kW)</div>
+              <div class="chart-desc">Droplet: 50× lighter thermal system</div>
+            </div>
+            <div class="chart-box"><canvas id="c-thermal"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Bottleneck Analysis</div>
+              <div class="chart-desc">Dominant constraint each period</div>
+            </div>
+            <div class="chart-box"><canvas id="c-bottleneck"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>Thermal</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>Power</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Bandwidth</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Orbital Slots</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Demand</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- PHYSICS TAB -->
+      <div class="tab-panel" data-tab="physics">
+        <div class="kpis">
+          <div class="kpi orbital"><div class="kpi-label">LEO Power</div><div class="kpi-value" id="kpi-leo">--</div></div>
+          <div class="kpi purple"><div class="kpi-label">Cislunar</div><div class="kpi-value" id="kpi-cis">--</div></div>
+          <div class="kpi accent"><div class="kpi-label">Mass 2035</div><div class="kpi-value" id="kpi-mass">--</div></div>
+        </div>
+        <div class="charts">
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Mass Breakdown (kg)</div>
+              <div class="chart-desc">Droplet radiators 50× lighter</div>
+            </div>
+            <div class="chart-box"><canvas id="c-mass"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>Solar/Reactor</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Battery</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Compute</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Radiator</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>Structure</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Launch Cost ($/kg)</div>
+              <div class="chart-desc">Learning curve to $15/kg floor</div>
+            </div>
+            <div class="chart-box"><canvas id="c-launch"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Compute Efficiency (GFLOPS/W)</div>
+              <div class="chart-desc">AI learning rate drives improvement</div>
+            </div>
+            <div class="chart-box"><canvas id="c-efficiency"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground</div>
+            </div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <div class="chart-title">Platform Power by Shell (MW)</div>
+              <div class="chart-desc">Fission/fusion enable 10-1000× power jump</div>
+            </div>
+            <div class="chart-box"><canvas id="c-power"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>LEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cislunar</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Specific Power (W/kg)</div>
+              <div class="chart-desc">Key figure of merit for orbital</div>
+            </div>
+            <div class="chart-box"><canvas id="c-specPower"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Power Budget (%)</div>
+              <div class="chart-desc">Compute vs thermal vs housekeeping</div>
+            </div>
+            <div class="chart-box"><canvas id="c-powerBudget"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Compute</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>Thermal</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>Housekeeping</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Data Rate per Platform (Gbps)</div>
+              <div class="chart-desc">Link budget based on compute output</div>
+            </div>
+            <div class="chart-box"><canvas id="c-dataRate"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Radiation: Reliability Overhead (%)</div>
+              <div class="chart-desc">SEU-driven redundancy by shell (improves with rad-hard tech)</div>
+            </div>
+            <div class="chart-box"><canvas id="c-reliability"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>LEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>MEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>GEO</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cislunar</div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">EROL (Energy Return on Launch)</div>
+              <div class="chart-desc">Lifetime energy output vs launch energy</div>
+            </div>
+            <div class="chart-box"><canvas id="c-erol"></canvas></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- FUTURES TAB -->
+      <div class="tab-panel" data-tab="futures">
+        <div class="kpis">
+          <div class="kpi orbital"><div class="kpi-label">Aggressive</div><div class="kpi-value" id="kpi-crossAgg">--</div></div>
+          <div class="kpi accent"><div class="kpi-label">Baseline</div><div class="kpi-value" id="kpi-crossBase">--</div></div>
+          <div class="kpi ground"><div class="kpi-label">Conservative</div><div class="kpi-value" id="kpi-crossCons">--</div></div>
+        </div>
+        <div class="charts">
+          <div class="chart-card wide tall">
+            <div class="chart-header">
+              <div class="chart-title">LCOC Scenarios ($/GPU-hr)</div>
+              <div class="chart-desc">Deployment ramp timing under different assumptions</div>
+            </div>
+            <div class="chart-box"><canvas id="c-lcocScenarios"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:rgba(0,102,204,0.3)"></div>Orbital range</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>Ground (market)</div>
+            </div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <div class="chart-title">Carbon Scenarios (gCO₂/TFLOP-hr)</div>
+              <div class="chart-desc">Emissions trajectory under each scenario</div>
+            </div>
+            <div class="chart-box"><canvas id="c-carbonScenarios"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:rgba(0,102,204,0.3)"></div>Orbital range</div>
+            </div>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <div class="chart-title">Efficiency Scenarios (GFLOPS/W)</div>
+              <div class="chart-desc">Compute efficiency improvement</div>
+            </div>
+            <div class="chart-box"><canvas id="c-effScenarios"></canvas></div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:rgba(0,102,204,0.3)"></div>Orbital range</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+================================================================================
+ORBITAL COMPUTE ECONOMICS SIMULATOR
+================================================================================
+
+@author  Pranav Myana
+@license MIT
+
+A physics-first model for comparing orbital vs terrestrial data center economics
+using the Levelized Cost of Compute (LCOC) framework.
+
+Key features:
+- First-principles thermal, power, and mass calculations
+- Proper capital recovery (WACC/CRF) instead of naive depreciation
+- Bandwidth and demand constraints (sellable utilization)
+- TID/SEU radiation effects by orbital shell
+- Technology breakthroughs: droplet radiators, fission, fusion
+
+The model answers: when does orbital compute become cost-competitive with ground?
+================================================================================
+*/
+
+const STEFAN_BOLTZMANN = 5.67e-8;
+const SOLAR_CONSTANT = 1361;
+const YEARS = Array.from({length: 26}, (_, i) => 2025 + i);
+const SLA = 0.999; // 99.9% uptime = 8.76 hours downtime/year
+
+// Shell definitions with separated radiation effects
+// tidMult: Total Ionizing Dose - affects lifetime/degradation (higher = worse)
+// seuMult: Single Event Upsets - affects reliability/redundancy overhead (higher = worse)
+const SHELLS = {
+  leo:      { alt: 550,    latency: 3.7,   tidMult: 1.0,  seuMult: 1.0,  capacity: 300000 },
+  meo:      { alt: 10000,  latency: 67,    tidMult: 3.0,  seuMult: 2.5,  capacity: 50000  }, // Van Allen belt - harsh
+  geo:      { alt: 35786,  latency: 120,   tidMult: 0.6,  seuMult: 0.8,  capacity: 1800   }, // Above belts
+  cislunar: { alt: 384400, latency: 1300,  tidMult: 0.4,  seuMult: 1.2,  capacity: 700000 }  // GCR exposure
+};
+
+let P = {
+  dropletOn: true, dropletYear: 2030,
+  fissionOn: true, fissionYear: 2035,
+  fusionOn: false, fusionYear: 2045,
+  // SMR: decoupled from orbital fission - independent ground policy
+  smrOn: true, smrYear: 2032, // SMR deployment independent of space fission
+  emissivity: 0.85, opTemp: 350,
+  solarEff: 0.32, basePower: 300,
+  computeFrac: 0.68, // fraction of power to compute
+  battDens: 280, // battery density Wh/kg
+  satLife: 8, // satellite lifetime years
+  radPen: 0.35, aiLearn: 0.20,
+  launchCost: 1500, launchLearn: 0.30, 
+  launchFloor: 15, // minimum $/kg
+  prodMult: 2.5,
+  maintCost: 0.15, // annual maintenance as fraction
+  bandwidth: 50, bwGrowth: 0.35,
+  bwCost: 50, // $k per Gbps annual
+  gbpsPerTflop: 0.0001, // 0.1 Mbps per TFLOP (batch inference - upload job, compute, download results)
+  orbitalEligibleShare: 0.35, // 35% of demand is batch/latency-tolerant (orbital-eligible)
+  // WACC: Cost of capital (fixes "free money" assumption)
+  waccOrbital: 0.12, // 12% for high-risk space ventures
+  waccGround: 0.08,  // 8% for established DC operators
+  // Ground params
+  groundPue: 1.30,
+  energyCost: 0.065, // $/kWh
+  energyEscal: 0.03, // %/yr
+  interconnect: 36, // months delay
+  // Market
+  demand2025: 65,
+  demandGrowth: 0.45, 
+  supply2025: 480,
+  supplyGrowth: 0.15
+};
+
+let fleetResults = [];
+
+// ============================================
+// SCENARIO MODIFIERS
+// ============================================
+
+const SCENARIOS = {
+  aggressive: { learnMult: 1.4, techYearOffset: -3, demandMult: 1.3, launchLearnMult: 1.3 },
+  baseline:   { learnMult: 1.0, techYearOffset: 0,  demandMult: 1.0, launchLearnMult: 1.0 },
+  conservative: { learnMult: 0.6, techYearOffset: 5, demandMult: 0.7, launchLearnMult: 0.7 }
+};
+
+function getScenarioParams(scenario) {
+  const s = SCENARIOS[scenario];
+  return {
+    ...P,
+    aiLearn: P.aiLearn * s.learnMult,
+    launchLearn: P.launchLearn * s.launchLearnMult,
+    dropletYear: P.dropletYear + s.techYearOffset,
+    fissionYear: P.fissionYear + s.techYearOffset,
+    fusionYear: P.fusionYear + s.techYearOffset,
+    demandGrowth: P.demandGrowth * s.demandMult
+  };
+}
+
+// ============================================
+// PHYSICS FUNCTIONS
+// ============================================
+
+function getLaunchCost(year, params = P, shell = 'leo') {
+  const baseCost = Math.max(params.launchFloor, params.launchCost * Math.pow(1 - params.launchLearn, year - 2025));
+  // Shell-specific multipliers (higher orbits cost more)
+  const shellMult = {
+    leo: 1.0,
+    meo: 1.3,      // +30% for MEO
+    geo: 1.6,      // +60% for GEO
+    cislunar: 2.5  // +150% for cislunar
+  };
+  return baseCost * (shellMult[shell] || 1.0);
+}
+
+function getDropletMult(year, params = P) {
+  if (!params.dropletOn || year < params.dropletYear) return 1.0;
+  const maturity = Math.min(1, (year - params.dropletYear) / 8);
+  return 5.0 + maturity * 5.0; // AMPLIFIED: 5× to 10× thermal rejection (was 3-5×)
+}
+
+function getRadiatorMassPerMW(year, powerKw, params = P) {
+  // FIXED: emissivity and opTemp now affect radiator mass via Stefan-Boltzmann
+  // Higher temp = more radiation = less area = less mass
+  // Higher emissivity = more radiation = less mass
+  
+  // Thermal physics scaling (calibrated at 350K, 0.85 emissivity)
+  const tempFactor = Math.pow(350 / params.opTemp, 4);
+  const emissivityFactor = 0.85 / params.emissivity;
+  
+  if (!params.dropletOn || year < params.dropletYear) {
+    // Conventional: base ~4500 kg/MW at reference conditions
+    const baseMass = Math.max(1000, (4500 * tempFactor * emissivityFactor) - (year - 2025) * 30);
+    const powerPenalty = 1 + (powerKw / 200) * 0.3;
+    return baseMass * powerPenalty;
+  }
+  // Droplet: ~20 kg/MW base, but still scales with thermal physics
+  // Higher temp/emissivity = even less mass needed
+  const maturity = Math.min(1, (year - params.dropletYear) / 8);
+  const dropletBase = 20 - maturity * 12;
+  return dropletBase * tempFactor * emissivityFactor;
+}
+
+function getRadiatorPower(year, params = P) {
+  // Pure Stefan-Boltzmann physics: W/m² radiated
+  // Droplet doesn't change this - it changes mass/area ratio
+  return params.emissivity * STEFAN_BOLTZMANN * Math.pow(params.opTemp, 4);
+}
+
+function getGroundEfficiency(year, params = P) {
+  let eff = 2800;
+  for (let y = 2025; y < year; y++) {
+    eff *= (1 + Math.max(0.03, params.aiLearn - (y - 2025) * 0.007));
+  }
+  return eff;
+}
+
+function getOrbitalEfficiency(year, params = P) {
+  const ground = getGroundEfficiency(year, params);
+  const penalty = params.radPen * Math.pow(0.82, year - 2025);
+  return ground * (1 - Math.max(0.02, penalty));
+}
+
+function getRadPenalty(year, params = P) {
+  return Math.max(0.02, params.radPen * Math.pow(0.82, year - 2025));
+}
+
+function getBandwidth(year, params = P) {
+  return params.bandwidth * Math.pow(1 + params.bwGrowth, year - 2025);
+}
+
+// ============================================
+// DEMAND & SUPPLY
+// ============================================
+
+function getDemand(year, params = P) {
+  const t = year - 2025;
+  const growth = Math.max(0.25, params.demandGrowth + 0.20 - t * 0.015);
+  return params.demand2025 * Math.pow(1 + growth, t);
+}
+
+function getGroundSupply(year, params = P) {
+  const t = year - 2025;
+  const delayYears = params.interconnect / 12;
+  const effectiveT = Math.max(0, t - delayYears);
+  let baseSupply = params.supply2025 + effectiveT * (params.supplyGrowth * 100);
+  
+  // SMR boost: DECOUPLED from space fission - independent ground policy
+  // SMRs accelerate ground DC builds by +10 GW/yr initially, ramping to +25 GW/yr
+  if (params.smrOn) {
+    if (year >= params.smrYear) {
+      const smrMaturity = Math.min(1, (year - params.smrYear) / 5);
+      const smrBoost = (10 + smrMaturity * 15) * (year - params.smrYear);
+      baseSupply += smrBoost;
+    }
+  }
+  
+  return baseSupply;
+}
+
+// ============================================
+// PLATFORM POWER - TECH ENABLES SCALING
+// ============================================
+
+function getLEOPower(year, params = P) {
+  const t = year - 2025;
+  const hasDroplet = params.dropletOn && year >= params.dropletYear;
+  const hasFission = params.fissionOn && year >= params.fissionYear;
+  const hasFusion = params.fusionOn && year >= params.fusionYear;
+  
+  if (hasFusion) {
+    // Fusion: 100-500 MW LEO stations
+    return 100000 + Math.min(1, (year - params.fusionYear) / 10) * 400000;
+  }
+  if (hasFission) {
+    // Fission: 5-20 MW
+    return 5000 + Math.min(1, (year - params.fissionYear) / 10) * 15000;
+  }
+  if (hasDroplet) {
+    // Droplet IMMEDIATELY enables MW-class: 1.5 MW instant, grows to 5 MW
+    const maturity = Math.min(1, (year - params.dropletYear) / 6);
+    return 1500 + maturity * 3500; // 1.5 MW → 5 MW
+  }
+  // Conventional: HARD LIMITED to ~250 kW by thermal (radiators become prohibitively heavy)
+  // This is the key constraint that droplet breaks
+  return Math.min(250, params.basePower * 0.8 + t * 5);
+}
+
+function getCislunarPower(year, params = P) {
+  const hasFission = params.fissionOn && year >= params.fissionYear;
+  const hasFusion = params.fusionOn && year >= params.fusionYear;
+  const hasDroplet = params.dropletOn && year >= params.dropletYear;
+  
+  if (hasFusion) {
+    // Fusion: 500 MW - 2 GW stations
+    return 500000 + Math.min(1, (year - params.fusionYear) / 10) * 1500000;
+  }
+  if (hasFission) {
+    // Fission enables cislunar: 50-150 MW
+    return 50000 + Math.min(1, (year - params.fissionYear) / 10) * 100000;
+  }
+  if (hasDroplet && (year - params.dropletYear) >= 5) {
+    // Mature droplet can do cislunar at lower power
+    return Math.min(30000, 5000 + (year - params.dropletYear - 5) * 5000);
+  }
+  return 0;
+}
+
+// ============================================
+// WACC & CRF - Capital Recovery Factor
+// ============================================
+
+function getCRF(wacc, years) {
+  // Capital Recovery Factor: converts capex to annualized payment
+  // CRF = r(1+r)^n / ((1+r)^n - 1)
+  if (wacc <= 0 || years <= 0) return 1 / Math.max(1, years);
+  const r = wacc;
+  const n = years;
+  const factor = Math.pow(1 + r, n);
+  return (r * factor) / (factor - 1);
+}
+
+// ============================================
+// RADIATION: TID & SEU Effects by Shell
+// ============================================
+
+function getShellRadiationEffects(shell, year, params = P) {
+  const shellData = SHELLS[shell];
+  const t = year - 2025;
+  
+  // TID effect: reduces effective lifetime (higher tidMult = shorter life)
+  // Base lifetime modified by TID: effectiveLife = satLife / tidMult
+  const tidFactor = shellData.tidMult;
+  const effectiveLife = params.satLife / tidFactor;
+  
+  // SEU effect: reliability overhead (redundancy, ECC, spares)
+  // seuMult of 1.0 = no overhead, 2.0 = 2× compute needed for same reliable output
+  // Improves over time with rad-hard tech (18%/yr improvement)
+  const radHardImprovement = Math.pow(0.82, t);
+  const seuPenalty = 1 + (shellData.seuMult - 1) * radHardImprovement;
+  
+  // Availability factor: fraction of compute that's usable after SEU overhead
+  const availabilityFactor = 1 / seuPenalty;
+  
+  // Replacement rate: driven by TID degradation
+  const baseReplacement = 1 / effectiveLife;
+  const replacementRate = Math.min(0.30, baseReplacement);
+  
+  return {
+    tidFactor,
+    effectiveLife,
+    seuPenalty,
+    availabilityFactor,
+    replacementRate
+  };
+}
+
+// Get reliability overhead for all shells (for charting)
+function getAllShellReliability(year, params = P) {
+  return {
+    leo: getShellRadiationEffects('leo', year, params),
+    meo: getShellRadiationEffects('meo', year, params),
+    geo: getShellRadiationEffects('geo', year, params),
+    cislunar: getShellRadiationEffects('cislunar', year, params)
+  };
+}
+
+// ============================================
+// SATELLITE CALCULATION
+// ============================================
+
+function calcSatellite(year, params = P, shell = 'leo') {
+  const t = year - 2025;
+  const hasDroplet = params.dropletOn && year >= params.dropletYear;
+  const hasFission = params.fissionOn && year >= params.fissionYear;
+  const hasFusion = params.fusionOn && year >= params.fusionYear;
+  
+  const powerKw = getLEOPower(year, params);
+  const solarEff = Math.min(0.50, params.solarEff + t * 0.008);
+  const radPower = getRadiatorPower(year, params);
+  const gflopsW = getOrbitalEfficiency(year, params);
+  const launchCost = getLaunchCost(year, params, shell);
+  const prodMult = Math.max(0.25, params.prodMult * Math.pow(0.68, t));
+  const radMassPerMW = getRadiatorMassPerMW(year, powerKw, params);
+  
+  // Get shell-specific radiation effects
+  const radEffects = getShellRadiationEffects(shell, year, params);
+  
+  // Power source mass
+  let powerMass = 0, battMass = 0;
+  if (hasFusion) {
+    powerMass = powerKw * 0.004; // 4 kg/kW = 250 W/kg
+  } else if (hasFission) {
+    powerMass = powerKw * 0.010; // 10 kg/kW = 100 W/kg
+  } else {
+    // Solar panels
+    const panelArea = powerKw * 1000 / (solarEff * SOLAR_CONSTANT);
+    powerMass = panelArea * 1.2;
+    // FIXED: Use battDens slider
+    const battDens = Math.min(1000, params.battDens + t * 35);
+    battMass = powerKw * 0.05 * 1.5 * 1000 / battDens;
+  }
+  
+  // Compute - apply SEU reliability overhead
+  const computeKw = powerKw * params.computeFrac;
+  const rawTflops = computeKw * gflopsW / 1000;
+  // SEU penalty: need extra compute for redundancy/ECC
+  const tflops = rawTflops * radEffects.availabilityFactor;
+  const gpuEq = tflops / 1979;
+  const compMass = Math.max(3, rawTflops * 0.0002); // Mass based on raw, not effective
+  
+  // Thermal - this is where droplet has huge impact
+  const wasteKw = computeKw * 0.65;
+  const radMass = wasteKw / 1000 * radMassPerMW;
+  
+  // Structure & margin
+  const subsystems = powerMass + battMass + compMass + radMass + 25;
+  const dryMass = subsystems * 1.10;
+  
+  // Specific power (W/kg) - key metric
+  const specPower = powerKw * 1000 / dryMass;
+  
+  // Solar array area (for solar platforms)
+  const solarArea = hasFission || hasFusion ? 0 : powerKw * 1000 / (solarEff * SOLAR_CONSTANT);
+  
+  // Data rate per platform (Gbps) - based on compute output
+  const dataRateGbps = tflops * params.gbpsPerTflop; // PARAMETERIZED (was magic 0.01)
+  
+  // Cost with WACC/CRF - proper capital recovery
+  const capex = dryMass * launchCost + dryMass * 350 * prodMult + 15000 * prodMult;
+  const crf = getCRF(params.waccOrbital, radEffects.effectiveLife);
+  const annualCapex = capex * crf; // Proper annualized capital cost
+  const annualMaint = capex * params.maintCost;
+  const annual = annualCapex + annualMaint;
+  const gpuHrs = gpuEq * 8760 * SLA;
+  const lcoc = gpuHrs > 0 ? annual / gpuHrs : Infinity;
+  
+  // Carbon - use effective lifetime
+  const carbonKg = dryMass * 95;
+  const carbonPerTflop = carbonKg * 1000 / Math.max(1, tflops * 8760 * radEffects.effectiveLife * 0.88);
+  
+  // EROL - use effective lifetime
+  const erol = (powerKw * 1000 * 8760 * 3600 * radEffects.effectiveLife * 0.88) / (dryMass * 400e6);
+  
+  return {
+    year, powerKw, dryMass, tflops, gpuEq, capex, lcoc, erol, carbonPerTflop, gflopsW, radPower,
+    specPower, solarArea, dataRateGbps, shell,
+    mass: { power: powerMass, batt: battMass, comp: compMass, rad: radMass, struct: subsystems * 0.10 },
+    hasDroplet, hasFission, hasFusion, radMassPerMW,
+    radEffects // Include radiation effects in output
+  };
+}
+
+// ============================================
+// GROUND CALCULATION
+// ============================================
+
+function calcGround(year, orbitalSupplyGW = 0, params = P) {
+  const t = year - 2025;
+  const gflopsW = getGroundEfficiency(year, params);
+  
+  // SMR synergy: DECOUPLED from space fission - independent ground policy
+  const hasSmr = params.smrOn && year >= params.smrYear;
+  const smrDiscount = hasSmr ? 0.7 - Math.min(0.3, (year - params.smrYear) * 0.03) : 1.0;
+  
+  // Hardware cost with WACC/CRF
+  const gpuPrice = 25000 * Math.pow(0.84, t);
+  const hwCapex = (gpuPrice / 3) / (gflopsW / 2800);
+  const groundHwLife = 5; // 5 year hardware refresh cycle
+  const crfGround = getCRF(params.waccGround, groundHwLife);
+  const hwCost = hwCapex * crfGround; // Annualized hardware cost
+  
+  // FIXED: Use energyCost, energyEscal, groundPue sliders
+  const energy = params.energyCost * Math.pow(1 + params.energyEscal, t) * smrDiscount;
+  const pue = Math.max(1.08, params.groundPue - t * 0.01);
+  const enCost = 700 * 8760 * SLA * energy * pue / 1000;
+  const overhead = 0.20 * 8760 * SLA;
+  const base = (hwCost + enCost + overhead) / (8760 * SLA);
+  
+  const demand = getDemand(year, params);
+  const groundSupply = getGroundSupply(year, params);
+  const totalSupply = groundSupply + orbitalSupplyGW;
+  const unmetRatio = Math.max(0, (demand - totalSupply) / totalSupply);
+  
+  let premium;
+  if (unmetRatio <= 0) premium = 1.0;
+  else if (unmetRatio <= 0.5) premium = 1 + unmetRatio * 8;
+  else if (unmetRatio <= 2) premium = 5 + (unmetRatio - 0.5) * 20;
+  else premium = 35 + (unmetRatio - 2) * 15;
+  
+  const gridCarbon = 380 * Math.pow(0.97, t);
+  // FIXED: Dimensionally correct carbon calculation
+  // gridCarbon: gCO2/kWh
+  // gflopsW: GFLOP/s per W
+  // For 1 TFLOP-hr: need (1000/gflopsW) W for 1 hr = (1/gflopsW) kWh
+  // With PUE: (pue/gflopsW) kWh
+  // Carbon: gridCarbon * (pue / gflopsW) gCO2/TFLOP-hr
+  const carbonPerTflop = gridCarbon * (pue / gflopsW) + 5;
+  
+  return { year, base, market: base * premium, premium, carbonPerTflop, gflopsW, demand, groundSupply, totalSupply, unmetRatio };
+}
+
+// ============================================
+// FLEET CALCULATION - MULTI-SHELL
+// ============================================
+
+function calcFleet(year, crossoverYear = null, params = P) {
+  const sat = calcSatellite(year, params);
+  const cislunarPowerKw = getCislunarPower(year, params);
+  const t = year - 2025;
+  
+  const hasFission = params.fissionOn && year >= params.fissionYear;
+  const hasFusion = params.fusionOn && year >= params.fusionYear;
+  const hasDroplet = params.dropletOn && year >= params.dropletYear;
+  
+  let leoPlatforms = 0, meoPlatforms = 0, geoPlatforms = 0, cisPlatforms = 0;
+  
+  if (!crossoverYear || year < crossoverYear) {
+    // Pre-crossover: minimal early adopters
+    leoPlatforms = Math.min(500, 50 + t * 20);
+  } else {
+    const yearsPost = year - crossoverYear;
+    
+    // LEO fills first and fastest - doubles every 1.2 years
+    leoPlatforms = Math.min(SHELLS.leo.capacity, Math.round(500 * Math.pow(2, yearsPost / 1.2)));
+    
+    // MEO: High radiation, slower growth - starts year 2
+    if (yearsPost >= 2) {
+      meoPlatforms = Math.min(SHELLS.meo.capacity, Math.round(100 * Math.pow(1.8, (yearsPost - 2) / 1.5)));
+    }
+    
+    // GEO: Limited slots, premium location - starts year 3
+    if (yearsPost >= 3) {
+      geoPlatforms = Math.min(SHELLS.geo.capacity, Math.round(50 * Math.pow(1.5, (yearsPost - 3) / 2)));
+    }
+    
+    // Cislunar: Requires fission/fusion - starts year 2
+    if (cislunarPowerKw > 0 && yearsPost >= 2) {
+      cisPlatforms = Math.min(SHELLS.cislunar.capacity, Math.round(50 * Math.pow(2, (yearsPost - 2) / 2)));
+    }
+  }
+  
+  // === Power by shell ===
+  // GEO can have much larger platforms (stable orbit, no drag)
+  const geoPowerKw = hasFission ? sat.powerKw * 20 : (hasDroplet ? sat.powerKw * 10 : sat.powerKw * 5);
+  
+  const leoPowerTw = leoPlatforms * sat.powerKw / 1e9;
+  const meoPowerTw = meoPlatforms * sat.powerKw * 0.8 / 1e9; // MEO Van Allen penalty
+  const geoPowerTw = geoPlatforms * geoPowerKw / 1e9;
+  const cisPowerTw = cisPlatforms * cislunarPowerKw / 1e9;
+  const totalPowerTw = leoPowerTw + meoPowerTw + geoPowerTw + cisPowerTw;
+  
+  // === Bandwidth utilization ===
+  const geoTflopsPerPlatform = geoPowerKw * params.computeFrac * sat.gflopsW / 1000;
+  const cisTflopsPerPlatform = cislunarPowerKw * params.computeFrac * sat.gflopsW / 1000;
+  
+  const fleetTflops = leoPlatforms * sat.tflops + 
+                      meoPlatforms * sat.tflops * 0.8 +
+                      geoPlatforms * geoTflopsPerPlatform +
+                      cisPlatforms * cisTflopsPerPlatform;
+  
+  const bwNeededGbps = fleetTflops * params.gbpsPerTflop;
+  const bwAvailTbps = getBandwidth(year, params);
+  const bwAvailGbps = bwAvailTbps * 1000;
+  
+  // bwSell: fraction of compute you can actually monetize (sellable utilization)
+  const bwSell = (bwNeededGbps <= 0) ? 1 : Math.min(1, bwAvailGbps / bwNeededGbps);
+  
+  // === Demand constraint ===
+  // Only orbitalEligibleShare of total demand is batch/latency-tolerant
+  const totalDemandGW = getDemand(year, params);
+  const eligibleDemandGW = totalDemandGW * params.orbitalEligibleShare;
+  const fleetPowerGW = totalPowerTw * 1000;
+  
+  // demandSell: fraction of fleet capacity the market can absorb
+  const demandSell = (fleetPowerGW <= 0) ? 1 : Math.min(1, eligibleDemandGW / fleetPowerGW);
+  
+  // Effective LCOC: inflated by whichever constraint binds (stranded capex)
+  const sellableUtil = Math.min(bwSell, demandSell);
+  const lcocEffective = sat.lcoc / Math.max(0.01, sellableUtil);
+  
+  // For display
+  const bwUtil = bwAvailGbps > 0 ? Math.min(1, bwNeededGbps / bwAvailGbps) : 1;
+  const demandUtil = eligibleDemandGW > 0 ? Math.min(1, fleetPowerGW / eligibleDemandGW) : 0;
+  
+  // Shell utilization
+  const leoUtil = leoPlatforms / SHELLS.leo.capacity;
+  const meoUtil = meoPlatforms / SHELLS.meo.capacity;
+  const geoUtil = geoPlatforms / SHELLS.geo.capacity;
+  const cisUtil = cisPlatforms / SHELLS.cislunar.capacity;
+  
+  // Bottleneck detection
+  let bottleneck = 'thermal';
+  if (!crossoverYear || year < crossoverYear) {
+    bottleneck = 'thermal';
+  } else {
+    if (bwSell < demandSell && bwSell < 0.9) bottleneck = 'bandwidth';
+    else if (demandSell < 0.9) bottleneck = 'demand';
+    else if (leoUtil > 0.9 || geoUtil > 0.9) bottleneck = 'slots';
+    else if (!hasDroplet && !hasFission) bottleneck = 'thermal';
+    else bottleneck = 'power';
+  }
+  
+  const leoRadEffects = getShellRadiationEffects('leo', year, params);
+  const replacementRate = leoRadEffects.replacementRate;
+  
+  return {
+    year, 
+    leoPlatforms, meoPlatforms, geoPlatforms, cisPlatforms,
+    leoPowerTw, meoPowerTw, geoPowerTw, cisPowerTw, totalPowerTw,
+    lcocEffective, bwUtil, bwAvailGbps, bwNeededGbps, bwSell,
+    demandUtil, demandSell, eligibleDemandGW, fleetTflops, sellableUtil,
+    satPowerKw: sat.powerKw, cislunarPowerKw,
+    leoUtil, meoUtil, geoUtil, cisUtil, 
+    bottleneck, replacementRate
+  };
+}
+
+// ============================================
+// SCENARIO RUNNER
+// ============================================
+
+function runScenario(scenario) {
+  const params = getScenarioParams(scenario);
+  const sats = YEARS.map(y => calcSatellite(y, params));
+  const preFleets = YEARS.map(y => calcFleet(y, null, params));
+  const preGnds = YEARS.map(y => calcGround(y, 0, params));
+  
+  const crossIdx = preFleets.findIndex((f, i) => f.lcocEffective < preGnds[i].market);
+  const crossoverYear = crossIdx >= 0 ? YEARS[crossIdx] : null;
+  
+  const fleets = YEARS.map(y => calcFleet(y, crossoverYear, params));
+  const gnds = YEARS.map((y, i) => calcGround(y, fleets[i].totalPowerTw * 1000, params));
+  
+  return { sats, fleets, gnds, crossoverYear };
+}
+
+// ============================================
+// CHARTS
+// ============================================
+
+Chart.defaults.color = '#666666';
+Chart.defaults.borderColor = '#d0d0d0';
+Chart.defaults.font.family = 'Inter';
+
+let charts = {};
+
+function initCharts() {
+  const opts = (yLabel, log = false) => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: { y: { type: log ? 'logarithmic' : 'linear', title: { display: true, text: yLabel } } }
+  });
+  const stackOpts = (yLabel) => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: yLabel } } }
+  });
+  
+  // Core - LCOC with uncertainty bands
+  charts.lcoc = new Chart(document.getElementById('c-lcoc'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      // Aggressive bound (upper for uncertainty)
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '+1', tension: 0.3, pointRadius: 0 },
+      // Baseline orbital
+      { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+      // Conservative bound (lower)
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 },
+      // Ground market
+      { data: [], borderColor: '#cc3333', borderWidth: 2, tension: 0.3, pointRadius: 0 }
+    ]}, options: opts('$/GPU-hr', true)
+  });
+  
+  // Inference cost ($/M tokens, Llama 70B equivalent)
+  charts.inference = new Chart(document.getElementById('c-inference'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      // Aggressive bound (upper for uncertainty)
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '+1', tension: 0.3, pointRadius: 0 },
+      // Baseline orbital
+      { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+      // Conservative bound (lower)
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 },
+      // Ground market
+      { data: [], borderColor: '#cc3333', borderWidth: 2, tension: 0.3, pointRadius: 0 }
+    ]}, options: opts('$/M tokens', true)
+  });
+  
+  // Fleet by shell - stacked area chart
+  charts.fleet = new Chart(document.getElementById('c-fleet'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#0066cc', backgroundColor: 'rgba(0,102,204,0.5)', fill: true, tension: 0.3 },
+      { data: [], borderColor: '#0066cc', backgroundColor: 'rgba(0,102,204,0.5)', fill: true, tension: 0.3 },
+      { data: [], borderColor: '#cc8800', backgroundColor: 'rgba(204,136,0,0.5)', fill: true, tension: 0.3 },
+      { data: [], borderColor: '#6633cc', backgroundColor: 'rgba(102,51,204,0.5)', fill: true, tension: 0.3 }
+    ]}, options: {
+      ...opts('TW', true),
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, beginAtZero: true }
+      }
+    }
+  });
+  
+  charts.carbon = new Chart(document.getElementById('c-carbon'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#0066cc', tension: 0.3 },
+      { data: [], borderColor: '#cc3333', tension: 0.3 }
+    ]}, options: opts('gCO₂/TFLOP-hr')
+  });
+  
+  // Market
+  charts.supplyDemand = new Chart(document.getElementById('c-supplyDemand'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#cc3333', tension: 0.3, borderWidth: 2 },
+      { data: [], borderColor: '#7a7a88', borderDash: [4,4], tension: 0.3 },
+      { data: [], borderColor: '#0066cc', tension: 0.3, borderWidth: 2 }
+    ]}, options: opts('GW', true)
+  });
+  
+  charts.scarcity = new Chart(document.getElementById('c-scarcity'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#cc3333', backgroundColor: 'rgba(204,51,51,0.1)', fill: true, tension: 0.3 }
+    ]}, options: opts('×')
+  });
+  
+  charts.efficiency = new Chart(document.getElementById('c-efficiency'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#0066cc', tension: 0.3 },
+      { data: [], borderColor: '#cc3333', tension: 0.3 }
+    ]}, options: opts('GFLOPS/W', true)
+  });
+  
+  // Constraints - Shell utilization for all 4 shells
+  charts.shellUtil = new Chart(document.getElementById('c-shellUtil'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#0066cc', tension: 0.3 },
+      { data: [], borderColor: '#0066cc', tension: 0.3 },
+      { data: [], borderColor: '#cc8800', tension: 0.3 },
+      { data: [], borderColor: '#6633cc', tension: 0.3 }
+    ]}, options: opts('%')
+  });
+  
+  charts.bandwidth = new Chart(document.getElementById('c-bandwidth'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#0066cc', backgroundColor: 'rgba(0,102,204,0.1)', fill: true, tension: 0.3 }
+    ]}, options: opts('Tbps', true)
+  });
+  
+  charts.bwUtil = new Chart(document.getElementById('c-bwUtil'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#cc6600', backgroundColor: 'rgba(204,102,0,0.1)', fill: true, tension: 0.3 }
+    ]}, options: opts('%')
+  });
+  
+  // Stranded capex penalty (LCOC multiplier from underutilization)
+  charts.stranded = new Chart(document.getElementById('c-stranded'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#cc3333', backgroundColor: 'rgba(204,51,51,0.1)', fill: true, tension: 0.3 }
+    ]}, options: opts('×')
+  });
+  
+  charts.thermal = new Chart(document.getElementById('c-thermal'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#cc3333', backgroundColor: 'rgba(204,51,51,0.1)', fill: true, tension: 0.1 }
+    ]}, options: opts('kg/kW')
+  });
+  
+  charts.erol = new Chart(document.getElementById('c-erol'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#cc8800', backgroundColor: 'rgba(204,136,0,0.1)', fill: true, tension: 0.3 }
+    ]}, options: opts('×')
+  });
+  
+  charts.bottleneck = new Chart(document.getElementById('c-bottleneck'), {
+    type: 'bar', data: { labels: YEARS, datasets: [
+      { data: [], backgroundColor: 'rgba(204,102,0,0.7)' },  // Thermal - orange
+      { data: [], backgroundColor: 'rgba(204,136,0,0.7)' },  // Power - yellow
+      { data: [], backgroundColor: 'rgba(0,102,204,0.7)' },  // Bandwidth - blue
+      { data: [], backgroundColor: 'rgba(102,51,204,0.7)' }, // Slots - purple
+      { data: [], backgroundColor: 'rgba(0,102,204,0.7)' }    // Demand - teal
+    ]}, options: stackOpts('Constraint')
+  });
+  
+  // Physics
+  charts.power = new Chart(document.getElementById('c-power'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#0066cc', tension: 0.1, borderWidth: 2 },
+      { data: [], borderColor: '#6633cc', tension: 0.1, borderWidth: 2 }
+    ]}, options: opts('MW', true)
+  });
+  
+  charts.specPower = new Chart(document.getElementById('c-specPower'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#0066cc', backgroundColor: 'rgba(0,102,204,0.1)', fill: true, tension: 0.3 }
+    ]}, options: opts('W/kg', true)
+  });
+  
+  charts.mass = new Chart(document.getElementById('c-mass'), {
+    type: 'bar', data: { labels: YEARS, datasets: [
+      { data: [], backgroundColor: '#cc8800' },
+      { data: [], backgroundColor: '#6633cc' },
+      { data: [], backgroundColor: '#0066cc' },
+      { data: [], backgroundColor: '#cc3333' },
+      { data: [], backgroundColor: '#7a7a88' }
+    ]}, options: stackOpts('kg')
+  });
+  
+  charts.powerBudget = new Chart(document.getElementById('c-powerBudget'), {
+    type: 'bar', data: { labels: YEARS, datasets: [
+      { data: [], backgroundColor: 'rgba(0,102,204,0.7)' },     // Compute - teal
+      { data: [], backgroundColor: 'rgba(204,102,0,0.7)' },    // Thermal - orange
+      { data: [], backgroundColor: 'rgba(122,122,136,0.7)' }    // Housekeeping - gray
+    ]}, options: stackOpts('%')
+  });
+  
+  charts.launch = new Chart(document.getElementById('c-launch'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#cc6600', tension: 0.3 }
+    ]}, options: opts('$/kg', true)
+  });
+  
+  charts.dataRate = new Chart(document.getElementById('c-dataRate'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#0066cc', backgroundColor: 'rgba(0,102,204,0.1)', fill: true, tension: 0.3 }
+    ]}, options: opts('Gbps', true)
+  });
+  
+  // Reliability overhead by shell (SEU penalty)
+  charts.reliability = new Chart(document.getElementById('c-reliability'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      { data: [], borderColor: '#0066cc', tension: 0.3, borderWidth: 2 }, // LEO
+      { data: [], borderColor: '#cc8800', tension: 0.3, borderWidth: 2 }, // MEO
+      { data: [], borderColor: '#0066cc', tension: 0.3, borderWidth: 2 }, // GEO
+      { data: [], borderColor: '#6633cc', tension: 0.3, borderWidth: 2 }  // Cislunar
+    ]}, options: opts('%')
+  });
+  
+  // Futures - with uncertainty bands
+  charts.lcocScenarios = new Chart(document.getElementById('c-lcocScenarios'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      // Aggressive bound (upper)
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '+1', tension: 0.3, pointRadius: 0 },
+      // Baseline orbital
+      { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+      // Conservative bound (lower)
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 },
+      // Ground market
+      { data: [], borderColor: '#7a7a88', borderDash: [4,4], borderWidth: 2, tension: 0.3, pointRadius: 0 }
+    ]}, options: opts('$/GPU-hr', true)
+  });
+  
+  charts.carbonScenarios = new Chart(document.getElementById('c-carbonScenarios'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      // Aggressive bound
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '+1', tension: 0.3, pointRadius: 0 },
+      // Baseline
+      { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+      // Conservative bound
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 }
+    ]}, options: opts('gCO₂/TFLOP-hr')
+  });
+  
+  charts.effScenarios = new Chart(document.getElementById('c-effScenarios'), {
+    type: 'line', data: { labels: YEARS, datasets: [
+      // Aggressive bound
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '+1', tension: 0.3, pointRadius: 0 },
+      // Baseline
+      { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+      // Conservative bound
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 }
+    ]}, options: opts('GFLOPS/W', true)
+  });
+}
+
+function update() {
+  // Run all scenarios
+  const agg = runScenario('aggressive');
+  const base = runScenario('baseline');
+  const cons = runScenario('conservative');
+  
+  // Use baseline for main display
+  const sats = base.sats;
+  const gnds = base.gnds;
+  fleetResults = base.fleets;
+  const crossoverYear = base.crossoverYear;
+  
+  const i30 = 5, i35 = 10, i40 = 15, i50 = 25;
+  
+  // Header badges
+  document.getElementById('badge-crossover').textContent = crossoverYear || 'Never';
+  document.getElementById('badge-fleet50').textContent = fleetResults[i50].totalPowerTw.toFixed(1) + ' TW';
+  
+  // Hero LCOC display
+  document.getElementById('hero-crossover').textContent = crossoverYear || 'Never';
+  document.getElementById('hero-orb35').textContent = '$' + fleetResults[i35].lcocEffective.toFixed(2);
+  document.getElementById('hero-gnd35').textContent = '$' + gnds[i35].market.toFixed(2);
+  const adv35 = ((gnds[i35].market - fleetResults[i35].lcocEffective) / gnds[i35].market * 100);
+  document.getElementById('hero-adv').textContent = (adv35 > 0 ? '+' : '') + adv35.toFixed(0) + '%';
+  
+  // Core KPIs
+  const i25 = 0; // 2025
+  document.getElementById('kpi-orb25').textContent = '$' + fleetResults[i25].lcocEffective.toFixed(2);
+  document.getElementById('kpi-gnd25').textContent = '$' + gnds[i25].market.toFixed(2);
+  document.getElementById('kpi-orb30').textContent = '$' + fleetResults[i30].lcocEffective.toFixed(2);
+  document.getElementById('kpi-gnd30').textContent = '$' + gnds[i30].market.toFixed(2);
+  document.getElementById('kpi-orb40').textContent = '$' + fleetResults[i40].lcocEffective.toFixed(2);
+  document.getElementById('kpi-gnd40').textContent = '$' + gnds[i40].market.toFixed(2);
+  document.getElementById('kpi-orb50').textContent = '$' + fleetResults[i50].lcocEffective.toFixed(3);
+  document.getElementById('kpi-gnd50').textContent = '$' + gnds[i50].market.toFixed(2);
+  
+  // Derived values
+  const radPower = P.emissivity * STEFAN_BOLTZMANN * Math.pow(P.opTemp, 4);
+  document.getElementById('d-radPower').textContent = radPower.toFixed(0);
+  document.getElementById('d-radMass').textContent = sats[i30].radMassPerMW.toFixed(0);
+  document.getElementById('d-launchLeo').textContent = getLaunchCost(2030, P, 'leo').toFixed(0);
+  document.getElementById('d-launchGeo').textContent = getLaunchCost(2030, P, 'geo').toFixed(0);
+  document.getElementById('d-satPower').textContent = sats[i30].powerKw.toFixed(0);
+  document.getElementById('d-satMass').textContent = sats[i30].dryMass.toFixed(0);
+  document.getElementById('d-demand35').textContent = gnds[i35].demand.toFixed(0);
+  document.getElementById('d-supply35').textContent = gnds[i35].groundSupply.toFixed(0);
+  
+  // Market KPIs
+  document.getElementById('kpi-peakPrem').textContent = Math.max(...gnds.map(g => g.premium)).toFixed(1) + '×';
+  document.getElementById('kpi-prem35').textContent = gnds[i35].premium.toFixed(1) + '×';
+  document.getElementById('kpi-unmet35').textContent = (gnds[i35].unmetRatio * 100).toFixed(0) + '%';
+  
+  // Constraints KPIs
+  document.getElementById('kpi-bwUtil').textContent = (fleetResults[i35].bwUtil * 100).toFixed(0) + '%';
+  const totalPlat35 = fleetResults[i35].leoPlatforms + fleetResults[i35].meoPlatforms + 
+                      fleetResults[i35].geoPlatforms + fleetResults[i35].cisPlatforms;
+  const totalPlat50 = fleetResults[i50].leoPlatforms + fleetResults[i50].meoPlatforms + 
+                      fleetResults[i50].geoPlatforms + fleetResults[i50].cisPlatforms;
+  document.getElementById('kpi-plat35').textContent = (totalPlat35 / 1000).toFixed(0) + 'k';
+  document.getElementById('kpi-plat50').textContent = (totalPlat50 / 1000).toFixed(0) + 'k';
+  
+  // Physics KPIs
+  document.getElementById('kpi-leo').textContent = (sats[i35].powerKw / 1000).toFixed(1) + ' MW';
+  document.getElementById('kpi-cis').textContent = (fleetResults[i35].cislunarPowerKw / 1000).toFixed(0) + ' MW';
+  document.getElementById('kpi-mass').textContent = sats[i35].dryMass.toFixed(0) + ' kg';
+  
+  // Futures KPIs
+  document.getElementById('kpi-crossAgg').textContent = agg.crossoverYear || 'Never';
+  document.getElementById('kpi-crossBase').textContent = base.crossoverYear || 'Never';
+  document.getElementById('kpi-crossCons').textContent = cons.crossoverYear || 'Never';
+  
+  // Toggle effects - droplet is always on
+  document.getElementById('eff-droplet').className = 'toggle-effect active';
+  document.getElementById('eff-fission').className = 'toggle-effect' + (P.fissionOn ? ' active' : '');
+  document.getElementById('eff-smr').className = 'toggle-effect' + (P.smrOn ? ' active' : '');
+  document.getElementById('eff-fusion').className = 'toggle-effect' + (P.fusionOn ? ' active' : '');
+  
+  // Core charts - LCOC with uncertainty
+  charts.lcoc.data.datasets[0].data = agg.fleets.map(f => f.lcocEffective);
+  charts.lcoc.data.datasets[1].data = base.fleets.map(f => f.lcocEffective);
+  charts.lcoc.data.datasets[2].data = cons.fleets.map(f => f.lcocEffective);
+  charts.lcoc.data.datasets[3].data = gnds.map(g => g.market);
+  charts.lcoc.update();
+  
+  // Inference cost ($/M tokens, Llama 70B equivalent)
+  // Convert GPU-hr to $/M tokens: ~1 GPU-hr ≈ 10M tokens for Llama 70B
+  // So $/M tokens ≈ LCOC / 10
+  const tokensPerGpuHr = 10; // M tokens
+  charts.inference.data.datasets[0].data = agg.fleets.map(f => f.lcocEffective / tokensPerGpuHr);
+  charts.inference.data.datasets[1].data = base.fleets.map(f => f.lcocEffective / tokensPerGpuHr);
+  charts.inference.data.datasets[2].data = cons.fleets.map(f => f.lcocEffective / tokensPerGpuHr);
+  charts.inference.data.datasets[3].data = gnds.map(g => g.market / tokensPerGpuHr);
+  charts.inference.update();
+  
+  // Fleet by shell
+  charts.fleet.data.datasets[0].data = fleetResults.map(f => f.leoPowerTw);
+  charts.fleet.data.datasets[1].data = fleetResults.map(f => f.meoPowerTw);
+  charts.fleet.data.datasets[2].data = fleetResults.map(f => f.geoPowerTw);
+  charts.fleet.data.datasets[3].data = fleetResults.map(f => f.cisPowerTw);
+  charts.fleet.update();
+  
+  charts.carbon.data.datasets[0].data = sats.map(s => s.carbonPerTflop);
+  charts.carbon.data.datasets[1].data = gnds.map(g => g.carbonPerTflop);
+  charts.carbon.update();
+  
+  // Market charts
+  charts.supplyDemand.data.datasets[0].data = gnds.map(g => g.demand);
+  charts.supplyDemand.data.datasets[1].data = gnds.map(g => g.groundSupply);
+  charts.supplyDemand.data.datasets[2].data = gnds.map(g => g.totalSupply);
+  charts.supplyDemand.update();
+  
+  charts.scarcity.data.datasets[0].data = gnds.map(g => g.premium);
+  charts.scarcity.update();
+  
+  charts.efficiency.data.datasets[0].data = sats.map(s => s.gflopsW);
+  charts.efficiency.data.datasets[1].data = gnds.map(g => g.gflopsW);
+  charts.efficiency.update();
+  
+  // Constraints charts - all 4 shells
+  charts.shellUtil.data.datasets[0].data = fleetResults.map(f => f.leoUtil * 100);
+  charts.shellUtil.data.datasets[1].data = fleetResults.map(f => f.meoUtil * 100);
+  charts.shellUtil.data.datasets[2].data = fleetResults.map(f => f.geoUtil * 100);
+  charts.shellUtil.data.datasets[3].data = fleetResults.map(f => f.cisUtil * 100);
+  charts.shellUtil.update();
+  
+  charts.bwUtil.data.datasets[0].data = fleetResults.map(f => f.bwUtil * 100);
+  charts.bwUtil.update();
+  
+  charts.bandwidth.data.datasets[0].data = fleetResults.map(f => f.bwAvailGbps / 1000); // Convert to Tbps for display
+  charts.bandwidth.update();
+  
+  // Stranded capex penalty (1/sellableUtil - shows LCOC inflation from underutilization)
+  charts.stranded.data.datasets[0].data = fleetResults.map(f => 1 / Math.max(0.01, f.sellableUtil || 1));
+  charts.stranded.update();
+  
+  // Thermal: show radiator specific mass (kg/kW) - droplet makes this 50× lower
+  charts.thermal.data.datasets[0].data = sats.map(s => getRadiatorMassPerMW(s.year, s.powerKw) / 1000);
+  charts.thermal.update();
+  
+  charts.bottleneck.data.datasets[0].data = fleetResults.map(f => f.bottleneck === 'thermal' ? 1 : 0);
+  charts.bottleneck.data.datasets[1].data = fleetResults.map(f => f.bottleneck === 'power' ? 1 : 0);
+  charts.bottleneck.data.datasets[2].data = fleetResults.map(f => f.bottleneck === 'bandwidth' ? 1 : 0);
+  charts.bottleneck.data.datasets[3].data = fleetResults.map(f => f.bottleneck === 'slots' ? 1 : 0);
+  charts.bottleneck.data.datasets[4].data = fleetResults.map(f => f.bottleneck === 'demand' ? 1 : 0);
+  charts.bottleneck.update();
+  
+  // Physics charts
+  charts.power.data.datasets[0].data = sats.map(s => s.powerKw / 1000);
+  charts.power.data.datasets[1].data = fleetResults.map(f => f.cislunarPowerKw / 1000);
+  charts.power.update();
+  
+  charts.specPower.data.datasets[0].data = sats.map(s => s.specPower);
+  charts.specPower.update();
+  
+  charts.mass.data.datasets[0].data = sats.map(s => s.mass.power);
+  charts.mass.data.datasets[1].data = sats.map(s => s.mass.batt);
+  charts.mass.data.datasets[2].data = sats.map(s => s.mass.comp);
+  charts.mass.data.datasets[3].data = sats.map(s => s.mass.rad);
+  charts.mass.data.datasets[4].data = sats.map(s => s.mass.struct);
+  charts.mass.update();
+  
+  // Power budget: compute (68%), thermal management (~22%), housekeeping (~10%)
+  // Power budget: compute, thermal management, housekeeping
+  const compPct = P.computeFrac * 100;
+  const thermalPct = (1 - P.computeFrac) * 0.7 * 100; // ~70% of non-compute goes to thermal
+  const housePct = 100 - compPct - thermalPct;
+  charts.powerBudget.data.datasets[0].data = YEARS.map(() => compPct);
+  charts.powerBudget.data.datasets[1].data = YEARS.map(() => thermalPct);
+  charts.powerBudget.data.datasets[2].data = YEARS.map(() => housePct);
+  charts.powerBudget.update();
+  
+  charts.launch.data.datasets[0].data = YEARS.map(y => getLaunchCost(y));
+  charts.launch.update();
+  
+  charts.dataRate.data.datasets[0].data = sats.map(s => s.dataRateGbps);
+  charts.dataRate.update();
+  
+  // Reliability overhead by shell (SEU penalty as % overhead)
+  charts.reliability.data.datasets[0].data = YEARS.map(y => (getShellRadiationEffects('leo', y).seuPenalty - 1) * 100);
+  charts.reliability.data.datasets[1].data = YEARS.map(y => (getShellRadiationEffects('meo', y).seuPenalty - 1) * 100);
+  charts.reliability.data.datasets[2].data = YEARS.map(y => (getShellRadiationEffects('geo', y).seuPenalty - 1) * 100);
+  charts.reliability.data.datasets[3].data = YEARS.map(y => (getShellRadiationEffects('cislunar', y).seuPenalty - 1) * 100);
+  charts.reliability.update();
+  
+  charts.erol.data.datasets[0].data = sats.map(s => s.erol);
+  charts.erol.update();
+  
+  // Futures charts
+  charts.lcocScenarios.data.datasets[0].data = agg.fleets.map(f => f.lcocEffective);
+  charts.lcocScenarios.data.datasets[1].data = base.fleets.map(f => f.lcocEffective);
+  charts.lcocScenarios.data.datasets[2].data = cons.fleets.map(f => f.lcocEffective);
+  charts.lcocScenarios.data.datasets[3].data = base.gnds.map(g => g.market);
+  charts.lcocScenarios.update();
+  
+  charts.carbonScenarios.data.datasets[0].data = agg.sats.map(s => s.carbonPerTflop);
+  charts.carbonScenarios.data.datasets[1].data = base.sats.map(s => s.carbonPerTflop);
+  charts.carbonScenarios.data.datasets[2].data = cons.sats.map(s => s.carbonPerTflop);
+  charts.carbonScenarios.update();
+  
+  charts.effScenarios.data.datasets[0].data = agg.sats.map(s => s.gflopsW);
+  charts.effScenarios.data.datasets[1].data = base.sats.map(s => s.gflopsW);
+  charts.effScenarios.data.datasets[2].data = cons.sats.map(s => s.gflopsW);
+  charts.effScenarios.update();
+}
+
+// ============================================
+// EVENTS
+// ============================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  initCharts();
+  
+  // Droplet is always on - just handle the year slider
+  P.dropletOn = true;
+  const dropletYearSlider = document.getElementById('dropletYear');
+  const dropletYearVal = document.getElementById('v-dropletYear');
+  if (dropletYearSlider) {
+    dropletYearSlider.addEventListener('input', () => {
+      P.dropletYear = parseInt(dropletYearSlider.value);
+      if (dropletYearVal) dropletYearVal.textContent = P.dropletYear;
+      update();
+    });
+  }
+  
+  // Other breakthroughs have toggles
+  ['fission', 'fusion', 'smr'].forEach(tech => {
+    const toggle = document.getElementById('tog-' + tech);
+    const yearInput = document.getElementById('year-' + tech);
+    if (!toggle) return;
+    
+    P[tech + 'On'] = toggle.checked;
+    if (yearInput) yearInput.disabled = !toggle.checked;
+    
+    toggle.addEventListener('change', () => {
+      P[tech + 'On'] = toggle.checked;
+      if (yearInput) yearInput.disabled = !toggle.checked;
+      update();
+    });
+    if (yearInput) {
+      yearInput.addEventListener('change', () => {
+        P[tech + 'Year'] = parseInt(yearInput.value);
+        update();
+      });
+    }
+  });
+  
+  const sliders = {
+    emissivity: { p: 'emissivity', s: 0.01, f: v => v.toFixed(2) },
+    opTemp: { p: 'opTemp', s: 1, f: v => v },
+    solarEff: { p: 'solarEff', s: 0.01, f: v => Math.round(v * 100) },
+    basePower: { p: 'basePower', s: 1, f: v => v },
+    computeFrac: { p: 'computeFrac', s: 0.01, f: v => Math.round(v * 100) },
+    battDens: { p: 'battDens', s: 1, f: v => v },
+    satLife: { p: 'satLife', s: 1, f: v => v },
+    radPen: { p: 'radPen', s: 0.01, f: v => Math.round(v * 100) },
+    aiLearn: { p: 'aiLearn', s: 0.01, f: v => Math.round(v * 100) },
+    launchCost: { p: 'launchCost', s: 1, f: v => v },
+    launchLearn: { p: 'launchLearn', s: 0.01, f: v => Math.round(v * 100) },
+    launchFloor: { p: 'launchFloor', s: 1, f: v => v },
+    prodMult: { p: 'prodMult', s: 0.1, f: v => v.toFixed(1) },
+    maintCost: { p: 'maintCost', s: 0.01, f: v => Math.round(v * 100) },
+    waccOrbital: { p: 'waccOrbital', s: 0.01, f: v => Math.round(v * 100) },
+    waccGround: { p: 'waccGround', s: 0.01, f: v => Math.round(v * 100) },
+    bandwidth: { p: 'bandwidth', s: 1, f: v => v },
+    bwGrowth: { p: 'bwGrowth', s: 0.01, f: v => Math.round(v * 100) },
+    bwCost: { p: 'bwCost', s: 1, f: v => v },
+    gbpsPerTflop: { p: 'gbpsPerTflop', s: 0.001, f: v => Math.round(v * 1000) }, // Display as Mbps
+    groundPue: { p: 'groundPue', s: 0.01, f: v => v.toFixed(2) },
+    energyCost: { p: 'energyCost', s: 0.001, f: v => v.toFixed(3) },
+    energyEscal: { p: 'energyEscal', s: 0.01, f: v => Math.round(v * 100) },
+    interconnect: { p: 'interconnect', s: 1, f: v => v },
+    demand2025: { p: 'demand2025', s: 1, f: v => v },
+    demandGrowth: { p: 'demandGrowth', s: 0.01, f: v => Math.round(v * 100) },
+    orbitalEligibleShare: { p: 'orbitalEligibleShare', s: 0.01, f: v => Math.round(v * 100) },
+    supply2025: { p: 'supply2025', s: 1, f: v => v },
+    supplyGrowth: { p: 'supplyGrowth', s: 0.01, f: v => Math.round(v * 100) }
+  };
+  
+  Object.entries(sliders).forEach(([id, cfg]) => {
+    const el = document.getElementById(id);
+    const val = document.getElementById('v-' + id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      P[cfg.p] = parseFloat(el.value) * cfg.s;
+      if (val) val.textContent = cfg.f(P[cfg.p]);
+      update();
+    });
+  });
+  
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelector(`.tab-panel[data-tab="${tab.dataset.tab}"]`).classList.add('active');
+    });
+  });
+  
+  update();
+});
+</script>
+</body>
+</html>

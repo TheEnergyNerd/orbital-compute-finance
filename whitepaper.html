@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Levelized Cost of Compute - Whitepaper | Pranav Myana</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    :root {
+      --text: #1a1a1a;
+      --muted: #666;
+      --bg: #fff;
+      --accent: #0066cc;
+      --orbital: #1a8a6a;
+      --ground: #cc6644;
+      --border: #e0e0e0;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, var(--accent) 0%, #004d99 100%);
+      color: white;
+      padding: 48px 24px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+    
+    .header .subtitle { font-size: 16px; opacity: 0.9; }
+    .header .author { margin-top: 24px; font-size: 14px; opacity: 0.8; }
+    
+    .actions { display: flex; justify-content: center; gap: 16px; margin-top: 24px; }
+    .btn { font-size: 13px; font-weight: 500; padding: 12px 24px; border-radius: 6px; text-decoration: none; transition: all 0.2s; }
+    .btn-primary { background: white; color: var(--accent); }
+    .btn-primary:hover { background: #f0f0f0; }
+    .btn-secondary { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.25); }
+    
+    .container { max-width: 720px; margin: 0 auto; padding: 48px 24px; }
+    
+    h2 { font-size: 22px; font-weight: 600; margin: 48px 0 20px; color: var(--text); }
+    h2:first-of-type { margin-top: 0; }
+    p { margin-bottom: 18px; }
+    strong { font-weight: 600; }
+    em { font-style: italic; }
+    ul, ol { margin: 18px 0; padding-left: 24px; }
+    li { margin-bottom: 8px; }
+    
+    .highlight {
+      background: #f0f7ff;
+      border-left: 3px solid var(--accent);
+      padding: 20px 24px;
+      margin: 32px 0;
+      font-size: 15px;
+    }
+    
+    .chart-container {
+      background: #fafafa;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin: 32px 0;
+    }
+    .chart-container h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: var(--muted); }
+    .chart-box { height: 300px; position: relative; }
+    .chart-legend { display: flex; gap: 24px; margin-top: 16px; font-size: 13px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+    
+    .formula-block {
+      background: #f8f9fa;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin: 24px 0;
+      overflow-x: auto;
+    }
+    .formula-block .katex-display { margin: 12px 0; }
+    .formula-label { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+    
+    .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 32px 0; }
+    .comparison-col { padding: 24px; border-radius: 8px; }
+    .comparison-col.ground { background: #fff5f5; border: 1px solid #ffcccc; }
+    .comparison-col.orbital { background: #f0fff8; border: 1px solid #b3e6cc; }
+    .comparison-col h4 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
+    .comparison-col.ground h4 { color: var(--ground); }
+    .comparison-col.orbital h4 { color: var(--orbital); }
+    .comparison-col ul { margin: 0; padding-left: 20px; font-size: 14px; }
+    
+    .risks { margin: 32px 0; }
+    .risk { margin-bottom: 24px; padding: 20px; background: #fafafa; border-radius: 8px; }
+    .risk h4 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+    .risk p { font-size: 14px; margin-bottom: 0; color: var(--muted); }
+    
+    .footer { border-top: 1px solid var(--border); padding: 32px 24px; text-align: center; font-size: 13px; color: var(--muted); }
+    .footer a { color: var(--accent); text-decoration: none; }
+    
+    @media (max-width: 600px) {
+      .header h1 { font-size: 28px; }
+      .comparison { grid-template-columns: 1fr; }
+      .container { padding: 32px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>The Levelized Cost of Compute</h1>
+    <div class="subtitle">A Framework for Comparing Orbital vs. Terrestrial Data Centers</div>
+    <div class="author">Pranav Myana</div>
+    <div class="actions">
+      <a href="/assets/whitepaper.pdf" class="btn btn-primary" download>Download PDF</a>
+      <a href="/finance" class="btn btn-secondary">Interactive Simulator</a>
+    </div>
+  </div>
+  
+  <div class="container">
+    <p><strong>You can't master something that you can't even measure.</strong> And everyone has been measuring the cost of compute wrong. This has led to the denouncement of Data Centers in Space. In this whitepaper, I break down how Orbital Compute compares to ground data centers through the mechanism of a new standard: the Levelized Cost of Compute.</p>
+    
+    <div class="chart-container">
+      <h3>LCOC Crossover Projection (Baseline Scenario)</h3>
+      <div class="chart-box">
+        <canvas id="lcoc-chart"></canvas>
+      </div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background: #1a8a6a;"></div>Orbital LCOC</div>
+        <div class="legend-item"><div class="legend-dot" style="background: #cc6644;"></div>Ground Market Price</div>
+      </div>
+    </div>
+    
+    <h2>First Principles: What Does a Data Center Need?</h2>
+    
+    <p>Data Centers in Space sounds jarring. Let's break it down into first principles.</p>
+    
+    <div class="comparison">
+      <div class="comparison-col ground">
+        <h4>Ground Inputs</h4>
+        <ul>
+          <li><strong>Power:</strong> Grid interconnection queues are 3-5 years long.</li>
+          <li><strong>Land:</strong> Fight zoning, environmental review, community pushback.</li>
+          <li><strong>Water:</strong> Water rights are contested and tightening.</li>
+          <li><strong>Labor:</strong> Skilled technicians must relocate. Rising costs.</li>
+        </ul>
+      </div>
+      <div class="comparison-col orbital">
+        <h4>Orbital Inputs</h4>
+        <ul>
+          <li><strong>Launch:</strong> $60k/kg → $1.5k/kg → $10-20/kg (Starship).</li>
+          <li><strong>Manufacturing:</strong> Learning curves drive cost down.</li>
+          <li><strong>Power:</strong> Near 24/7 solar. No interconnection, no fuel.</li>
+          <li><strong>Cooling:</strong> Radiative cooling. No water rights.</li>
+        </ul>
+      </div>
+    </div>
+    
+    <h2>The LCOC Framework</h2>
+    
+    <p>Inspired by the energy industry's Levelized Cost of Energy (LCOE), LCOC enables apples-to-apples comparison between radically different architectures.</p>
+    
+    <div class="highlight">
+      <strong>LCOC = $/delivered GPU-hour</strong> with a standard SLA (99.9% uptime), factoring capital expenditure, operating expenses, financing costs, and actual utilization.
+    </div>
+    
+    <h2>Core Equations</h2>
+    
+    <div class="formula-block">
+      <div class="formula-label">Delivered GPU-hours per year:</div>
+      $$\text{DeliveredGPUh}_y = \text{GPUeq}_y \cdot 8760 \cdot \text{SLA} \cdot \min\left(1,\frac{BW_{\text{avail},y}}{BW_{\text{need},y}}\right) \cdot \min\left(1,\frac{D_y}{C_y}\right)$$
+      
+      <div class="formula-label" style="margin-top: 24px;">Effective LCOC:</div>
+      $$\text{LCOC}_{\text{effective},y} = \frac{\text{LCOC}_{\text{base},y}}{u_{\text{sell},y}}$$
+      
+      <div class="formula-label" style="margin-top: 24px;">Base LCOC:</div>
+      $$\text{LCOC}_{\text{base}} = \frac{\text{CAPEX} \cdot \text{CRF}(r,n) + \text{OPEX}}{\text{GPUeq} \cdot 8760 \cdot \text{SLA}}$$
+      
+      <div class="formula-label" style="margin-top: 24px;">Capital Recovery Factor:</div>
+      $$\text{CRF}(r,n) = \frac{r(1+r)^n}{(1+r)^n - 1}$$
+    </div>
+    
+    <p>Where:</p>
+    <ul>
+      <li><strong>GPUeq</strong> = GPU-equivalent compute capacity</li>
+      <li><strong>SLA</strong> = 0.999 (99.9% uptime)</li>
+      <li><strong>BW<sub>avail</sub> / BW<sub>need</sub></strong> = Bandwidth sellability</li>
+      <li><strong>D<sub>y</sub> / C<sub>y</sub></strong> = Demand sellability</li>
+      <li><strong>u<sub>sell</sub></strong> = min(bwSell, demandSell)</li>
+      <li><strong>r</strong> = WACC (12% orbital, 8% ground)</li>
+      <li><strong>n</strong> = Asset lifetime (years)</li>
+    </ul>
+    
+    <h2>Why Now?</h2>
+    
+    <p>Ground compute costs are flattening. The easy sites are taken. Meanwhile, orbital costs are rapidly declining.</p>
+    
+    <p><strong>I predict crossover sometime in the early 2030s.</strong></p>
+    
+    <p><em>If you don't believe in space data centers, you don't believe in compute growth.</em></p>
+    
+    <h2>Risks</h2>
+    
+    <div class="risks">
+      <div class="risk">
+        <h4>Thermal</h4>
+        <p>Heat can only leave by radiation. Droplet radiators are the breakthrough.</p>
+      </div>
+      <div class="risk">
+        <h4>Bandwidth</h4>
+        <p>The binding constraint post-fusion—you can build faster than you can sell.</p>
+      </div>
+      <div class="risk">
+        <h4>Radiation</h4>
+        <p>SEU (bit flips) needs redundancy. TID (cumulative damage) limits lifetime.</p>
+      </div>
+    </div>
+    
+    <h2>Try the Model</h2>
+    
+    <p>The <a href="/finance">interactive simulator</a> lets you adjust every assumption. <strong>Every breakthrough just moves the bottleneck.</strong></p>
+  </div>
+  
+  <div class="footer">
+    <p>© 2024 Pranav Myana · <a href="/finance">Simulator</a> · <a href="/">Home</a></p>
+  </div>
+  
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left: '$$', right: '$$', display: true},
+          {left: '$', right: '$', display: false}
+        ]
+      });
+      
+      const ctx = document.getElementById('lcoc-chart').getContext('2d');
+      const years = Array.from({length: 26}, (_, i) => 2025 + i);
+      const orbitalLcoc = years.map(y => {
+        const t = y - 2025;
+        if (t < 5) return 2.5 - t * 0.2;
+        if (t < 10) return 1.5 - (t - 5) * 0.15;
+        return Math.max(0.08, 0.75 - (t - 10) * 0.045);
+      });
+      const groundPrice = years.map(y => {
+        const t = y - 2025;
+        const base = 0.85;
+        const premium = 1 + Math.min(2, t * 0.08);
+        return base * premium * Math.pow(0.97, t);
+      });
+      
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: years,
+          datasets: [
+            { label: 'Orbital LCOC', data: orbitalLcoc, borderColor: '#1a8a6a', backgroundColor: 'rgba(26, 138, 106, 0.1)', fill: true, tension: 0.3 },
+            { label: 'Ground Market', data: groundPrice, borderColor: '#cc6644', backgroundColor: 'rgba(204, 102, 68, 0.1)', fill: true, tension: 0.3 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}/GPU-hr` } } },
+          scales: { x: { grid: { display: false } }, y: { title: { display: true, text: '$/GPU-hr' }, min: 0, max: 3 } }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

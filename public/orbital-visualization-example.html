@@ -1,0 +1,1656 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Orbital Compute Visualization Example</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000011;
+      font-family: Arial, sans-serif;
+    }
+    #container {
+      width: 100vw;
+      height: 100vh;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    #baselineText {
+      color: rgba(255, 255, 255, 0.8);
+      font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+      font-size: 12px;
+      text-align: right;
+    }
+    #deployButton {
+      background: #2d5a4f; /* Dark teal/green like the image */
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: normal;
+      font-family: 'Courier New', 'Monaco', 'Menlo', monospace; /* Mono font */
+      border-radius: 6px; /* Slightly rounded corners */
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: background 0.2s, transform 0.1s;
+    }
+    #deployButton:hover {
+      background: #3a6b5e;
+      transform: translateY(-1px);
+    }
+    #deployButton:active {
+      transform: translateY(0);
+      background: #244a3f;
+    }
+    #scale-info {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(139, 90, 43, 0.95); /* Warm brown/tan like Pokemon UI */
+      border: 3px solid rgba(101, 67, 33, 1); /* Darker brown border */
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: rgba(255, 248, 220, 0.95); /* Warm cream text */
+      min-width: 200px;
+      z-index: 100;
+      box-shadow: 
+        0 4px 8px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+      /* Pixelated/retro feel */
+      image-rendering: pixelated;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: crisp-edges;
+    }
+    .scale-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: rgba(255, 220, 177, 1); /* Warm orange/peach */
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid rgba(101, 67, 33, 0.8); /* Darker brown */
+      font-weight: bold;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    .scale-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .scale-label {
+      color: rgba(255, 248, 220, 0.85); /* Cream */
+    }
+    .scale-value {
+      color: rgba(255, 200, 87, 1); /* Warm golden yellow */
+      font-weight: bold;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4);
+    }
+    .scale-note {
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 2px solid rgba(101, 67, 33, 0.6);
+      font-size: 10px;
+      color: rgba(200, 170, 120, 0.9); /* Muted tan */
+      line-height: 1.5;
+    }
+    .scale-note strong {
+      color: rgba(255, 200, 87, 0.9); /* Golden yellow for emphasis */
+      font-weight: bold;
+    }
+  </style>
+  
+  <!-- Load Three.js with fallback CDNs -->
+  <script>
+    (function() {
+      var loaded = false;
+      // Using more reliable CDN URLs with proper MIME types
+      // Note: A local copy (three.min.js) is available as fallback
+      var cdns = [
+        'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js',
+        'https://unpkg.com/three@0.160.0/build/three.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js',
+        'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.js',
+        'https://unpkg.com/three@0.160.0/build/three.js'
+      ];
+      var currentIndex = 0;
+      
+      function showError() {
+        var infoEl = document.getElementById('info');
+        if (infoEl) {
+          infoEl.innerHTML = '<div style="color: red;">Error: Could not load Three.js.<br>Please download three.min.js from <a href="https://threejs.org/" style="color: #88aaff;" target="_blank">threejs.org</a> and place it in the same directory, or check your network connection.</div>';
+        }
+      }
+      
+      function tryLoadLocal() {
+        console.log('Attempting to load local Three.js...');
+        var localScript = document.createElement('script');
+        localScript.src = 'three.min.js';
+        localScript.type = 'text/javascript';
+        localScript.onload = function() {
+          if (typeof THREE !== 'undefined') {
+            loaded = true;
+            console.log('Three.js loaded from local file');
+            loadVizLib();
+          } else {
+            showError();
+          }
+        };
+        localScript.onerror = showError;
+        document.head.appendChild(localScript);
+      }
+      
+      function tryLoad() {
+        if (loaded || currentIndex >= cdns.length) {
+          if (!loaded && currentIndex >= cdns.length) {
+            tryLoadLocal();
+          }
+          return;
+        }
+        
+        var script = document.createElement('script');
+        script.src = cdns[currentIndex];
+        script.type = 'text/javascript';
+        script.crossOrigin = 'anonymous';
+        script.onload = function() {
+          if (typeof THREE !== 'undefined') {
+            loaded = true;
+            console.log('Three.js loaded from CDN ' + (currentIndex + 1));
+            loadVizLib();
+          } else {
+            currentIndex++;
+            tryLoad();
+          }
+        };
+        script.onerror = function() {
+          currentIndex++;
+          if (currentIndex < cdns.length) {
+            console.warn('CDN ' + currentIndex + ' failed, trying next...');
+            tryLoad();
+          } else {
+            console.error('All CDNs failed to load Three.js');
+            tryLoadLocal();
+          }
+        };
+        document.head.appendChild(script);
+      }
+      
+      function loadVizLib() {
+        var script = document.createElement('script');
+        script.src = 'orbital-visualization.js';
+        script.onload = function() {
+          console.log('Visualization library loaded');
+          
+          // Load simple OrbitControls implementation
+          loadSimpleOrbitControls();
+          
+          if (typeof initVisualization === 'function') {
+            initVisualization();
+          } else {
+            // Wait a bit if function not ready
+            setTimeout(function() {
+              if (typeof initVisualization === 'function') {
+                initVisualization();
+              } else {
+                console.error('initVisualization function not found');
+              }
+            }, 100);
+          }
+        };
+        script.onerror = function() {
+          console.error('Failed to load orbital-visualization.js');
+          document.getElementById('info').innerHTML = '<div style="color: red;">Error: orbital-visualization.js failed to load</div>';
+        };
+        document.head.appendChild(script);
+      }
+      
+      function loadSimpleOrbitControls() {
+        // Load simple OrbitControls implementation
+        var controlsScript = document.createElement('script');
+        controlsScript.src = 'simple-orbit-controls.js';
+        controlsScript.onload = function() {
+          console.log('OrbitControls loaded');
+          if (window.onOrbitControlsLoaded) window.onOrbitControlsLoaded();
+        };
+        controlsScript.onerror = function() {
+          console.error('Failed to load OrbitControls');
+        };
+        document.head.appendChild(controlsScript);
+      }
+      
+      window.onOrbitControlsLoaded = function() {
+        console.log('OrbitControls loaded');
+      };
+      
+      // Start loading when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', tryLoad);
+      } else {
+        tryLoad();
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div id="container"></div>
+  <div id="controls">
+    <button id="deployButton">Deploy 2026</button>
+    <div id="baselineText">Baseline Only</div>
+  </div>
+  <div id="scale-info">
+    <div class="scale-title">Scale Reference</div>
+    <div class="scale-row">
+      <span class="scale-label">Year:</span>
+      <span class="scale-value" id="scale-year">2026</span>
+    </div>
+    <div class="scale-note">
+      <strong>Each dot represents multiple platforms.</strong><br>
+      Distribution is representative, not exact positions.<br>
+      <strong>Representative visualization, not true to scale.</strong><br>
+      Orbits shown for visual variety and clarity.
+    </div>
+  </div>
+
+  <!-- Visualization Library -->
+  <script src="orbital-visualization.js"></script>
+
+  <script>
+    // Main initialization function
+    function initVisualization() {
+      // Check Three.js is loaded
+      if (typeof THREE === 'undefined') {
+        console.error('Three.js is not available');
+        document.getElementById('info').innerHTML = '<div style="color: red;">Error: Three.js failed to load</div>';
+        return;
+      }
+      
+      // Check OrbitalViz is loaded
+      if (typeof OrbitalViz === 'undefined') {
+        console.error('OrbitalViz is not available');
+        document.getElementById('info').innerHTML = '<div style="color: red;">Error: orbital-visualization.js failed to load</div>';
+        return;
+      }
+      
+      // ============================================================================
+      // SETUP THREE.JS SCENE
+      // ============================================================================
+      
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.getElementById('container').appendChild(renderer.domElement);
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+      scene.add(ambientLight);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0);
+      directionalLight.position.set(5, 5, 5);
+      scene.add(directionalLight);
+
+      // Camera position
+      camera.position.set(0, 0, 4);
+      
+      // OrbitControls for camera interaction
+      let controls = null;
+      
+      // Initialize OrbitControls when available
+      function initControls() {
+        if (typeof OrbitControls !== 'undefined') {
+          controls = new OrbitControls(camera, renderer.domElement);
+          controls.enableDamping = true;
+          controls.dampingFactor = 0.05;
+          controls.enablePan = false; // Disable panning - only zoom and rotate
+          controls.enableZoom = true;
+          controls.enableRotate = true;
+          controls.minDistance = 1.5;
+          controls.maxDistance = 20;
+          controls.target.set(0, 0, 0);
+          console.log('OrbitControls initialized');
+          return true;
+        }
+        return false;
+      }
+      
+      // Hook into OrbitControls loading
+      window.onOrbitControlsLoaded = function() {
+        initControls();
+      };
+      
+      // Start trying to initialize controls (in case it loads before this function runs)
+      if (!initControls()) {
+        // Retry if OrbitControls not loaded yet
+        var retryCount = 0;
+        var retryInterval = setInterval(function() {
+          if (initControls() || retryCount++ > 50) {
+            clearInterval(retryInterval);
+            if (retryCount > 50) {
+              console.warn('OrbitControls failed to load after retries');
+            }
+          }
+        }, 100);
+      }
+
+      // ============================================================================
+      // CREATE GLOBE
+      // ============================================================================
+      
+      let earthMesh;
+      // Create stylized Pokemon HeartGold/SoulSilver-style globe
+      createStylizedGlobe(scene).then(mesh => {
+        earthMesh = mesh;
+        // Apply Earth's axial tilt (23.44°) relative to ecliptic/Sun
+        // This is critical for correct terminator and SSO alignment
+        earthMesh.rotation.x = 23.44 * (Math.PI / 180);
+        console.log('Stylized globe created with axial tilt');
+      }).catch(err => {
+        console.error('Failed to create globe:', err);
+      });
+      
+      // Create stylized globe with Pokemon HeartGold/SoulSilver aesthetic
+      // Shows actual countries/continents in pixelated style
+      function createStylizedGlobe(scene) {
+        return new Promise((resolve, reject) => {
+          try {
+            // Create sphere geometry - lower resolution for pixelated look
+            const geometry = new THREE.SphereGeometry(1.0, 128, 64);
+            
+            // Load actual Earth texture for continent shapes
+            const textureLoader = new THREE.TextureLoader();
+            const textureUrl = 'https://raw.githubusercontent.com/turban/webgl-earth/master/images/2_no_clouds_4k.jpg';
+            
+            textureLoader.load(
+              textureUrl,
+              function(texture) {
+                texture.flipY = true;
+                
+                // Create custom shader material for pixelated, stylized look
+                const material = new THREE.ShaderMaterial({
+                  uniforms: {
+                    time: { value: 0 },
+                    lightDirection: { value: new THREE.Vector3(1, 1, 1).normalize() },
+                    earthTexture: { value: texture },
+                    dayNightCycle: { value: 0.5 } // 0 = night, 1 = day
+                  },
+                  vertexShader: `
+                    varying vec3 vNormal;
+                    varying vec3 vPosition;
+                    varying vec2 vUv;
+                    
+                    void main() {
+                      vUv = uv;
+                      vNormal = normalize(normalMatrix * normal);
+                      vPosition = position;
+                      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                  `,
+                  fragmentShader: `
+                    uniform float time;
+                    uniform vec3 lightDirection;
+                    uniform sampler2D earthTexture;
+                    uniform float dayNightCycle;
+                    varying vec3 vNormal;
+                    varying vec3 vPosition;
+                    varying vec2 vUv;
+                    
+                    // Dithering function for pixelation effect
+                    float dither(vec2 uv) {
+                      vec2 pixelSize = vec2(2.0, 2.0); // Pixelation amount
+                      vec2 pixelated = floor(uv * pixelSize) / pixelSize;
+                      vec2 ditherOffset = (fract(uv * pixelSize) - 0.5) * 0.1;
+                      return length(ditherOffset);
+                    }
+                    
+                    // Convert RGB to stylized Pokemon colors (SIMPLIFIED PALETTE - Option 4)
+                    vec3 stylizeColor(vec3 original) {
+                      // Better land detection
+                      float landScore = (original.r + original.g) - original.b * 0.8;
+                      float isLand = step(0.15, landScore);
+                      
+                      if (isLand > 0.5) {
+                        // Simplified: Only 2 land colors (Option 4)
+                        float brightness = (original.r + original.g + original.b) / 3.0;
+                        if (brightness > 0.5) {
+                          return vec3(0.65, 0.6, 0.4); // Light tan/beige (simplified)
+                        } else {
+                          return vec3(0.35, 0.5, 0.3); // Forest green (simplified)
+                        }
+                      } else {
+                        // Simplified: Only 2 ocean colors (Option 4)
+                        float depth = (original.b - original.r * 0.3) * 1.2;
+                        if (depth > 0.5) {
+                          return vec3(0.2, 0.45, 0.65); // Deep blue
+                        } else {
+                          return vec3(0.3, 0.55, 0.75); // Light blue
+                        }
+                      }
+                    }
+                    
+                    void main() {
+                      vec2 uv = vUv;
+                      
+                      // Option 6: Dithering/pixelation effect (5x less pixelated)
+                      float ditherAmount = dither(uv);
+                      // Increased resolution 5x: from 256x128 to ~1280x640 (less pixelated)
+                      vec2 pixelatedUv = floor(uv * vec2(1280.0, 640.0)) / vec2(1280.0, 640.0);
+                      vec3 texColor = texture2D(earthTexture, pixelatedUv).rgb;
+                      
+                      // Convert to stylized Pokemon colors
+                      vec3 baseColor = stylizeColor(texColor);
+                      
+                      // Option 3: Boost saturation (more vibrant colors)
+                      float gray = dot(baseColor, vec3(0.299, 0.587, 0.114));
+                      baseColor = mix(vec3(gray), baseColor, 1.4); // Increase saturation
+                      baseColor = clamp(baseColor, 0.0, 1.0);
+                      
+                      // Option 2: Stronger cel-shading (more dramatic bands)
+                      float lightIntensity = dot(vNormal, lightDirection);
+                      lightIntensity = smoothstep(-0.3, 1.0, lightIntensity);
+                      
+                      // Create 2-tone cel shading (stronger contrast - Option 2)
+                      float cel = floor(lightIntensity * 2.0) / 2.0;
+                      cel = smoothstep(0.0, 1.0, cel);
+                      
+                      // Apply cel shading with stronger contrast
+                      vec3 finalColor = baseColor * (0.3 + cel * 0.7); // More dramatic (Option 2)
+                      
+                      // Day/night color temperature shift (more saturated - Option 3)
+                      vec3 dayTint = vec3(1.15, 1.1, 0.9); // Warmer, more saturated
+                      vec3 nightTint = vec3(0.65, 0.75, 1.15); // Cooler, more saturated
+                      vec3 colorTemp = mix(nightTint, dayTint, dayNightCycle);
+                      finalColor *= colorTemp;
+                      
+                      // Option 5: Bloom/glow effect (shader-based)
+                      float rim = 1.0 - dot(vNormal, vec3(0.0, 0.0, 1.0));
+                      rim = pow(rim, 2.5);
+                      vec3 bloomColor = vec3(0.5, 0.6, 0.7) * rim * 0.3;
+                      finalColor += bloomColor;
+                      
+                      // Apply dithering noise for pixelation effect (Option 6)
+                      finalColor += (ditherAmount - 0.5) * 0.05;
+                      
+                      gl_FragColor = vec4(finalColor, 1.0);
+                    }
+                  `,
+                  side: THREE.FrontSide
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                scene.add(mesh);
+                
+                // Update time uniform for animation
+                const animate = () => {
+                  material.uniforms.time.value += 0.01;
+                  requestAnimationFrame(animate);
+                };
+                animate();
+                
+                resolve(mesh);
+              },
+              undefined,
+              reject
+            );
+          } catch (error) {
+            reject(error);
+          }
+        });
+      }
+
+      // ============================================================================
+      // SATELLITE DATA (from your physics model)
+      // ============================================================================
+      
+      // Example: Your physics model would populate this
+      let satellites = [];
+      
+      // Generate SSO position with correct geometry
+      // For dawn-dusk SSO:
+      // 1. Orbital plane normal = Sun direction (terminator alignment)
+      // 2. Orbit is inclined 98° relative to Earth's EQUATORIAL plane (near-polar)
+      // 3. Orbit passes near both poles
+      function generateSSOPosition(altitudeKm, inclinationDeg, trueAnomaly, sunDirection, earthAxialTilt) {
+        const EARTH_RADIUS_KM = 6371;
+        const radius = 1.0 + (altitudeKm / EARTH_RADIUS_KM);
+        const inclination = inclinationDeg * (Math.PI / 180);
+        
+        // Sun direction (normalized) - orbital plane normal should be parallel to this
+        const sunDir = sunDirection.clone().normalize();
+        
+        // Earth's north pole direction (Y-up in Three.js)
+        // Note: Earth mesh is rotated by axial tilt, but in Earth's frame, north is still (0,1,0)
+        const earthNorth = new THREE.Vector3(0, 1, 0);
+        
+        // For SSO: orbital plane is perpendicular to Sun (contains terminator)
+        // The orbital plane normal is the Sun direction
+        const orbitNormal = sunDir.clone();
+        
+        // Create two perpendicular vectors in the orbital plane
+        // First: find a vector perpendicular to both orbit normal and Earth's north pole
+        // This gives us one axis in the orbital plane
+        let axis1 = new THREE.Vector3().crossVectors(earthNorth, orbitNormal);
+        if (axis1.length() < 0.001) {
+          // Edge case: Sun aligned with pole, use arbitrary perpendicular
+          axis1 = new THREE.Vector3(1, 0, 0);
+        }
+        axis1.normalize();
+        
+        // Second axis: perpendicular to both orbit normal and axis1
+        const axis2 = new THREE.Vector3().crossVectors(orbitNormal, axis1).normalize();
+        
+        // Now we need to ensure the orbit is inclined 98° relative to Earth's equator
+        // The inclination is the angle between the orbital plane and equatorial plane
+        // For near-polar (98°), we rotate the orbital plane around axis1
+        // The rotation angle is (98° - 90°) = 8° from being perfectly polar
+        const inclinationOffset = inclination - Math.PI / 2; // 98° - 90° = 8°
+        const inclinationQuat = new THREE.Quaternion().setFromAxisAngle(axis1, inclinationOffset);
+        
+        // Rotate axis2 by the inclination offset
+        const rotatedAxis2 = axis2.clone().applyQuaternion(inclinationQuat);
+        
+        // Position in orbital plane (circular orbit)
+        const xp = radius * Math.cos(trueAnomaly);
+        const yp = radius * Math.sin(trueAnomaly);
+        
+        // Convert to 3D position
+        const position = new THREE.Vector3()
+          .addScaledVector(axis1, xp)
+          .addScaledVector(rotatedAxis2, yp);
+        
+        return { x: position.x, y: position.y, z: position.z };
+      }
+      
+      // Generate realistic orbital positions using orbital mechanics (for non-SSO orbits)
+      function generateOrbitalPosition(altitudeKm, inclinationDeg, trueAnomaly, ascendingNodeLongitude = null) {
+        const EARTH_RADIUS_KM = 6371;
+        const radius = 1.0 + (altitudeKm / EARTH_RADIUS_KM);
+        const inclination = inclinationDeg * (Math.PI / 180);
+        
+        // Use random ascending node longitude if not provided (distributes orbits around globe)
+        const omega = ascendingNodeLongitude !== null 
+          ? ascendingNodeLongitude * (Math.PI / 180)
+          : Math.random() * Math.PI * 2;
+        
+        // True anomaly is the angle in the orbital plane (0 to 2π)
+        // Position in orbital plane (before rotation)
+        const u = trueAnomaly; // Argument of latitude = true anomaly for circular orbits
+        const xp = radius * Math.cos(u);
+        const yp = radius * Math.sin(u);
+        
+        // Rotate by inclination around x-axis (line of nodes)
+        const x1 = xp;
+        const y1 = yp * Math.cos(inclination);
+        const z1 = yp * Math.sin(inclination);
+        
+        // Rotate around z-axis (vertical) by ascending node longitude
+        const cosOmega = Math.cos(omega);
+        const sinOmega = Math.sin(omega);
+        const x = x1 * cosOmega - y1 * sinOmega;
+        const y = x1 * sinOmega + y1 * cosOmega;
+        const z = z1;
+        
+        // Three.js uses Y-up coordinate system, so we need to map:
+        // Standard orbital: Z-up (north pole), X-Y plane is equator
+        // Three.js: Y-up (north pole), X-Z plane is equator
+        // So we map: (x, y, z) -> (x, z, -y)
+        return { x: x, y: z, z: -y };
+      }
+      
+      let deploymentCount = 0;
+      let currentYear = 2026; // Start in 2026
+      let crossoverYear = 2030; // Default crossover year (can be updated from physics model)
+      let fissionEnabled = false; // Track when fission becomes available
+      
+      // Scale data - actual vs rendered satellite counts (exponential growth)
+      // Based on baseline scenario: droplet 2030, fission 2035, fusion off
+      // Significantly increased rendered counts for better visibility and variety
+      const SCALE_DATA = {
+        2026: { actual: 0, rendered: 0 },
+        2027: { actual: 200, rendered: 60 },       // Increased for better visibility
+        2028: { actual: 500, rendered: 100 },       // Increased for better visibility
+        2029: { actual: 1000, rendered: 140 },      // Increased for better visibility
+        2030: { actual: 2000, rendered: 180 },      // Increased (Droplet enables MW-class)
+        2031: { actual: 8000, rendered: 220 },
+        2032: { actual: 20000, rendered: 260 },
+        2033: { actual: 40000, rendered: 300 },
+        2034: { actual: 60000, rendered: 340 },
+        2035: { actual: 75000, rendered: 380 },    // Fission unlocks cislunar
+        2036: { actual: 100000, rendered: 420 },
+        2037: { actual: 130000, rendered: 460 },
+        2038: { actual: 160000, rendered: 500 },
+        2039: { actual: 190000, rendered: 540 },
+        2040: { actual: 220000, rendered: 580 },
+        2041: { actual: 245000, rendered: 620 },
+        2042: { actual: 265000, rendered: 660 },
+        2043: { actual: 285000, rendered: 700 },
+        2044: { actual: 300000, rendered: 740 },
+        2045: { actual: 315000, rendered: 780 },   // LEO approaching capacity
+        2046: { actual: 325000, rendered: 820 },
+        2047: { actual: 335000, rendered: 860 },
+        2048: { actual: 342000, rendered: 900 },
+        2049: { actual: 348000, rendered: 940 },
+        2050: { actual: 353000, rendered: 980 }    // ~7.6 TW total
+      };
+      
+      // Update scale info display
+      function updateScaleInfo(year) {
+        const yearEl = document.getElementById('scale-year');
+        if (yearEl) yearEl.textContent = year;
+      }
+
+      // ============================================================================
+      // STATE MANAGEMENT AND EXPORT FOR CURSOR + WORLD VIZ
+      // ============================================================================
+      
+      // Simulator state variables (initialized before use)
+      // Note: crossoverYear, currentYear, and fissionEnabled are declared above (line ~557)
+      let P = {}; // Physics parameters
+      let fleetResults = null;
+      let sats = []; // Satellites array (alias for satellites)
+      let gnds = []; // Ground stations array
+      
+      // Update function - called when P is modified
+      function update() {
+        // Update visualization based on current state
+        if (satellites.length > 0 || sats.length > 0) {
+          updateSatellitesFromPhysics();
+        }
+        updateStats();
+      }
+      
+      // Export state to window for Cursor + world viz
+      function exportState() {
+        window.simulatorState = {
+          P: P,
+          fleetResults: fleetResults,
+          sats: sats.length > 0 ? sats : satellites, // Use sats if set, otherwise use satellites
+          gnds: gnds,
+          crossoverYear: crossoverYear,
+          currentYear: currentYear,
+          fissionEnabled: fissionEnabled
+        };
+      }
+      
+      // Create P as a Proxy to detect changes and call update()
+      const PBase = {};
+      P = new Proxy(PBase, {
+        set(target, property, value) {
+          target[property] = value;
+          update(); // Call update when P is modified
+          exportState(); // Re-export state
+          return true;
+        },
+        get(target, property) {
+          return target[property];
+        }
+      });
+      
+      function generateSatellites(addToExisting = false) {
+        // If not adding to existing, start fresh
+        if (!addToExisting) {
+          satellites = [];
+          deploymentCount = 0;
+          currentYear = 2026; // Reset to 2026
+        }
+        
+        console.log('generateSatellites called - addToExisting:', addToExisting, 'currentYear:', currentYear);
+        
+        // Update crossover year from physics model if available
+        if (window.simulatorState?.crossoverYear) {
+          crossoverYear = window.simulatorState.crossoverYear;
+        }
+        
+        // Check if fission is enabled (typically around 2035)
+        fissionEnabled = currentYear >= 2035;
+        
+        // Calculate unlock years based on crossover - matching physics model reference
+        // LEO unlocks early (2026) to allow satellites in early years
+        // Crossover year (2030) marks when orbital compute becomes economically viable
+        const leoUnlockYear = 2026; // Always available from start
+        const meoUnlockYear = crossoverYear + 2; // Crossover + 2 years (2032)
+        const geoUnlockYear = crossoverYear + 3; // Crossover + 3 years (2033)
+        const cislunarUnlockYear = 2038; // Based on physics model: L4 shell starts at 2038
+        
+        // Get target rendered count from scale data (exponential growth)
+        const scaleData = SCALE_DATA[currentYear] || { actual: 0, rendered: 0 };
+        const targetRendered = scaleData.rendered || 0;
+        
+        // Calculate distribution percentages - adjusted for better visualization variety
+        // Increased MEO, GEO, and cislunar percentages so they're more visible
+        // LEO: 300,000 / 353,400 = 84.9% (reduced to make room for others)
+        // MEO: 50,000 / 353,400 = 14.1% (increased for visibility)
+        // GEO: 1,800 / 353,400 = 0.5% (increased for visibility)
+        // Cislunar: 1,600 / 353,400 = 0.5% (increased for visibility)
+        // SSO is part of LEO, so we'll allocate 15% of LEO to SSO
+        const leoPercent = 0.70;   // Reduced from 84.9% to make room for other orbits
+        const meoPercent = 0.20;   // Increased from 14.1% for better visibility
+        const geoPercent = 0.05;   // Increased from 0.5% (minimum 3-5 for visibility)
+        const cislunarPercent = 0.05;  // Increased from 0.5% (minimum 3-5 for visibility)
+        
+        // Use golden angle for better distribution (137.508° in degrees, ~2.4 radians)
+        const goldenAngle = 2.399963229728653; // Golden angle in radians for optimal spacing
+        const baseOffset = deploymentCount * goldenAngle; // Offset each deployment using golden angle
+        
+        // SSO (Sun-Synchronous Orbit) - Diamond shape (octahedron), 98° inclination, 600-800km
+        // Dawn-dusk SSO: Correctly oriented near-polar orbit aligned with terminator
+        // SSO is part of LEO, so unlocked with LEO (2026)
+        // SSO gets ~15% of LEO allocation (reduced to make room for other LEO)
+        const ssoUnlocked = currentYear >= leoUnlockYear;
+        const ssoCount = ssoUnlocked ? Math.round(targetRendered * leoPercent * 0.15) : 0;
+        const ssoAltitude = 700;
+        const ssoInclination = 98; // Sun-synchronous near-polar (relative to Earth's equator)
+        
+        // CRITICAL: SSO orbital plane must be:
+        // 1. Inclined 98° relative to Earth's EQUATORIAL plane (near-polar)
+        // 2. Orbital plane normal is parallel to Sun direction (terminator alignment)
+        // 3. Passes near both poles
+        
+        // Sun direction (in inertial frame) - defines terminator
+        // For dawn-dusk SSO, orbital plane normal should be parallel to Sun direction
+        const sunDirection = new THREE.Vector3(1, 0, 0).normalize(); // Sun along +X axis
+        
+        // Earth's axial tilt (23.44°) - already applied to Earth mesh rotation
+        const earthAxialTilt = 23.44 * (Math.PI / 180);
+        
+        // For dawn-dusk SSO constellation:
+        // - All satellites share the same orbital plane
+        // - Orbital plane normal = Sun direction (for terminator alignment)
+        // - Orbit is inclined 98° relative to Earth's equator (near-polar)
+        // - Satellites are evenly spaced along the orbit
+        
+        for (let i = 0; i < ssoCount; i++) {
+          // Evenly space satellites along the orbit (true anomaly) - perfect spacing
+          const trueAnomaly = (i / ssoCount) * Math.PI * 2;
+          
+          // Generate SSO position with correct geometry
+          const pos = generateSSOPosition(ssoAltitude, ssoInclination, trueAnomaly, sunDirection, earthAxialTilt);
+          satellites.push({
+            id: `sso_${deploymentCount}_${i}`,
+            x: pos.x,
+            y: pos.y,
+            z: pos.z,
+            altitudeKm: ssoAltitude,
+            shape: 'octahedron', // Diamond shape for SSO
+            isSSO: true, // Flag for special rendering
+            size: 0.03 // Larger size for SSO
+          });
+        }
+        
+        // LEO (Low Earth Orbit) - Various inclinations, 400-2000km
+        // Unlocked: 2026 (always available from start)
+        // LEO gets 85% of total (minus SSO which is already counted)
+        const leoUnlocked = currentYear >= leoUnlockYear;
+        const leoCount = leoUnlocked ? Math.round(targetRendered * leoPercent * 0.85) : 0;
+        const leoConfigs = [
+          { alt: 550, inc: 51.6 }, // ISS-like
+          { alt: 800, inc: 28.5 }, // Lower inclination
+          { alt: 1200, inc: 97.8 } // Polar-like
+        ];
+        
+        // Distribute LEO satellites evenly across configs and orbits
+        // Group satellites by config for even distribution
+        const satellitesPerConfig = Math.floor(leoCount / leoConfigs.length);
+        const extraSatellites = leoCount % leoConfigs.length;
+        
+        let satelliteIndex = 0;
+        for (let configIdx = 0; configIdx < leoConfigs.length; configIdx++) {
+          const config = leoConfigs[configIdx];
+          const countForThisConfig = satellitesPerConfig + (configIdx < extraSatellites ? 1 : 0);
+          
+          for (let j = 0; j < countForThisConfig; j++) {
+            // Evenly space within each config's orbit
+            const trueAnomaly = (j / countForThisConfig) * Math.PI * 2;
+            // Use golden angle spacing for ascending nodes to distribute orbits evenly
+            const ascendingNode = (satelliteIndex * goldenAngle * 180 / Math.PI) % 360;
+            const pos = generateOrbitalPosition(config.alt, config.inc, trueAnomaly, ascendingNode);
+            
+            satellites.push({
+              id: `leo_${deploymentCount}_${satelliteIndex}`,
+              x: pos.x,
+              y: pos.y,
+              z: pos.z,
+              altitudeKm: config.alt,
+              shape: 'sphere'
+            });
+            satelliteIndex++;
+          }
+        }
+        
+        // MEO (Medium Earth Orbit) - 10000-20000km, 55° inclination
+        // Unlocked: 2028 (earlier for visibility)
+        // MEO gets 20% of total (increased for better visibility)
+        const meoUnlocked = currentYear >= meoUnlockYear;
+        const meoCount = meoUnlocked ? Math.round(targetRendered * meoPercent) : 0;
+        const meoAltitude = 20000;
+        for (let i = 0; i < meoCount; i++) {
+          // Evenly space satellites in orbit
+          const trueAnomaly = (i / meoCount) * Math.PI * 2;
+          // Use golden angle for ascending nodes to distribute orbits evenly
+          const ascendingNode = (i * goldenAngle * 180 / Math.PI) % 360;
+          const pos = generateOrbitalPosition(meoAltitude, 55, trueAnomaly, ascendingNode);
+          satellites.push({
+            id: `meo_${deploymentCount}_${i}`,
+            x: pos.x,
+            y: pos.y,
+            z: pos.z,
+            altitudeKm: meoAltitude,
+            shape: 'sphere'
+          });
+        }
+        
+        // GEO (Geosynchronous) - 35786km, equatorial (0° inclination)
+        // Unlocked: 2029 (earlier for visibility)
+        // GEO satellites should be distributed around the equator at different longitudes
+        // GEO gets 5% of total, but minimum 3-5 for visibility
+        const geoUnlocked = currentYear >= geoUnlockYear;
+        const geoCount = geoUnlocked ? Math.max(3, Math.round(targetRendered * geoPercent)) : 0;
+        const geoAltitude = 35786;
+        const geoRadius = 1.0 + (geoAltitude / 6371); // Using Earth radius constant
+        
+        for (let i = 0; i < geoCount; i++) {
+          // Space evenly around the equator by longitude (not by true anomaly in one orbit)
+          const longitude = (i / geoCount) * Math.PI * 2;
+          
+          // GEO is equatorial (0° inclination), so position directly on equator
+          // x = radius * cos(longitude)
+          // y = 0 (on equator)
+          // z = radius * sin(longitude)
+          const pos = {
+            x: geoRadius * Math.cos(longitude),
+            y: 0, // On equator
+            z: geoRadius * Math.sin(longitude)
+          };
+          
+          satellites.push({
+            id: `geo_${deploymentCount}_${i}`,
+            x: pos.x,
+            y: pos.y,
+            z: pos.z,
+            altitudeKm: geoAltitude,
+            shape: 'box'
+          });
+        }
+        
+        // Cislunar - Earth-Moon Lagrange points (L4/L5) and lunar orbits
+        // Unlocked: 2038 (based on physics model: L4 shell starts at 2038)
+        // Cislunar satellites are at L4/L5 Lagrange points (60° ahead/behind Moon) at ~384,400km
+        // For visualization: position satellites near L4/L5 points in Earth-Moon orbital plane
+        // Cislunar gets 5% of total, but minimum 3-5 for visibility
+        const cislunarUnlocked = currentYear >= cislunarUnlockYear;
+        const cislunarCount = cislunarUnlocked ? Math.max(3, Math.round(targetRendered * cislunarPercent)) : 0;
+        const cislunarAltitude = 384400; // Earth-Moon distance (L4/L5 are at this distance)
+        const EARTH_RADIUS_KM = 6371;
+        const cislunarRadius = 1.0 + (cislunarAltitude / EARTH_RADIUS_KM);
+        
+        // Simplified Moon position (for L4/L5 reference)
+        // Moon orbits in ecliptic plane, roughly along +X axis in our coordinate system
+        // L4 is 60° ahead of Moon, L5 is 60° behind Moon in the Moon's orbit
+        const moonAngle = 0; // Simplified: assume Moon at 0° for reference
+        
+        // Distribute satellites between L4 and L5 Lagrange points
+        const l4Count = Math.ceil(cislunarCount / 2);
+        const l5Count = cislunarCount - l4Count;
+        
+        // L4: 60° ahead of Moon
+        const l4BaseAngle = (moonAngle + 60) * (Math.PI / 180);
+        // Scale cloud radius with number of satellites to prevent overlap
+        // Base radius of 0.15, scales up to 0.4 for large counts
+        const l4CloudRadius = Math.min(0.4, 0.15 + (l4Count / 100) * 0.25);
+        for (let i = 0; i < l4Count; i++) {
+          // Distribute satellites around L4 point in a cloud
+          // Use golden angle spacing for better distribution
+          const goldenAngle = 2.399963229728653; // Golden angle in radians
+          const cloudAngle = (i * goldenAngle) % (Math.PI * 2); // Golden angle distribution
+          
+          // Offset from L4 center position - vary distance for 3D cloud effect
+          const offsetRadius = l4CloudRadius * (0.4 + (i % 4) * 0.15); // Vary distance in layers
+          const offsetX = offsetRadius * Math.cos(cloudAngle);
+          const offsetZ = offsetRadius * Math.sin(cloudAngle);
+          const offsetY = l4CloudRadius * 0.5 * Math.sin(i * 1.3); // Vertical spread
+          
+          // Rotate offset to align with L4 position in Earth-Moon plane
+          const rotatedOffsetX = offsetX * Math.cos(l4BaseAngle) - offsetZ * Math.sin(l4BaseAngle);
+          const rotatedOffsetZ = offsetX * Math.sin(l4BaseAngle) + offsetZ * Math.cos(l4BaseAngle);
+          
+          // Final position
+          const x = cislunarRadius * Math.cos(l4BaseAngle) + rotatedOffsetX;
+          const y = offsetY;
+          const z = cislunarRadius * Math.sin(l4BaseAngle) + rotatedOffsetZ;
+          
+          satellites.push({
+            id: `cislunar_${deploymentCount}_L4_${i}`,
+            x: x,
+            y: y,
+            z: z,
+            altitudeKm: cislunarAltitude,
+            shape: 'sphere'
+          });
+        }
+        
+        // L5: 60° behind Moon
+        const l5BaseAngle = (moonAngle - 60) * (Math.PI / 180);
+        // Scale cloud radius with number of satellites to prevent overlap
+        // Base radius of 0.15, scales up to 0.4 for large counts
+        const l5CloudRadius = Math.min(0.4, 0.15 + (l5Count / 100) * 0.25);
+        for (let i = 0; i < l5Count; i++) {
+          // Distribute satellites around L5 point in a cloud
+          // Use golden angle spacing for better distribution
+          const goldenAngle = 2.399963229728653; // Golden angle in radians
+          const cloudAngle = (i * goldenAngle) % (Math.PI * 2); // Golden angle distribution
+          
+          // Offset from L5 center position - vary distance for 3D cloud effect
+          const offsetRadius = l5CloudRadius * (0.4 + (i % 4) * 0.15); // Vary distance in layers
+          const offsetX = offsetRadius * Math.cos(cloudAngle);
+          const offsetZ = offsetRadius * Math.sin(cloudAngle);
+          const offsetY = l5CloudRadius * 0.5 * Math.sin(i * 1.3); // Vertical spread
+          
+          // Rotate offset to align with L5 position in Earth-Moon plane
+          const rotatedOffsetX = offsetX * Math.cos(l5BaseAngle) - offsetZ * Math.sin(l5BaseAngle);
+          const rotatedOffsetZ = offsetX * Math.sin(l5BaseAngle) + offsetZ * Math.cos(l5BaseAngle);
+          
+          // Final position
+          const x = cislunarRadius * Math.cos(l5BaseAngle) + rotatedOffsetX;
+          const y = offsetY;
+          const z = cislunarRadius * Math.sin(l5BaseAngle) + rotatedOffsetZ;
+          
+          satellites.push({
+            id: `cislunar_${deploymentCount}_L5_${i}`,
+            x: x,
+            y: y,
+            z: z,
+            altitudeKm: cislunarAltitude,
+            shape: 'sphere'
+          });
+        }
+        
+        deploymentCount++;
+        // Note: Year advancement happens in button click handler, not here
+      }
+      
+      function updateSatellitesFromPhysics() {
+        console.log('updateSatellitesFromPhysics called - currentYear:', currentYear);
+        
+        // Sync satellites array with sats if sats is being used
+        if (sats.length > 0 && satellites.length === 0) {
+          satellites = sats;
+        }
+        
+        // Clear existing satellites array to regenerate for current year
+        // This ensures we show the correct count for the current year only
+        satellites = [];
+        
+        // Generate satellites for the CURRENT year
+        // Use addToExisting=true to avoid resetting currentYear or deploymentCount
+        generateSatellites(true);
+        
+        // Get target rendered count for logging
+        const scaleData = SCALE_DATA[currentYear] || { actual: 0, rendered: 0 };
+        const targetRendered = scaleData.rendered || 0;
+        
+        console.log('Total satellites after generation:', satellites.length, '(Target:', targetRendered + ')');
+        
+        // Verify we're generating the expected count
+        if (satellites.length !== targetRendered && targetRendered > 0) {
+          console.warn('Satellite count mismatch! Generated:', satellites.length, 'Expected:', targetRendered);
+        }
+        
+        // Separate SSO satellites from others for special rendering
+        const ssoSatellites = satellites.filter(sat => sat.isSSO);
+        const otherSatellites = satellites.filter(sat => !sat.isSSO);
+        
+        console.log('SSO satellites:', ssoSatellites.length, 'Other satellites:', otherSatellites.length);
+        
+        // Group other satellites by shape, but separate cislunar (very high altitude) from regular spheres
+        const satellitesByShape = {
+          'octahedron': [],
+          'sphere': [],
+          'box': [],
+          'sphere_cislunar': [] // Separate cislunar spheres (very far away)
+        };
+        
+        otherSatellites.forEach(sat => {
+          const shape = sat.shape || 'octahedron';
+          // Separate cislunar satellites (altitude > 100000km) from regular spheres
+          if (shape === 'sphere' && sat.altitudeKm > 100000) {
+            satellitesByShape['sphere_cislunar'].push(sat);
+            console.log('Cislunar satellite detected:', sat.id, 'altitude:', sat.altitudeKm);
+          } else if (satellitesByShape[shape]) {
+            satellitesByShape[shape].push(sat);
+          }
+        });
+        
+        console.log('Cislunar count:', satellitesByShape['sphere_cislunar'].length);
+        
+        // Remove old meshes
+        if (satelliteMeshes && satelliteMeshes.length > 0) {
+          satelliteMeshes.forEach(mesh => {
+            if (mesh) {
+              scene.remove(mesh);
+              if (mesh.geometry) mesh.geometry.dispose();
+              if (mesh.material) {
+                // Dispose shader materials properly
+                if (mesh.material.uniforms) {
+                  Object.keys(mesh.material.uniforms).forEach(key => {
+                    const uniform = mesh.material.uniforms[key];
+                    if (uniform && uniform.value && uniform.value.dispose) {
+                      uniform.value.dispose();
+                    }
+                  });
+                }
+                mesh.material.dispose();
+              }
+            }
+          });
+        }
+        
+        // Create special white glowing mesh for SSO satellites
+        satelliteMeshes = [];
+        ssoMeshes = []; // Reset SSO mesh tracking
+        cislunarMeshes = []; // Reset cislunar mesh tracking
+        if (ssoSatellites.length > 0) {
+          console.log('Creating SSO mesh with', ssoSatellites.length, 'satellites');
+          const ssoMesh = createSSOMesh(scene, ssoSatellites);
+          satelliteMeshes.push(ssoMesh);
+          ssoMeshes.push(ssoMesh); // Track for animations
+          console.log('SSO mesh created, added to scene');
+        } else {
+          console.log('No SSO satellites to create');
+        }
+        
+        // Create meshes for other satellite types with Pokemon-style materials
+        Object.keys(satellitesByShape).forEach(shape => {
+          const sats = satellitesByShape[shape];
+          if (sats.length > 0) {
+            console.log('Creating', sats.length, shape, 'satellites', shape === 'sphere_cislunar' ? '(CISLUNAR - purple, large)' : '');
+            // Create geometry first - make cislunar larger
+            const baseSize = (shape === 'sphere_cislunar') ? 0.04 : 0.02; // Larger for cislunar
+            let geo;
+            switch (shape) {
+              case 'sphere':
+              case 'sphere_cislunar':
+                geo = new THREE.SphereGeometry(baseSize, 8, 8);
+                break;
+              case 'box':
+                geo = new THREE.BoxGeometry(baseSize, baseSize, baseSize);
+                break;
+              case 'octahedron':
+              default:
+                geo = new THREE.OctahedronGeometry(baseSize, 0);
+                break;
+            }
+            
+            // Use warm, saturated colors matching globe palette
+            const pokemonColors = {
+              'sphere': 0x4a90e2,        // Warm blue (LEO)
+              'sphere_cislunar': 0x9b59b6, // Purple (Cislunar - very far)
+              'box': 0xd4a574,           // Warm tan (GEO)
+              'octahedron': 0x5ba85f     // Forest green (MEO)
+            };
+            const baseColor = pokemonColors[shape] || 0x6b8dd6;
+            // TEMPORARY: Use basic material to test visibility
+            const material = new THREE.MeshBasicMaterial({ color: baseColor });
+            // const material = createPokemonSatelliteMaterial(baseColor, false);
+            
+            // Create InstancedMesh with Pokemon material
+            const instancedMesh = new THREE.InstancedMesh(geo, material, sats.length);
+            const dummy = new THREE.Object3D();
+            
+            sats.forEach((sat, i) => {
+              const x = sat.x || 0;
+              const y = sat.y || 0;
+              const z = sat.z || 0;
+              
+              let scale = 1.0;
+              if (sat.altitudeKm !== undefined) {
+                if (sat.altitudeKm >= 100000) scale = 6.0; // Cislunar - much larger since they're far away (6x for visibility)
+                else if (sat.altitudeKm >= 35786) scale = 2.0; // GEO
+                else if (sat.altitudeKm >= 10000) scale = 1.5; // MEO
+              }
+              
+              dummy.position.set(x, y, z);
+              dummy.scale.set(scale, scale, scale);
+              dummy.updateMatrix();
+              instancedMesh.setMatrixAt(i, dummy.matrix);
+            });
+            
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            scene.add(instancedMesh);
+            satelliteMeshes.push(instancedMesh);
+            
+            // Track cislunar meshes separately for orbital animation
+            if (shape === 'sphere_cislunar') {
+              cislunarMeshes.push({
+                mesh: instancedMesh,
+                satellites: sats // Store original satellite data for animation
+              });
+            }
+            
+            console.log('Added', sats.length, shape, 'satellites to scene. Total meshes:', satelliteMeshes.length);
+          }
+        });
+        
+        console.log('Final satellite mesh count:', satelliteMeshes.length);
+      }
+      
+      // Create special white glowing mesh for SSO satellites
+      // Create Pokemon-style shader material for satellites
+      function createPokemonSatelliteMaterial(baseColor, isSSO = false) {
+        const color = new THREE.Color(baseColor);
+        
+        // Get light direction from scene's directional light
+        let lightDir = new THREE.Vector3(1, 1, 1).normalize();
+        if (typeof directionalLight !== 'undefined' && directionalLight) {
+          lightDir = directionalLight.position.clone().normalize();
+        }
+        
+        return new THREE.ShaderMaterial({
+          uniforms: {
+            baseColor: { value: color },
+            lightDirection: { value: lightDir },
+            glowIntensity: { value: isSSO ? 0.8 : 0.0 }
+          },
+          vertexShader: `
+            varying vec3 vNormal;
+            varying vec3 vPosition;
+            
+            void main() {
+              vNormal = normalize(normalMatrix * normal);
+              vPosition = position;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform vec3 baseColor;
+            uniform vec3 lightDirection;
+            uniform float glowIntensity;
+            varying vec3 vNormal;
+            varying vec3 vPosition;
+            
+            void main() {
+              // Ensure we have a valid normal
+              vec3 normal = normalize(vNormal);
+              
+              // Calculate lighting - ensure minimum brightness so satellites are always visible
+              float lightIntensity = dot(normal, lightDirection);
+              lightIntensity = smoothstep(-0.5, 1.0, lightIntensity);
+              
+              // 2-tone cel shading (strong contrast like globe)
+              float cel = floor(lightIntensity * 2.0) / 2.0;
+              cel = smoothstep(0.0, 1.0, cel);
+              
+              // Apply cel shading with minimum brightness to ensure visibility
+              vec3 color = baseColor * (0.6 + cel * 0.4); // Increased brightness for visibility
+              
+              // Add glow for SSO satellites (simpler rim calculation)
+              float rim = abs(dot(normal, vec3(0.0, 0.0, 1.0)));
+              rim = pow(1.0 - rim, 2.0);
+              color += baseColor * rim * glowIntensity * 0.5;
+              
+              // Boost saturation (Pokemon style)
+              float gray = dot(color, vec3(0.299, 0.587, 0.114));
+              color = mix(vec3(gray), color, 1.3);
+              color = clamp(color, 0.0, 1.0);
+              
+              // Ensure minimum brightness for visibility (critical!)
+              color = max(color, vec3(0.4)); // Minimum 40% brightness so always visible
+              
+              gl_FragColor = vec4(color, 1.0);
+            }
+          `,
+          side: THREE.FrontSide
+        });
+      }
+      
+      function createSSOMesh(scene, ssoSatellites) {
+        const baseSize = 0.02; // Base size (increased for visibility)
+        const geo = new THREE.OctahedronGeometry(baseSize, 0);
+        
+        // TEMPORARY: Use basic material to test visibility
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        // const material = createPokemonSatelliteMaterial(0xffffff, true);
+        
+        const instancedMesh = new THREE.InstancedMesh(geo, material, ssoSatellites.length);
+        const dummy = new THREE.Object3D();
+        
+        ssoSatellites.forEach((sat, i) => {
+          const x = sat.x || 0;
+          const y = sat.y || 0;
+          const z = sat.z || 0;
+          
+          // SSO satellites are 3x larger than default
+          const scaleFactor = 3.0;
+          
+          dummy.position.set(x, y, z);
+          dummy.scale.set(scaleFactor, scaleFactor, scaleFactor);
+          dummy.updateMatrix();
+          instancedMesh.setMatrixAt(i, dummy.matrix);
+        });
+        
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        scene.add(instancedMesh);
+        
+        return instancedMesh;
+      }
+
+      // ============================================================================
+      // GROUND STATIONS - REMOVED
+      // ============================================================================
+
+      // ============================================================================
+      // ORBITAL SHELLS - REMOVED (not needed)
+      // ============================================================================
+
+      // ============================================================================
+      // DATA FLOWS - REMOVED (not needed)
+      // ============================================================================
+
+      // ============================================================================
+      // INTEGRATION WITH YOUR PHYSICS MODEL
+      // ============================================================================
+      
+      // Replace this function with your actual physics model integration
+      function syncWithPhysicsModel() {
+        // Example: Get data from your physics model
+        // const physicsData = yourPhysicsModel.getCurrentState();
+        
+        // Reset to starting state (2026, no satellites) - don't advance year on init
+        currentYear = 2026;
+        deploymentCount = 0;
+        
+        // Update visualizations - start with initial deployment (fresh)
+        generateSatellites(false);
+        
+        // Update scale info on initialization
+        updateScaleInfo(currentYear);
+        
+        // Separate SSO satellites from others for special rendering
+        const ssoSatellites = satellites.filter(sat => sat.isSSO);
+        const otherSatellites = satellites.filter(sat => !sat.isSSO);
+        
+        // Group other satellites by shape, but separate cislunar (very high altitude) from regular spheres
+        const satellitesByShape = {
+          'octahedron': [],
+          'sphere': [],
+          'box': [],
+          'sphere_cislunar': [] // Separate cislunar spheres (very far away)
+        };
+        otherSatellites.forEach(sat => {
+          const shape = sat.shape || 'octahedron';
+          // Separate cislunar satellites (altitude > 100000km) from regular spheres
+          if (shape === 'sphere' && sat.altitudeKm > 100000) {
+            satellitesByShape['sphere_cislunar'].push(sat);
+            console.log('Cislunar satellite detected:', sat.id, 'altitude:', sat.altitudeKm);
+          } else if (satellitesByShape[shape]) {
+            satellitesByShape[shape].push(sat);
+          }
+        });
+        
+        console.log('Cislunar count:', satellitesByShape['sphere_cislunar'].length);
+        
+        satelliteMeshes = [];
+        // Create SSO mesh first (white glowing diamonds)
+        ssoMeshes = []; // Reset SSO mesh tracking
+        cislunarMeshes = []; // Reset cislunar mesh tracking
+        if (ssoSatellites.length > 0) {
+          const ssoMesh = createSSOMesh(scene, ssoSatellites);
+          satelliteMeshes.push(ssoMesh);
+          ssoMeshes.push(ssoMesh); // Track for animations
+        }
+        // Then create other meshes with Pokemon-style materials
+        Object.keys(satellitesByShape).forEach(shape => {
+          const sats = satellitesByShape[shape];
+          if (sats.length > 0) {
+            // Create geometry first - make cislunar larger
+            const baseSize = (shape === 'sphere_cislunar') ? 0.04 : 0.02; // Larger for cislunar
+            let geo;
+            switch (shape) {
+              case 'sphere':
+              case 'sphere_cislunar':
+                geo = new THREE.SphereGeometry(baseSize, 8, 8);
+                break;
+              case 'box':
+                geo = new THREE.BoxGeometry(baseSize, baseSize, baseSize);
+                break;
+              case 'octahedron':
+              default:
+                geo = new THREE.OctahedronGeometry(baseSize, 0);
+                break;
+            }
+            
+            // Use warm, saturated colors matching globe palette
+            const pokemonColors = {
+              'sphere': 0x4a90e2,        // Warm blue (LEO)
+              'sphere_cislunar': 0x9b59b6, // Purple (Cislunar - very far)
+              'box': 0xd4a574,           // Warm tan (GEO)
+              'octahedron': 0x5ba85f     // Forest green (MEO)
+            };
+            const baseColor = pokemonColors[shape] || 0x6b8dd6;
+            // TEMPORARY: Use basic material to test visibility
+            const material = new THREE.MeshBasicMaterial({ color: baseColor });
+            // const material = createPokemonSatelliteMaterial(baseColor, false);
+            
+            // Create InstancedMesh with Pokemon material
+            const instancedMesh = new THREE.InstancedMesh(geo, material, sats.length);
+            const dummy = new THREE.Object3D();
+            
+            sats.forEach((sat, i) => {
+              const x = sat.x || 0;
+              const y = sat.y || 0;
+              const z = sat.z || 0;
+              
+              let scale = 1.0;
+              if (sat.altitudeKm !== undefined) {
+                if (sat.altitudeKm >= 100000) scale = 6.0; // Cislunar - much larger since they're far away (6x for visibility)
+                else if (sat.altitudeKm >= 35786) scale = 2.0; // GEO
+                else if (sat.altitudeKm >= 10000) scale = 1.5; // MEO
+              }
+              
+              dummy.position.set(x, y, z);
+              dummy.scale.set(scale, scale, scale);
+              dummy.updateMatrix();
+              instancedMesh.setMatrixAt(i, dummy.matrix);
+            });
+            
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            scene.add(instancedMesh);
+            satelliteMeshes.push(instancedMesh);
+            
+            // Track cislunar meshes separately for orbital animation
+            if (shape === 'sphere_cislunar') {
+              cislunarMeshes.push({
+                mesh: instancedMesh,
+                satellites: sats // Store original satellite data for animation
+              });
+            }
+          }
+        });
+        updateStats();
+        
+        // Update stats
+        updateStats();
+      }
+      
+      function updateStats() {
+        // Update button text to show "deploy [year]"
+        const btn = document.getElementById('deployButton');
+        if (btn) {
+          btn.textContent = `Deploy ${currentYear}`;
+        }
+        // Update scale info display
+        updateScaleInfo(currentYear);
+      }
+
+      // ============================================================================
+      // ANIMATION LOOP
+      // ============================================================================
+      
+      let satelliteMeshes = [];
+      let lastTime = performance.now();
+      
+      // Animation state
+      let animationTime = 0;
+      let ssoMeshes = []; // Track SSO meshes separately for animations
+      let cislunarMeshes = []; // Track cislunar meshes separately for orbital animation
+      let cislunarSatellites = []; // Store original cislunar satellite data for animation
+      
+      function animate() {
+        requestAnimationFrame(animate);
+        
+        const currentTime = performance.now();
+        const deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
+        lastTime = currentTime;
+        animationTime += deltaTime;
+        
+        // Update OrbitControls
+        if (controls) {
+          controls.update();
+        }
+        
+        // ============================================================================
+        // LIGHTWEIGHT ANIMATIONS
+        // ============================================================================
+        
+        // 1. Slow Earth rotation (very lightweight - just rotate the globe)
+        if (earthMesh) {
+          earthMesh.rotation.y += deltaTime * 0.05; // Slow rotation
+        }
+        
+        // 2. Satellite animations (Pokemon-style)
+        ssoMeshes.forEach(mesh => {
+          if (mesh && mesh.material && mesh.material.uniforms) {
+            // SSO satellites: pulse glow intensity
+            const pulse = 0.6 + 0.4 * (Math.sin(animationTime * 2) * 0.5 + 0.5);
+            mesh.material.uniforms.glowIntensity.value = pulse;
+            
+            // Update light direction to match globe
+            if (earthMesh && earthMesh.material && earthMesh.material.uniforms) {
+              mesh.material.uniforms.lightDirection.value.copy(
+                earthMesh.material.uniforms.lightDirection.value
+              );
+            }
+          }
+        });
+        
+        // Update light direction for all Pokemon-style satellite materials
+        satelliteMeshes.forEach(mesh => {
+          if (mesh && mesh.material && mesh.material.uniforms && mesh.material.uniforms.lightDirection) {
+            if (earthMesh && earthMesh.material && earthMesh.material.uniforms) {
+              mesh.material.uniforms.lightDirection.value.copy(
+                earthMesh.material.uniforms.lightDirection.value
+              );
+            }
+          }
+        });
+        
+        // Note: Only SSO satellites twinkle (they have emissive materials)
+        // Other satellites use MeshBasicMaterial which doesn't support emissive
+        
+        // 3. Subtle satellite rotation (rotate SSO diamonds slowly around their axis)
+        // Note: This is slightly more expensive but still lightweight for small counts
+        if (ssoMeshes.length > 0 && ssoMeshes[0].count < 50) { // Only if not too many
+          ssoMeshes.forEach(mesh => {
+            if (mesh) {
+              const dummy = new THREE.Object3D();
+              for (let i = 0; i < mesh.count; i++) {
+                mesh.getMatrixAt(i, dummy.matrix);
+                dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
+                
+                // Add slow rotation around local Y axis (different speed per satellite)
+                const rotationSpeed = 0.2 + (i % 3) * 0.1; // Vary speed slightly
+                const rotation = new THREE.Quaternion().setFromAxisAngle(
+                  new THREE.Vector3(0, 1, 0),
+                  deltaTime * rotationSpeed
+                );
+                dummy.quaternion.multiplyQuaternions(rotation, dummy.quaternion);
+                
+                dummy.updateMatrix();
+                mesh.setMatrixAt(i, dummy.matrix);
+              }
+              mesh.instanceMatrix.needsUpdate = true;
+            }
+          });
+        }
+        
+        // 4. Cislunar orbital animation - co-orbit with Moon
+        // L4/L5 Lagrange points co-orbit with the Moon (27.3 day period)
+        // For visualization, rotate cislunar satellites around Earth's Y-axis
+        // Moon's orbital period: ~27.3 days = 2,358,720 seconds
+        // Angular velocity: 2π / 2,358,720 ≈ 2.66e-6 rad/s (very slow)
+        // Speed up for visibility: use 0.005 rad/s (sped up but still slow enough to see structure)
+        const moonOrbitalSpeed = 0.005; // radians per second (sped up for visibility)
+        cislunarMeshes.forEach(({mesh, satellites}) => {
+          if (mesh && satellites) {
+            const dummy = new THREE.Object3D();
+            
+            for (let i = 0; i < satellites.length && i < mesh.count; i++) {
+              const sat = satellites[i];
+              if (!sat) continue;
+              
+              // Get original position
+              const originalX = sat.x || 0;
+              const originalZ = sat.z || 0;
+              const originalY = sat.y || 0;
+              
+              // Calculate original angle and distance in X-Z plane
+              const originalAngle = Math.atan2(originalZ, originalX);
+              const distance = Math.sqrt(originalX * originalX + originalZ * originalZ);
+              
+              // Rotate around Earth's Y-axis at Moon's orbital rate
+              // This makes the L4/L5 clouds co-orbit with the Moon
+              const currentAngle = originalAngle + animationTime * moonOrbitalSpeed;
+              
+              // Calculate new position preserving distance and Y offset
+              const x = distance * Math.cos(currentAngle);
+              const z = distance * Math.sin(currentAngle);
+              const y = originalY; // Keep original Y (vertical offset from cloud distribution)
+              
+              // Get scale (cislunar satellites are 6x larger)
+              let scale = 6.0;
+              
+              dummy.position.set(x, y, z);
+              dummy.scale.set(scale, scale, scale);
+              dummy.rotation.set(0, 0, 0); // No rotation
+              dummy.updateMatrix();
+              mesh.setMatrixAt(i, dummy.matrix);
+            }
+            mesh.instanceMatrix.needsUpdate = true;
+          }
+        });
+        
+        // 3. Globe day/night cycle (subtle warm/cool color temperature shift)
+        if (earthMesh && earthMesh.material && earthMesh.material.uniforms) {
+          try {
+            // Calculate day/night cycle based on Earth rotation
+            // 0 = night (cool), 1 = day (warm)
+            const dayNightCycle = (Math.sin(earthMesh.rotation.y * 0.5) * 0.5 + 0.5);
+            if (earthMesh.material.uniforms.dayNightCycle) {
+              earthMesh.material.uniforms.dayNightCycle.value = dayNightCycle;
+            }
+          } catch (e) {
+            // Uniform might not exist, skip
+          }
+        }
+        
+        renderer.render(scene, camera);
+      }
+      
+      
+      // ============================================================================
+      // BUTTON HANDLERS
+      // ============================================================================
+      
+      // Deploy satellites button handler - works multiple times
+      // Attach after DOM is ready
+      setTimeout(function() {
+        var deployButton = document.getElementById('deployButton');
+        console.log('Looking for deploy button:', deployButton);
+        if (deployButton) {
+          console.log('Attaching click handler to deploy button');
+          deployButton.addEventListener('click', function() {
+            console.log('Deploy satellites button clicked - Year ' + currentYear);
+            
+            try {
+              // Generate and deploy new set of satellites for CURRENT year
+              // This will generate satellites based on currentYear
+              updateSatellitesFromPhysics();
+              
+              // Advance year by 1 after deployment
+              currentYear++;
+              console.log('Year advanced to:', currentYear);
+              
+              updateStats();
+              
+              // Update button to show next year
+              const btn = document.getElementById('deployButton');
+              const nextYear = currentYear;
+              if (btn) {
+                btn.textContent = `Deploy ${nextYear}`;
+              }
+              
+              // Brief visual feedback
+              if (btn) {
+                btn.style.background = '#1a3d33';
+                setTimeout(function() {
+                  btn.style.background = '#2d5a4f';
+                }, 200);
+              }
+              
+              console.log('Deployment complete. Year now:', currentYear);
+            } catch (error) {
+              console.error('Error in deploy button handler:', error);
+            }
+          });
+        } else {
+          console.error('Deploy button not found!');
+        }
+      }, 100);
+      
+      // Initialize with example data
+      syncWithPhysicsModel();
+      
+      // Start animation loop
+      animate();
+      
+      // ============================================================================
+      // WINDOW RESIZE HANDLER
+      // ============================================================================
+      
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+      
+      // ============================================================================
+      // STATE MANAGEMENT AND EXPORT FOR CURSOR + WORLD VIZ
+      // ============================================================================
+      
+      // (State variables already declared above - see line ~562)
+      // Initial state export
+      exportState();
+      
+      // ============================================================================
+      // EXPOSE UPDATE FUNCTIONS FOR YOUR PHYSICS MODEL
+      // ============================================================================
+      
+      // Call these functions from your physics model when data changes:
+      window.updateVisualization = {
+        satellites: updateSatellitesFromPhysics,
+        update: update,
+        exportState: exportState
+      };
+      
+      // Expose state setter functions
+      window.setSimulatorState = function(newState) {
+        if (newState.P !== undefined) P = Object.assign(P, newState.P);
+        if (newState.fleetResults !== undefined) fleetResults = newState.fleetResults;
+        if (newState.sats !== undefined) {
+          sats = newState.sats;
+          satellites = newState.sats; // Also update satellites array
+        }
+        if (newState.gnds !== undefined) gnds = newState.gnds;
+        if (newState.crossoverYear !== undefined) crossoverYear = newState.crossoverYear;
+        if (newState.currentYear !== undefined) currentYear = newState.currentYear;
+        if (newState.fissionEnabled !== undefined) fissionEnabled = newState.fissionEnabled;
+        exportState();
+        update();
+      };
+      
+      console.log('Visualization ready. Use window.updateVisualization.* to update from your physics model.');
+      console.log('State exported to window.simulatorState:', window.simulatorState);
+    }
+    
+    // Expose init function globally
+    window.initVisualization = initVisualization;
+  </script>
+</body>
+</html>

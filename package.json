@@ -1,0 +1,40 @@
+{
+  "name": "orbital-compute",
+  "version": "1.0.0",
+  "description": "Physics-first model for orbital vs terrestrial data center economics using the Levelized Cost of Compute (LCOC) framework",
+  "author": "Pranav Myana",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && cp public/simple-orbit-controls.js public/orbital-visualization.js dist/",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "lint": "eslint src/",
+    "export:audit": "node scripts/export-audit.js"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "eslint": "^8.56.0",
+    "terser": "^5.44.1",
+    "typescript": "^5.9.3",
+    "vite": "^5.0.0",
+    "vitest": "^4.0.16"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pranavmyana/orbital-compute"
+  },
+  "keywords": [
+    "orbital-compute",
+    "space",
+    "data-center",
+    "lcoc",
+    "economics",
+    "physics",
+    "simulation"
+  ]
+}
