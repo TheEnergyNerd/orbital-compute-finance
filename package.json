@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && cp public/simple-orbit-controls.js public/orbital-visualization.js dist/",
+    "build": "vite build && cp public/simple-orbit-controls.js public/orbital-visualization.js public/favicon.png dist/ && cp -r public/assets dist/",
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint src/",
