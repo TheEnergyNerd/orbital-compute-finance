@@ -17,7 +17,6 @@ This lets you compare apples to apples: a $10B orbital platform vs. a $500M grou
 ## The Thesis
 
 Space has natural advantages for compute:
-- **Free cooling** - radiate to 3K background (no water rights, no chillers)
 - **24/7 sun** - no night, no clouds, 1361 W/m²
 - **No land costs** - no permitting, no interconnection queues
 
@@ -73,7 +72,7 @@ npm run dev
 ## Key Physics
 
 ```typescript
-// Stefan-Boltzmann: the only equation that matters in space cooling
+// Stefan-Boltzmann
 const radPower = emissivity * STEFAN_BOLTZMANN * Math.pow(opTemp, 4);
 
 // Chip efficiency improves ~20%/year
