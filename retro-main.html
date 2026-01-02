@@ -996,11 +996,11 @@ function getLaunchCost(year, params = P, shell = 'leo') {
 function getDropletMult(year, params = P) {
   if (!params.dropletOn || year < params.dropletYear) return 1.0;
   const maturity = Math.min(1, (year - params.dropletYear) / 8);
-  return 5.0 + maturity * 5.0; // AMPLIFIED: 5× to 10× thermal rejection (was 3-5×)
+  return 5.0 + maturity * 5.0; // 5-10× thermal rejection improvement
 }
 
 function getRadiatorMassPerMW(year, powerKw, params = P) {
-  // FIXED: emissivity and opTemp now affect radiator mass via Stefan-Boltzmann
+  // Emissivity and opTemp affect radiator mass via Stefan-Boltzmann
   // Higher temp = more radiation = less area = less mass
   // Higher emissivity = more radiation = less mass
   
@@ -1301,7 +1301,7 @@ function calcGround(year, orbitalSupplyGW = 0, params = P) {
   const crfGround = getCRF(params.waccGround, groundHwLife);
   const hwCost = hwCapex * crfGround; // Annualized hardware cost
   
-  // FIXED: Use energyCost, energyEscal, groundPue sliders
+  // Energy cost with escalation and SMR discount
   const energy = params.energyCost * Math.pow(1 + params.energyEscal, t) * smrDiscount;
   const pue = Math.max(1.08, params.groundPue - t * 0.01);
   const enCost = 700 * 8760 * SLA * energy * pue / 1000;
@@ -1320,7 +1320,7 @@ function calcGround(year, orbitalSupplyGW = 0, params = P) {
   else premium = 35 + (unmetRatio - 2) * 15;
   
   const gridCarbon = 380 * Math.pow(0.97, t);
-  // FIXED: Dimensionally correct carbon calculation
+  // Carbon calculation (dimensionally correct)
   // gridCarbon: gCO2/kWh
   // gflopsW: GFLOP/s per W
   // For 1 TFLOP-hr: need (1000/gflopsW) W for 1 hr = (1/gflopsW) kWh

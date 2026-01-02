@@ -9,13 +9,11 @@ import {
 } from './physics';
 import { getShellRadiationEffects } from './orbital';
 import { getCRF } from './finance';
+import { getDemandPressure } from './market';
 
 /**
- * SATELLITE ECONOMICS
- * This is the LCOC calculation - the whole point of the model
- *
- * I stayed up way too late building this. Worth it.
- * - PM
+ * Calculate satellite economics including LCOC (Levelized Cost of Compute).
+ * This is the core calculation that determines orbital vs ground competitiveness.
  */
 export function calcSatellite(
   year: number,
@@ -23,17 +21,27 @@ export function calcSatellite(
   shell = 'leo'
 ): SatelliteResult {
   const t = year - 2026;
-  const hasDroplet = params.dropletOn && year >= params.dropletYear;
+  const hasThermal = params.thermalOn && year >= params.thermalYear;
   const hasFission = params.fissionOn && year >= params.fissionYear;
   const hasFusion = params.fusionOn && year >= params.fusionYear;
+  const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
+  const hasPhotonicCompute = params.photonicOn && year >= params.photonicYear;
 
-  // Platform specs - these all compound
+  // Platform specifications
   const powerKw = getLEOPower(year, params);
-  const solarEff = Math.min(0.5, params.solarEff + t * 0.008);
+  const solarEff = Math.min(0.5, params.solarEff + t * params.solarLearn);
   const radPower = getRadiatorPower(params);
   const gflopsW = getOrbitalEfficiency(year, params);
   const launchCost = getLaunchCost(year, params, shell);
-  const prodMult = Math.max(0.25, params.prodMult * Math.pow(0.68, t));
+
+  // Demand-coupled manufacturing learning (Wright's Law)
+  let prodMult = params.prodMult;
+  for (let y = 2026; y < year; y++) {
+    const demandPressure = getDemandPressure(y, params);
+    const orbitalLearningMult = Math.pow(demandPressure, 1.5); // 0.09x to 2.83x
+    prodMult *= (1 - 0.32 * orbitalLearningMult);
+  }
+  prodMult = Math.max(0.25, prodMult);
   const radMassPerMW = getRadiatorMassPerMW(year, powerKw, params);
 
   // Radiation effects
@@ -61,14 +69,21 @@ export function calcSatellite(
   const rawTflops = (computeKw * gflopsW) / 1000;
   const tflops = rawTflops * radEffects.availabilityFactor;
   const gpuEq = tflops / 1979; // H100 equivalents
-  // Compute hardware mass scales with power input, not TFLOPS output
-  // Better efficiency means lighter hardware per TFLOP, not heavier
+  // Compute hardware mass scales with power input
   const compMass = Math.max(3, computeKw * 0.005); // ~5 kg per kW of compute power
 
-  // Thermal - THE constraint pre-droplet
-  // This is what everyone gets wrong. You can't just slap GPUs in space.
-  // Heat rejection is the whole game until droplet radiators work.
-  const wasteKw = computeKw * 0.65;
+  // Thermal: waste heat determines radiator mass
+  // Thermodynamic and photonic computing dramatically reduce waste heat per computation
+  const baseWasteKw = computeKw * 0.65;
+  let wasteKw = baseWasteKw;
+  if (hasThermoCompute || hasPhotonicCompute) {
+    const deterministicFrac = 1 - params.workloadProbabilistic;
+    const probFrac = params.workloadProbabilistic;
+    const photonicMult = hasPhotonicCompute ? params.photonicSpaceMult : 1;
+    const thermoMult = hasThermoCompute ? params.thermoSpaceMult : 1;
+    const avgMult = photonicMult * deterministicFrac + thermoMult * probFrac;
+    wasteKw = baseWasteKw / avgMult;
+  }
   const radMass = (wasteKw / 1000) * radMassPerMW;
 
   // Total mass
@@ -84,16 +99,8 @@ export function calcSatellite(
       : (powerKw * 1000) / (solarEff * SOLAR_CONSTANT);
   const dataRateGbps = tflops * params.gbpsPerTflop;
 
-  /*
-  LCOC calculation - here's the punchline
-
-  Naive metrics: $/GPU-hour at a moment
-  LCOC: $/delivered-GPU-hour over the asset's life, accounting for:
-    - Time value of money (WACC)
-    - Capital recovery (CRF amortization)
-    - Maintenance and ops
-    - Actual utilization (SLA)
-  */
+  // LCOC (Levelized Cost of Compute) calculation
+  // Accounts for WACC, CRF amortization, maintenance, and utilization
   const capex =
     dryMass * launchCost + dryMass * 350 * prodMult + 15000 * prodMult;
   const crf = getCRF(params.waccOrbital, radEffects.effectiveLife);
@@ -137,9 +144,11 @@ export function calcSatellite(
       rad: radMass,
       struct: subsystems * 0.1
     },
-    hasDroplet,
+    hasThermal,
     hasFission,
     hasFusion,
+    hasThermoCompute,
+    hasPhotonicCompute,
     radMassPerMW,
     radEffects
   };

@@ -11,7 +11,7 @@ interface SliderConfig {
 
 const sliderConfigs: SliderConfig[] = [
   // Breakthroughs
-  { id: 'dropletYear', param: 'dropletYear', valueId: 'v-dropletYear' },
+  { id: 'thermalYear', param: 'thermalYear', valueId: 'v-thermalYear' },
 
   // Thermal
   {
@@ -21,6 +21,7 @@ const sliderConfigs: SliderConfig[] = [
     transform: (v) => v / 100
   },
   { id: 'opTemp', param: 'opTemp', valueId: 'v-opTemp' },
+  { id: 'radLearn', param: 'radLearn', valueId: 'v-radLearn' },
 
   // Power
   {
@@ -28,6 +29,13 @@ const sliderConfigs: SliderConfig[] = [
     param: 'solarEff',
     valueId: 'v-solarEff',
     transform: (v) => v / 100
+  },
+  {
+    id: 'solarLearn',
+    param: 'solarLearn',
+    valueId: 'v-solarLearn',
+    transform: (v) => v / 1000,
+    format: (v) => (v * 1000).toFixed(1)
   },
   { id: 'basePower', param: 'basePower', valueId: 'v-basePower' },
   {

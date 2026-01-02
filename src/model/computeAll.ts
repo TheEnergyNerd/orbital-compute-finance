@@ -16,7 +16,7 @@ export function getScenarioParams(
     ...baseParams,
     aiLearn: baseParams.aiLearn * s.learnMult,
     launchLearn: baseParams.launchLearn * s.launchLearnMult,
-    dropletYear: baseParams.dropletYear + s.techYearOffset,
+    thermalYear: baseParams.thermalYear + s.techYearOffset,
     fissionYear: baseParams.fissionYear + s.techYearOffset,
     fusionYear: baseParams.fusionYear + s.techYearOffset,
     demandGrowth: baseParams.demandGrowth * s.demandMult

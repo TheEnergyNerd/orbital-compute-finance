@@ -566,8 +566,8 @@ export function updateCharts(
     charts.power.data.datasets[2].data = sats.map((s, i) => {
       const year = 2026 + i;
       const hasFission = params.fissionOn && year >= params.fissionYear;
-      const hasDroplet = params.dropletOn && year >= params.dropletYear;
-      const mult = hasFission ? 20 : hasDroplet ? 10 : 5;
+      const hasThermal = params.thermalOn && year >= params.thermalYear;
+      const mult = hasFission ? 20 : hasThermal ? 10 : 5;
       return s.powerKw * mult / 1000;
     });
     // Cislunar power

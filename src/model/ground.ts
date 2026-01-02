@@ -1,7 +1,7 @@
 import { SLA } from './constants';
 import type { Params, GroundResult } from './types';
 import { getGroundEfficiency } from './physics';
-import { getDemand, getGroundSupply } from './market';
+import { getDemand, getGroundSupply, getBtmShare } from './market';
 import { getCRF } from './finance';
 
 export function calcGround(
@@ -18,18 +18,28 @@ export function calcGround(
     ? 0.7 - Math.min(0.3, (year - params.smrYear) * 0.03)
     : 1.0;
 
+  // BTM share for this year
+  const yearBtmShare = getBtmShare(year, params);
+
   // Hardware cost with WACC/CRF
   const gpuPrice = 25000 * Math.pow(0.84, t);
   const hwCapex = (gpuPrice / 3) / (gflopsW / 2800);
-  const groundHwLife = 5; // 5 year hardware refresh cycle
-  const crfGround = getCRF(params.waccGround, groundHwLife);
-  const hwCost = hwCapex * crfGround; // Annualized hardware cost
 
-  // Energy costs
-  const energy =
-    params.energyCost * Math.pow(1 + params.energyEscal, t) * smrDiscount;
+  // Apply capex premium for BTM portion
+  const btmCapexOverhead = yearBtmShare * (params.btmCapexMult - 1);
+  const hwCapexAdjusted = hwCapex * (1 + btmCapexOverhead);
+
+  const groundHwLife = 5;
+  const crfGround = getCRF(params.waccGround, groundHwLife);
+  const hwCost = hwCapexAdjusted * crfGround;
+
+  // Blended energy costs (grid vs BTM)
+  const gridEnergy = params.energyCost * Math.pow(1 + params.energyEscal, t) * smrDiscount;
+  const btmEnergy = params.btmEnergyCost; // Stable, no escalation
+  const blendedEnergy = gridEnergy * (1 - yearBtmShare) + btmEnergy * yearBtmShare;
+
   const pue = Math.max(1.08, params.groundPue - t * 0.01);
-  const enCost = (700 * 8760 * SLA * energy * pue) / 1000;
+  const enCost = (700 * 8760 * SLA * blendedEnergy * pue) / 1000;
   const overhead = 0.2 * 8760 * SLA;
   const base = (hwCost + enCost + overhead) / (8760 * SLA);
 
@@ -37,14 +47,26 @@ export function calcGround(
   const demand = getDemand(year, params);
   const groundSupply = getGroundSupply(year, params);
   const totalSupply = groundSupply + orbitalSupplyGW;
-  const unmetRatio = Math.max(0, (demand - totalSupply) / totalSupply);
+  const unmetRatio = (demand - totalSupply) / totalSupply;
 
-  // Scarcity premium
+  // Revised scarcity premium with demand destruction and oversupply discount
   let premium: number;
-  if (unmetRatio <= 0) premium = 1.0;
-  else if (unmetRatio <= 0.5) premium = 1 + unmetRatio * 8;
-  else if (unmetRatio <= 2) premium = 5 + (unmetRatio - 0.5) * 20;
-  else premium = 35 + (unmetRatio - 2) * 15;
+  if (unmetRatio <= -0.3) {
+    // Severe oversupply: price war (floor at 0.6x cost)
+    premium = Math.max(0.6, 0.85 + unmetRatio);
+  } else if (unmetRatio <= 0) {
+    // Mild oversupply: slight discount
+    premium = 1.0 + unmetRatio * 0.5;
+  } else if (unmetRatio <= 0.3) {
+    // Moderate scarcity: linear premium
+    premium = 1 + unmetRatio * 4;
+  } else if (unmetRatio <= 1.0) {
+    // High scarcity: slower growth (demand destruction kicks in)
+    premium = 2.2 + (unmetRatio - 0.3) * 2.5;
+  } else {
+    // Extreme scarcity: plateau (demand destruction dominates)
+    premium = Math.min(6, 4 + (unmetRatio - 1) * 0.5);
+  }
 
   // Carbon intensity
   const gridCarbon = 380 * Math.pow(0.97, t);

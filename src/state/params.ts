@@ -1,68 +1,82 @@
 import type { Params } from '../model/types';
 
 /**
- * Default parameters - every slider maps to one of these
- * If you don't believe these numbers, tweak them. That's the whole point.
- *
- * These are my best guesses after reading way too many papers.
- * Fight me (or just adjust the sliders).
- * - PM
+ * Default parameters for the orbital compute model.
+ * Each parameter maps to a UI slider or toggle.
  */
 export const defaults: Params = {
-  // Breakthroughs - these are the bets
-  dropletOn: true,
-  dropletYear: 2030, // droplet radiators solve the thermal problem
+  // Breakthroughs
+  thermalOn: true,
+  thermalYear: 2030,     // Thermal breakthrough enables MW-class heat rejection
   fissionOn: true,
-  fissionYear: 2035, // space nuclear unlocks cislunar
+  fissionYear: 2035,     // Space nuclear enables cislunar operations
   fusionOn: false,
-  fusionYear: 2045, // moonshot (literally)
+  fusionYear: 2045,      // Fusion power for GW-class stations
   smrOn: true,
-  smrYear: 2032, // ground nukes - separate from space policy
+  smrYear: 2032,         // Ground SMR deployment
+  thermoOn: false,
+  thermoYear: 2029,      // Thermodynamic computing availability
+  thermoGroundMult: 1000,   // Room-temp TSU efficiency multiplier
+  thermoSpaceMult: 10000,   // Superconducting TSU efficiency multiplier (passive cryo)
+  photonicOn: false,
+  photonicYear: 2035,    // Photonic computing availability
+  photonicGroundMult: 50,   // Ground photonic efficiency multiplier
+  photonicSpaceMult: 100,   // Space photonic efficiency multiplier (vacuum optics)
+  workloadProbabilistic: 0.15, // Fraction of workloads that are sampling-heavy
 
-  // Thermal - the biggest engineering challenge
-  emissivity: 0.85, // how good your radiator surface is
-  opTemp: 365, // hotter = more radiation = less mass (modern chips handle this)
+  // Thermal
+  emissivity: 0.85,      // Radiator surface emissivity
+  opTemp: 365,           // Operating temperature (K)
+  radLearn: 50,          // kg/MW/year improvement for conventional radiators
 
-  // Power - you're drowning in it up there
-  solarEff: 0.35, // panel efficiency (multi-junction hitting 35%+ in production)
-  basePower: 300, // platform power before breakthroughs (kW)
-  computeFrac: 0.68, // what % goes to GPUs
-  battDens: 280, // Wh/kg - matters for eclipse survival
+  // Power
+  solarEff: 0.20,        // Silicon baseline (SpaceX/Starlink approach)
+  solarLearn: 0.008,     // +0.8%/yr absolute improvement (reaches ~30% by 2038)
+  basePower: 300,        // Platform power before breakthroughs (kW)
+  computeFrac: 0.68,     // Fraction of power to compute
+  battDens: 280,         // Battery density (Wh/kg)
 
   // Compute
-  satLife: 8, // years before TID kills you
-  radPen: 0.30, // radiation efficiency penalty (better ECC, chiplet designs)
-  aiLearn: 0.2, // the learning curve
+  satLife: 10,           // Satellite lifetime (years)
+  radPen: 0.30,          // Radiation efficiency penalty
+  aiLearn: 0.2,          // Annual compute efficiency improvement
 
   // Launch economics
-  launchCost: 1500, // today's $/kg
-  launchLearn: 0.33, // 33% cost reduction per doubling (SpaceX track record)
-  launchFloor: 10, // can't go below propellant + minimal refurb
-  prodMult: 2.5, // manufacturing scales with launch volume
+  launchCost: 1500,      // Current launch cost ($/kg)
+  launchLearn: 0.18,     // Learning rate per doubling (18% - historical aerospace)
+  launchFloor: 10,       // Minimum achievable launch cost ($/kg)
+  prodMult: 2.5,         // Manufacturing cost multiplier
 
-  maintCost: 0.15, // 15% of capex annually
+  maintCost: 0.015,      // Annual maintenance as fraction of capex (1.5%)
 
-  // Bandwidth - the real bottleneck
-  bandwidth: 50, // Tbps total capacity in 2025
-  bwGrowth: 0.35, // 35%/yr growth
-  gbpsPerTflop: 0.0001, // 0.1 Mbps/TFLOP
+  // Bandwidth
+  bandwidth: 50,         // Total capacity in 2025 (Tbps)
+  bwGrowth: 0.35,        // Annual bandwidth growth rate
+  gbpsPerTflop: 0.0001,  // Bandwidth per TFLOP (Gbps)
 
   // Market
-  orbitalEligibleShare: 0.35, // 35% latency-tolerant
+  orbitalEligibleShare: 0.35,  // Fraction of demand that is latency-tolerant
 
   // Cost of capital
-  waccOrbital: 0.12, // 12% - space is risky
-  waccGround: 0.08, // 8% - hyperscalers have cheap capital
+  waccOrbital: 0.10,     // Orbital WACC (maturing industry, SpaceX routine access)
+  waccGround: 0.08,      // Ground WACC
 
   // Ground constraints
-  groundPue: 1.3, // power overhead
-  energyCost: 0.065, // $/kWh
-  energyEscal: 0.03, // 3%/yr
-  interconnect: 36, // 3 year queue
+  groundPue: 1.3,        // Power Usage Effectiveness
+  energyCost: 0.065,     // Energy cost ($/kWh)
+  energyEscal: 0.04,     // Annual energy cost escalation (4%/yr)
+  interconnect: 48,      // Interconnection queue (months) - US grid queues now 4-5+ years
 
   // Demand
-  demand2025: 65, // GW
-  demandGrowth: 0.45, // 45%/yr
-  supply2025: 480, // current ground capacity
-  supplyGrowth: 0.15 // new ground coming online
+  demand2025: 65,        // 2025 demand (GW)
+  demandGrowth: 0.55,    // Annual demand growth rate (AI compute ~4x/yr historically)
+  supply2025: 60,        // 2025 ground supply (GW) - actual global AI-ready DC capacity
+  supplyGrowth: 0.08,    // 8% annual growth (constrained by interconnect, chips, fabs)
+
+  // Behind-the-meter generation
+  btmShare: 0.15,        // 15% of new ground capacity is BTM in 2026
+  btmShareGrowth: 0.02,  // Base growth rate per year
+  btmDelay: 12,          // Months to deploy BTM (vs interconnect for grid)
+  btmCapexMult: 1.35,    // 35% higher capex for on-site generation
+  btmEnergyCost: 0.04    // $/kWh LCOS for solar+storage
 };

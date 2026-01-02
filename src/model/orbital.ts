@@ -2,14 +2,13 @@ import { SHELLS } from './constants';
 import type { Params, RadiationEffects } from './types';
 
 /**
- * RADIATION IS THE TAX YOU PAY FOR FREE POWER
+ * Calculate radiation effects by orbital shell.
+ * - TID (Total Ionizing Dose): cumulative damage reducing hardware lifetime
+ * - SEU (Single Event Upsets): transient errors requiring redundancy
  *
- * Calculate radiation effects by orbital shell:
- * - TID (Total Ionizing Dose): your chips slowly die
- * - SEU (Single Event Upsets): random cosmic ray bit-flips
- *
- * MEO is hell (Van Allen belts). GEO is surprisingly chill.
- * Cislunar gets weird with GCR exposure.
+ * MEO experiences highest radiation due to Van Allen belts.
+ * GEO is above the belts with lower radiation.
+ * Cislunar has galactic cosmic ray (GCR) exposure.
  */
 export function getShellRadiationEffects(
   shell: string,

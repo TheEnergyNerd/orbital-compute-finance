@@ -15,7 +15,7 @@ describe('Physics', () => {
     expect(getLaunchCost(2050, defaults)).toBeGreaterThanOrEqual(defaults.launchFloor);
   });
 
-  it('radiator mass drops after droplet', () => {
+  it('radiator mass drops after thermal breakthrough', () => {
     const pre = getRadiatorMassPerMW(2028, 300, defaults);
     const post = getRadiatorMassPerMW(2035, 300, defaults);
     expect(post).toBeLessThan(pre * 0.1); // 50× lighter
@@ -130,10 +130,10 @@ describe('Satellite', () => {
     expect(sat2040.lcoc).toBeLessThan(sat2026.lcoc);
   });
 
-  it('LCOC drops significantly after droplet radiators', () => {
-    const preDroplet = calcSatellite(2028, defaults);
-    const postDroplet = calcSatellite(2032, defaults);
-    expect(postDroplet.lcoc).toBeLessThan(preDroplet.lcoc * 0.5);
+  it('LCOC drops significantly after thermal breakthrough', () => {
+    const preThermal = calcSatellite(2028, defaults);
+    const postThermal = calcSatellite(2032, defaults);
+    expect(postThermal.lcoc).toBeLessThan(preThermal.lcoc * 0.5);
   });
 
   it('power increases after fission breakthrough', () => {

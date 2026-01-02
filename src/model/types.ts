@@ -2,21 +2,32 @@
 
 export interface Params {
   // Breakthroughs
-  dropletOn: boolean;
-  dropletYear: number;
+  thermalOn: boolean;
+  thermalYear: number;
   fissionOn: boolean;
   fissionYear: number;
   fusionOn: boolean;
   fusionYear: number;
   smrOn: boolean;
   smrYear: number;
+  thermoOn: boolean;
+  thermoYear: number;
+  thermoGroundMult: number;
+  thermoSpaceMult: number;
+  photonicOn: boolean;
+  photonicYear: number;
+  photonicGroundMult: number;
+  photonicSpaceMult: number;
+  workloadProbabilistic: number;
 
   // Thermal
   emissivity: number;
   opTemp: number;
+  radLearn: number;
 
   // Power
   solarEff: number;
+  solarLearn: number;
   basePower: number;
   computeFrac: number;
   battDens: number;
@@ -52,6 +63,13 @@ export interface Params {
   demandGrowth: number;
   supply2025: number;
   supplyGrowth: number;
+
+  // Behind-the-meter
+  btmShare: number;
+  btmShareGrowth: number;
+  btmDelay: number;
+  btmCapexMult: number;
+  btmEnergyCost: number;
 }
 
 export interface Shell {
@@ -95,9 +113,11 @@ export interface SatelliteResult {
   dataRateGbps: number;
   shell: string;
   mass: MassBreakdown;
-  hasDroplet: boolean;
+  hasThermal: boolean;
   hasFission: boolean;
   hasFusion: boolean;
+  hasThermoCompute: boolean;
+  hasPhotonicCompute: boolean;
   radMassPerMW: number;
   radEffects: RadiationEffects;
 }

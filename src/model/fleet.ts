@@ -19,7 +19,7 @@ export function calcFleet(
 
   const hasFission = params.fissionOn && year >= params.fissionYear;
   const hasFusion = params.fusionOn && year >= params.fusionYear;
-  const hasDroplet = params.dropletOn && year >= params.dropletYear;
+  const hasThermal = params.thermalOn && year >= params.thermalYear;
 
   let leoPlatforms = 0;
   let meoPlatforms = 0;
@@ -66,7 +66,7 @@ export function calcFleet(
   // === Power by shell ===
   const geoPowerKw = hasFission
     ? sat.powerKw * 20
-    : hasDroplet
+    : hasThermal
       ? sat.powerKw * 10
       : sat.powerKw * 5;
 
@@ -129,7 +129,7 @@ export function calcFleet(
     if (bwSell < demandSell && bwSell < 0.9) bottleneck = 'bandwidth';
     else if (demandSell < 0.9) bottleneck = 'demand';
     else if (leoUtil > 0.9 || geoUtil > 0.9) bottleneck = 'slots';
-    else if (!hasDroplet && !hasFission) bottleneck = 'thermal';
+    else if (!hasThermal && !hasFission) bottleneck = 'thermal';
     else bottleneck = 'power';
   }
 

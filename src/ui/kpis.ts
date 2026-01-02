@@ -80,7 +80,7 @@ export function updateToggleEffects(params: Params): void {
     }
   };
 
-  setActive('eff-droplet', true); // Always on
+  setActive('eff-thermal', true); // Always on
   setActive('eff-fission', params.fissionOn);
   setActive('eff-smr', params.smrOn);
   setActive('eff-fusion', params.fusionOn);
