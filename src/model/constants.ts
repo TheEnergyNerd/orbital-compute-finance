@@ -10,8 +10,8 @@ export const STEFAN_BOLTZMANN = 5.67e-8;
 // Solar irradiance at 1 AU (W/m²)
 export const SOLAR_CONSTANT = 1361;
 
-// Simulation years: 2026-2050
-export const YEARS = Array.from({ length: 25 }, (_, i) => 2026 + i);
+// Simulation years: 2026-2070 (extended to show lunar development timelines)
+export const YEARS = Array.from({ length: 45 }, (_, i) => 2026 + i);
 
 // Service Level Agreement target (99.9% uptime)
 export const SLA = 0.999;
@@ -23,11 +23,14 @@ export const SLA = 0.999;
  * - capacity: Maximum platform count before orbital congestion issues
  */
 export const SHELLS: Record<string, Shell> = {
-  leo:      { alt: 550,    latency: 3.7,   tidMult: 1.0,  seuMult: 1.0,  capacity: 300000 },  // Low Earth Orbit
+  leo:      { alt: 550,    latency: 3.7,   tidMult: 1.0,  seuMult: 1.0,  capacity: 500000 },  // Low Earth Orbit (Elon's 500k Starlink v3 validates)
   meo:      { alt: 10000,  latency: 67,    tidMult: 3.0,  seuMult: 2.5,  capacity: 50000  },  // Van Allen radiation belt
   geo:      { alt: 35786,  latency: 120,   tidMult: 0.6,  seuMult: 0.8,  capacity: 1800   },  // Geostationary orbit
   cislunar: { alt: 384400, latency: 1300,  tidMult: 0.4,  seuMult: 1.2,  capacity: 700000 }   // Earth-Moon space
 };
+
+// Starship payload capacity (kg to LEO)
+export const STARSHIP_PAYLOAD_KG = 150000;
 
 // Launch cost multipliers by orbital shell
 export const SHELL_COST_MULT: Record<string, number> = {

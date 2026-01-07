@@ -116,7 +116,8 @@
     .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted); }
     .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
     .sla-note { font-size: 10px; color: var(--muted); margin-top: 4px; }
-    
+    .slider-context { font-size: 10px; color: var(--muted); margin-top: 2px; font-style: italic; }
+
     /* Responsive layouts */
 
     /* Large screens */
@@ -226,7 +227,7 @@
       .lcoc-value { font-size: 32px; }
       .lcoc-stats { gap: 12px; }
       .lcoc-stat { padding: 6px 12px; }
-      .lcoc-whitepaper-link { display: none; }
+      .lcoc-whitepaper-link { font-size: 11px; padding: 6px 10px; }
     }
   </style>
 </head>
@@ -308,13 +309,13 @@
         </div>
         <div id="thermo-sliders" style="display: none;">
           <div class="slider-row">
-            <div class="slider-header"><span class="slider-lbl">Ground Mult</span><span class="slider-val"><span id="v-thermoGroundMult">1000</span><span class="unit">×</span></span></div>
-            <input type="range" id="thermoGroundMult" min="2" max="4" step="0.1" value="3">
+            <div class="slider-header"><span class="slider-lbl">Ground Mult</span><span class="slider-val"><span id="v-thermoGroundMult">100</span><span class="unit">×</span></span></div>
+            <input type="range" id="thermoGroundMult" min="1" max="3" step="0.1" value="2">
             <div class="toggle-effect">Room-temp silicon TSUs. Limited by thermal noise floor.</div>
           </div>
           <div class="slider-row">
-            <div class="slider-header"><span class="slider-lbl">Space Mult</span><span class="slider-val"><span id="v-thermoSpaceMult">10000</span><span class="unit">×</span></span></div>
-            <input type="range" id="thermoSpaceMult" min="2" max="5" step="0.1" value="4">
+            <div class="slider-header"><span class="slider-lbl">Space Mult</span><span class="slider-val"><span id="v-thermoSpaceMult">1000</span><span class="unit">×</span></span></div>
+            <input type="range" id="thermoSpaceMult" min="2" max="4" step="0.1" value="3">
             <div class="toggle-effect">Superconducting TSUs (Josephson junctions). Passive cryo cooling to ~20K.</div>
           </div>
         </div>
@@ -330,13 +331,13 @@
         </div>
         <div id="photonic-sliders" style="display: none;">
           <div class="slider-row">
-            <div class="slider-header"><span class="slider-lbl">Ground Mult</span><span class="slider-val"><span id="v-photonicGroundMult">50</span><span class="unit">×</span></span></div>
-            <input type="range" id="photonicGroundMult" min="1" max="3" step="0.1" value="1.7">
+            <div class="slider-header"><span class="slider-lbl">Ground Mult</span><span class="slider-val"><span id="v-photonicGroundMult">30</span><span class="unit">×</span></span></div>
+            <input type="range" id="photonicGroundMult" min="1" max="3" step="0.1" value="1.48">
             <div class="toggle-effect">Optical matrix multiply. Room temperature.</div>
           </div>
           <div class="slider-row">
-            <div class="slider-header"><span class="slider-lbl">Space Mult</span><span class="slider-val"><span id="v-photonicSpaceMult">100</span><span class="unit">×</span></span></div>
-            <input type="range" id="photonicSpaceMult" min="1" max="4" step="0.1" value="2">
+            <div class="slider-header"><span class="slider-lbl">Space Mult</span><span class="slider-val"><span id="v-photonicSpaceMult">150</span><span class="unit">×</span></span></div>
+            <input type="range" id="photonicSpaceMult" min="1" max="4" step="0.1" value="2.18">
             <div class="toggle-effect">Vacuum optics = no atmospheric scatter.</div>
           </div>
           <div class="slider-row">
@@ -478,8 +479,9 @@
       <div class="section">
         <div class="section-title ground">Market</div>
         <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">2026 Demand</span><span class="slider-val ground"><span id="v-demand2025">65</span><span class="unit">GW</span></span></div>
-          <input type="range" class="ground" id="demand2025" min="30" max="150" value="65">
+          <div class="slider-header"><span class="slider-lbl">2026 Demand</span><span class="slider-val ground"><span id="v-demand2025">195</span><span class="unit">Exaflops</span></span></div>
+          <input type="range" class="ground" id="demand2025" min="90" max="450" value="195">
+          <div class="slider-context" id="demand-context">(≈ 307 Petatok/yr | ≈ 65 GW @ baseline)</div>
         </div>
         <div class="slider-row">
           <div class="slider-header"><span class="slider-lbl">Demand Growth</span><span class="slider-val ground"><span id="v-demandGrowth">55</span><span class="unit">%/yr</span></span></div>
@@ -599,6 +601,8 @@
           <div class="kpi ground"><div class="kpi-label">Gnd 2035</div><div class="kpi-value" id="kpi-gnd35">--</div></div>
           <div class="kpi orbital"><div class="kpi-label">Orb 2050</div><div class="kpi-value" id="kpi-orb50">--</div></div>
           <div class="kpi ground"><div class="kpi-label">Gnd 2050</div><div class="kpi-value" id="kpi-gnd50">--</div></div>
+          <div class="kpi warning"><div class="kpi-label">Delivered 2035</div><div class="kpi-value" id="kpi-tokens35">--</div></div>
+          <div class="kpi accent"><div class="kpi-label">Delivered 2050</div><div class="kpi-value" id="kpi-tokens50">--</div></div>
         </div>
         <div class="charts">
           <div class="chart-card wide tall">
@@ -912,18 +916,22 @@ The model answers: when does orbital compute become cost-competitive with ground
 
 const STEFAN_BOLTZMANN = 5.67e-8;
 const SOLAR_CONSTANT = 1361;
-const YEARS = Array.from({length: 25}, (_, i) => 2026 + i);
+const BASELINE_EFFICIENCY = 3000;  // GFLOPS/W for standard ground compute (fixed reference)
+const YEARS = Array.from({length: 45}, (_, i) => 2026 + i);  // 2026-2070 (extended for lunar timelines)
 const SLA = 0.999; // 99.9% uptime = 8.76 hours downtime/year
 
 // Shell definitions with separated radiation effects
 // tidMult: Total Ionizing Dose - affects lifetime/degradation (higher = worse)
 // seuMult: Single Event Upsets - affects reliability/redundancy overhead (higher = worse)
 const SHELLS = {
-  leo:      { alt: 550,    latency: 3.7,   tidMult: 1.0,  seuMult: 1.0,  capacity: 300000 },  // Low Earth Orbit
+  leo:      { alt: 550,    latency: 3.7,   tidMult: 1.0,  seuMult: 1.0,  capacity: 500000 },  // Low Earth Orbit (Elon's 500k Starlink v3)
   meo:      { alt: 10000,  latency: 67,    tidMult: 3.0,  seuMult: 2.5,  capacity: 50000  },  // Van Allen radiation belt
   geo:      { alt: 35786,  latency: 120,   tidMult: 0.6,  seuMult: 0.8,  capacity: 1800   },  // Geostationary orbit
   cislunar: { alt: 384400, latency: 1300,  tidMult: 0.4,  seuMult: 1.2,  capacity: 700000 }   // Earth-Moon space
 };
+
+// Starship payload capacity (kg to LEO)
+const STARSHIP_PAYLOAD_KG = 150000;
 
 let P = {
   thermalOn: true, thermalYear: 2030,
@@ -931,9 +939,9 @@ let P = {
   fusionOn: false, fusionYear: 2045,
   smrOn: true, smrYear: 2032,
   thermoOn: false, thermoYear: 2029,
-  thermoGroundMult: 1000, thermoSpaceMult: 10000,
+  thermoGroundMult: 100, thermoSpaceMult: 1000,
   photonicOn: false, photonicYear: 2035,
-  photonicGroundMult: 50, photonicSpaceMult: 100,
+  photonicGroundMult: 30, photonicSpaceMult: 150,
   workloadProbabilistic: 0.15,
   emissivity: 0.85, opTemp: 365, radLearn: 50,
   solarEff: 0.20, solarLearn: 0.008, basePower: 300, // Silicon baseline
@@ -948,6 +956,7 @@ let P = {
   bandwidth: 50, bwGrowth: 0.35,
   bwCost: 50, // $k per Gbps annual
   gbpsPerTflop: 0.0001, // 0.1 Mbps per TFLOP (batch inference - upload job, compute, download results)
+  cislunarLocalRatio: 0.85, // 85% of cislunar compute is local (no downlink needed)
   orbitalEligibleShare: 0.35, // 35% of demand is batch/latency-tolerant (orbital-eligible)
   // WACC: Cost of capital (fixes "free money" assumption)
   waccOrbital: 0.10, // 10% for maturing space industry
@@ -1159,6 +1168,31 @@ function formatPrice(value) {
   if (value >= 0.1) return value.toFixed(3);
   if (value >= 0.01) return value.toFixed(4);
   return value.toFixed(5);
+}
+
+// Format delivered tokens per year in Petatokens for consistency
+function formatDeliveredTokens(tokens) {
+  const peta = tokens / 1e15;
+  if (peta >= 100) {
+    return peta.toFixed(0) + ' Peta';
+  } else if (peta >= 10) {
+    return peta.toFixed(1) + ' Peta';
+  } else if (peta >= 1) {
+    return peta.toFixed(2) + ' Peta';
+  }
+  return peta.toFixed(3) + ' Peta';
+}
+
+// Format demand context for slider display (baseline conversions)
+function formatDemandContext(exaflops) {
+  // Convert to baseline GW (fixed reference)
+  const baselineGW = (exaflops * 1e12) / (BASELINE_EFFICIENCY * 1e9);
+
+  // Convert to tokens/year (fixed reference)
+  const tokensPerYear = exaflops * 1e6 * 0.05 * 8760 * 3600;
+  const petatok = tokensPerYear / 1e15;
+
+  return `(≈ ${petatok.toFixed(0)} Petatok/yr | ≈ ${baselineGW.toFixed(0)} GW @ baseline)`;
 }
 
 function getDemandPressure(year, params = P) {
@@ -1458,117 +1492,184 @@ function calcGround(year, orbitalSupplyGW = 0, params = P) {
 
 // ============================================
 // FLEET CALCULATION - MULTI-SHELL
+// Fleet scales DOWN to match available bandwidth (bandwidth-constrained scaling)
 // ============================================
+
+// Track previous year's platforms for annual mass calculation
+let prevTotalPlatforms = 0;
+
+function resetFleetTracker() {
+  prevTotalPlatforms = 0;
+}
 
 function calcFleet(year, crossoverYear = null, params = P) {
   const sat = calcSatellite(year, params);
   const cislunarPowerKw = getCislunarPower(year, params);
   const t = year - 2026;
-  
+
   const hasFission = params.fissionOn && year >= params.fissionYear;
   const hasFusion = params.fusionOn && year >= params.fusionYear;
   const hasThermal = params.thermalOn && year >= params.thermalYear;
-  
-  let leoPlatforms = 0, meoPlatforms = 0, geoPlatforms = 0, cisPlatforms = 0;
-  
+
+  // STEP 1: Calculate UNCONSTRAINED platform counts (capacity-limited only)
+  let leoUnconstrained = 0, meoUnconstrained = 0, geoUnconstrained = 0, cisUnconstrained = 0;
+
   if (!crossoverYear || year < crossoverYear) {
     // Pre-crossover: minimal early adopters
-    leoPlatforms = Math.min(500, 50 + t * 20);
+    leoUnconstrained = Math.min(500, 50 + t * 20);
   } else {
     const yearsPost = year - crossoverYear;
-    
+
     // LEO fills first and fastest - doubles every 1.2 years
-    leoPlatforms = Math.min(SHELLS.leo.capacity, Math.round(500 * Math.pow(2, yearsPost / 1.2)));
-    
+    leoUnconstrained = Math.min(SHELLS.leo.capacity, Math.round(500 * Math.pow(2, yearsPost / 1.2)));
+
     // MEO: High radiation, slower growth - starts year 2
     if (yearsPost >= 2) {
-      meoPlatforms = Math.min(SHELLS.meo.capacity, Math.round(100 * Math.pow(1.8, (yearsPost - 2) / 1.5)));
+      meoUnconstrained = Math.min(SHELLS.meo.capacity, Math.round(100 * Math.pow(1.8, (yearsPost - 2) / 1.5)));
     }
-    
+
     // GEO: Limited slots, premium location - starts year 3
     if (yearsPost >= 3) {
-      geoPlatforms = Math.min(SHELLS.geo.capacity, Math.round(50 * Math.pow(1.5, (yearsPost - 3) / 2)));
+      geoUnconstrained = Math.min(SHELLS.geo.capacity, Math.round(50 * Math.pow(1.5, (yearsPost - 3) / 2)));
     }
-    
+
     // Cislunar: Requires fission/fusion - starts year 2
     if (cislunarPowerKw > 0 && yearsPost >= 2) {
-      cisPlatforms = Math.min(SHELLS.cislunar.capacity, Math.round(50 * Math.pow(2, (yearsPost - 2) / 2)));
+      cisUnconstrained = Math.min(SHELLS.cislunar.capacity, Math.round(50 * Math.pow(2, (yearsPost - 2) / 2)));
     }
   }
-  
-  // === Power by shell ===
+
+  // STEP 2: Calculate bandwidth per platform
+  const bwAvailTbps = getBandwidth(year, params);
+  const bwAvailGbps = bwAvailTbps * 1000;
+
   // GEO can have much larger platforms (stable orbit, no drag)
   const geoPowerKw = hasFission ? sat.powerKw * 20 : (hasThermal ? sat.powerKw * 10 : sat.powerKw * 5);
-  
+
+  const geoTflopsPerPlatform = geoPowerKw * params.computeFrac * sat.gflopsW / 1000;
+  const cisTflopsPerPlatform = cislunarPowerKw * params.computeFrac * sat.gflopsW / 1000;
+
+  // Bandwidth per platform - cislunar gets local processing exemption
+  const leoBwPerPlatform = sat.tflops * params.gbpsPerTflop;
+  const meoBwPerPlatform = sat.tflops * 0.8 * params.gbpsPerTflop;
+  const geoBwPerPlatform = geoTflopsPerPlatform * params.gbpsPerTflop;
+  const cisBwPerPlatform = cisTflopsPerPlatform * params.gbpsPerTflop * (1 - params.cislunarLocalRatio);
+
+  // STEP 3: Scale fleet to match bandwidth
+  const totalUnconstrainedBw =
+    leoUnconstrained * leoBwPerPlatform +
+    meoUnconstrained * meoBwPerPlatform +
+    geoUnconstrained * geoBwPerPlatform +
+    cisUnconstrained * cisBwPerPlatform;
+
+  let leoPlatforms = leoUnconstrained;
+  let meoPlatforms = meoUnconstrained;
+  let geoPlatforms = geoUnconstrained;
+  let cisPlatforms = cisUnconstrained;
+
+  if (totalUnconstrainedBw > bwAvailGbps && totalUnconstrainedBw > 0) {
+    const bwScaleFactor = bwAvailGbps / totalUnconstrainedBw;
+    leoPlatforms = Math.round(leoUnconstrained * bwScaleFactor);
+    meoPlatforms = Math.round(meoUnconstrained * bwScaleFactor);
+    geoPlatforms = Math.round(geoUnconstrained * bwScaleFactor);
+    cisPlatforms = Math.round(cisUnconstrained * bwScaleFactor);
+  }
+
+  // === Power by shell ===
   const leoPowerTw = leoPlatforms * sat.powerKw / 1e9;
   const meoPowerTw = meoPlatforms * sat.powerKw * 0.8 / 1e9; // MEO Van Allen penalty
   const geoPowerTw = geoPlatforms * geoPowerKw / 1e9;
   const cisPowerTw = cisPlatforms * cislunarPowerKw / 1e9;
   const totalPowerTw = leoPowerTw + meoPowerTw + geoPowerTw + cisPowerTw;
-  
-  // === Bandwidth utilization ===
-  const geoTflopsPerPlatform = geoPowerKw * params.computeFrac * sat.gflopsW / 1000;
-  const cisTflopsPerPlatform = cislunarPowerKw * params.computeFrac * sat.gflopsW / 1000;
-  
-  const fleetTflops = leoPlatforms * sat.tflops + 
+
+  // === Recalculate fleet TFLOPS with scaled platform counts ===
+  const fleetTflops = leoPlatforms * sat.tflops +
                       meoPlatforms * sat.tflops * 0.8 +
                       geoPlatforms * geoTflopsPerPlatform +
                       cisPlatforms * cisTflopsPerPlatform;
-  
+
   const bwNeededGbps = fleetTflops * params.gbpsPerTflop;
-  const bwAvailTbps = getBandwidth(year, params);
-  const bwAvailGbps = bwAvailTbps * 1000;
-  
-  // bwSell: fraction of compute you can actually monetize (sellable utilization)
+
+  // bwSell: fraction of compute you can monetize (should be ~100% with bandwidth scaling)
   const bwSell = (bwNeededGbps <= 0) ? 1 : Math.min(1, bwAvailGbps / bwNeededGbps);
-  
+
   // === Demand constraint ===
   // Only orbitalEligibleShare of total demand is batch/latency-tolerant
   const totalDemandGW = getDemand(year, params);
   const eligibleDemandGW = totalDemandGW * params.orbitalEligibleShare;
   const fleetPowerGW = totalPowerTw * 1000;
-  
+
   // demandSell: fraction of fleet capacity the market can absorb
   const demandSell = (fleetPowerGW <= 0) ? 1 : Math.min(1, eligibleDemandGW / fleetPowerGW);
-  
+
   // Effective LCOC: inflated by whichever constraint binds (stranded capex)
   const sellableUtil = Math.min(bwSell, demandSell);
   const lcocEffective = sat.lcoc / Math.max(0.01, sellableUtil);
-  
+
   // For display
   const bwUtil = bwAvailGbps > 0 ? Math.min(1, bwNeededGbps / bwAvailGbps) : 1;
   const demandUtil = eligibleDemandGW > 0 ? Math.min(1, fleetPowerGW / eligibleDemandGW) : 0;
-  
-  // Shell utilization
+
+  // Shell utilization (against capacity)
   const leoUtil = leoPlatforms / SHELLS.leo.capacity;
   const meoUtil = meoPlatforms / SHELLS.meo.capacity;
   const geoUtil = geoPlatforms / SHELLS.geo.capacity;
   const cisUtil = cisPlatforms / SHELLS.cislunar.capacity;
-  
+
+  // Bandwidth constraint ratio for bottleneck detection
+  const bwConstraintRatio = totalUnconstrainedBw > 0 ? bwAvailGbps / totalUnconstrainedBw : 1;
+
   // Bottleneck detection
   let bottleneck = 'thermal';
   if (!crossoverYear || year < crossoverYear) {
     bottleneck = 'thermal';
   } else {
-    if (bwSell < demandSell && bwSell < 0.9) bottleneck = 'bandwidth';
+    if (bwConstraintRatio < 0.9 && bwConstraintRatio < demandSell) bottleneck = 'bandwidth';
     else if (demandSell < 0.9) bottleneck = 'demand';
     else if (leoUtil > 0.9 || geoUtil > 0.9) bottleneck = 'slots';
     else if (!hasThermal && !hasFission) bottleneck = 'thermal';
     else bottleneck = 'power';
   }
-  
+
   const leoRadEffects = getShellRadiationEffects('leo', year, params);
   const replacementRate = leoRadEffects.replacementRate;
-  
+
+  // Calculate delivered compute metric (Llama-70B tokens/year)
+  // Llama-70B: ~0.05 tokens/sec per TFLOP (rough estimate)
+  const tokensPerTflopSec = 0.05;
+  const secondsPerYear = 8760 * 3600;
+  const deliveredTflops = fleetTflops * bwSell;  // Only count sellable compute
+  const deliveredTokensPerYear = deliveredTflops * tokensPerTflopSec * secondsPerYear;
+
+  // === Fleet mass & Starship equivalency ===
+  const totalPlatforms = leoPlatforms + meoPlatforms + geoPlatforms + cisPlatforms;
+  const avgPlatformMassKg = sat.dryMass;  // Use current sat mass as baseline
+  const fleetMassKg = totalPlatforms * avgPlatformMassKg;
+  const starshipFlightsToDeploy = fleetMassKg / STARSHIP_PAYLOAD_KG;
+
+  // Annual deployment: new platforms + replacements
+  const newPlatformsThisYear = Math.max(0, totalPlatforms - prevTotalPlatforms);
+  const replacementMassKg = totalPlatforms * replacementRate * avgPlatformMassKg;
+  const newDeploymentMassKg = newPlatformsThisYear * avgPlatformMassKg;
+  const annualMassKg = newDeploymentMassKg + replacementMassKg;
+  const annualStarshipFlights = annualMassKg / STARSHIP_PAYLOAD_KG;
+
+  // Update previous platforms for next iteration
+  prevTotalPlatforms = totalPlatforms;
+
   return {
-    year, 
+    year,
     leoPlatforms, meoPlatforms, geoPlatforms, cisPlatforms,
     leoPowerTw, meoPowerTw, geoPowerTw, cisPowerTw, totalPowerTw,
     lcocEffective, bwUtil, bwAvailGbps, bwNeededGbps, bwSell,
     demandUtil, demandSell, eligibleDemandGW, fleetTflops, sellableUtil,
     satPowerKw: sat.powerKw, cislunarPowerKw,
-    leoUtil, meoUtil, geoUtil, cisUtil, 
-    bottleneck, replacementRate
+    leoUtil, meoUtil, geoUtil, cisUtil,
+    bottleneck, replacementRate,
+    deliveredTokensPerYear,
+    // Fleet mass & Starship metrics
+    totalPlatforms, avgPlatformMassKg, fleetMassKg,
+    starshipFlightsToDeploy, annualMassKg, annualStarshipFlights
   };
 }
 
@@ -1884,7 +1985,11 @@ function update() {
                       fleetResults[i50].geoPlatforms + fleetResults[i50].cisPlatforms;
   document.getElementById('kpi-plat35').textContent = (totalPlat35 / 1000).toFixed(0) + 'k';
   document.getElementById('kpi-plat50').textContent = (totalPlat50 / 1000).toFixed(0) + 'k';
-  
+
+  // Delivered compute KPIs
+  document.getElementById('kpi-tokens35').textContent = formatDeliveredTokens(fleetResults[i35].deliveredTokensPerYear) + ' tok/yr';
+  document.getElementById('kpi-tokens50').textContent = formatDeliveredTokens(fleetResults[i50].deliveredTokensPerYear) + ' tok/yr';
+
   // Physics KPIs
   document.getElementById('kpi-leo').textContent = (sats[i35].powerKw / 1000).toFixed(1) + ' MW';
   document.getElementById('kpi-cis').textContent = (fleetResults[i35].cislunarPowerKw / 1000).toFixed(0) + ' MW';
@@ -2034,7 +2139,7 @@ function update() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initCharts();
-  
+
   // Thermal is always on - just handle the year slider
   P.thermalOn = true;
   const thermalYearSlider = document.getElementById('thermalYear');
@@ -2119,7 +2224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     energyCost: { p: 'energyCost', s: 0.001, f: v => v.toFixed(3) },
     energyEscal: { p: 'energyEscal', s: 0.01, f: v => Math.round(v * 100) },
     interconnect: { p: 'interconnect', s: 1, f: v => v },
-    demand2025: { p: 'demand2025', s: 1, f: v => v },
+    // demand2025 is handled specially - slider is in Exaflops, model uses GW
     demandGrowth: { p: 'demandGrowth', s: 0.01, f: v => Math.round(v * 100) },
     orbitalEligibleShare: { p: 'orbitalEligibleShare', s: 0.01, f: v => Math.round(v * 100) },
     supply2025: { p: 'supply2025', s: 1, f: v => v },
@@ -2159,7 +2264,22 @@ document.addEventListener('DOMContentLoaded', () => {
       update();
     });
   });
-  
+
+  // Special handling for demand2025 - slider is in Exaflops, model uses GW
+  const demandSlider = document.getElementById('demand2025');
+  const demandVal = document.getElementById('v-demand2025');
+  const demandContext = document.getElementById('demand-context');
+  if (demandSlider) {
+    demandSlider.addEventListener('input', () => {
+      const exaflops = parseFloat(demandSlider.value);
+      // Convert Exaflops to GW for model: GW = Exaflops * 1000 / BASELINE_EFFICIENCY
+      P.demand2025 = exaflops * 1000 / BASELINE_EFFICIENCY;
+      if (demandVal) demandVal.textContent = exaflops;
+      if (demandContext) demandContext.textContent = formatDemandContext(exaflops);
+      update();
+    });
+  }
+
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));

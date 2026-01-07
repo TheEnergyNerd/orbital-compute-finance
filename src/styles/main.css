@@ -600,6 +600,62 @@ input[type='range']::-webkit-slider-thumb {
   font-style: italic;
 }
 
+.slider-context {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.params-expander {
+  margin: 16px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 2px 2px 0 var(--border-dark);
+}
+
+.params-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.params-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.params-toggle::before {
+  content: '▶';
+  font-size: 10px;
+  color: var(--orbital);
+  transition: transform 0.2s;
+}
+
+.params-expander[open] .params-toggle::before {
+  transform: rotate(90deg);
+}
+
+.params-expander[open] .params-toggle {
+  border-bottom: 1px solid var(--border);
+}
+
+.params-expander .sandbox-grid {
+  margin: 0;
+  padding: 8px;
+}
+
 /* Responsive layouts */
 
 /* Large screens - add max-width constraints */

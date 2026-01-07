@@ -19,7 +19,6 @@
         <button class="tab" data-tab="constraints">Constraints</button>
         <button class="tab" data-tab="physics">Physics</button>
         <button class="tab" data-tab="futures">Futures</button>
-        <button class="tab" data-tab="sandbox">Sandbox</button>
         <a href="/finance/" class="tab finance-link">Finance</a>
       </div>
       <div class="header-badges">
@@ -40,6 +39,229 @@
         <div class="world-container">
           <iframe id="world-iframe" src="/orbital-visualization-example.html" style="width: 100%; height: calc(100vh - 120px); border: none; border-radius: 6px;"></iframe>
         </div>
+
+        <!-- Parameter Controls -->
+        <details class="params-expander">
+          <summary class="params-toggle">Parameters</summary>
+          <div class="sandbox-grid">
+          <div class="sandbox-section">
+            <div class="section-title">Breakthroughs</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Thermal Breakthrough</span><span class="slider-val"><span id="v-thermalYear">2030</span></span></div>
+              <input type="range" id="thermalYear" min="2026" max="2040" value="2030">
+              <div class="toggle-effect" id="eff-thermal">50× lighter heat rejection, MW-class platforms</div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-lbl">Space Fission</div>
+                <div class="toggle-effect" id="eff-fission">10-100× orbital power only</div>
+              </div>
+              <div class="toggle-group">
+                <input type="number" class="year-input" id="year-fission" value="2035" min="2028" max="2050">
+                <label class="toggle"><input type="checkbox" id="tog-fission" checked><span class="toggle-track"></span></label>
+              </div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-lbl">Ground SMR Buildout</div>
+                <div class="toggle-effect" id="eff-smr">Ground supply +10-25 GW/yr</div>
+              </div>
+              <div class="toggle-group">
+                <input type="number" class="year-input" id="year-smr" value="2032" min="2028" max="2050">
+                <label class="toggle"><input type="checkbox" id="tog-smr" checked><span class="toggle-track"></span></label>
+              </div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-lbl">Fusion Power</div>
+                <div class="toggle-effect" id="eff-fusion">GW stations, 100× ground</div>
+              </div>
+              <div class="toggle-group">
+                <input type="number" class="year-input" id="year-fusion" value="2045" min="2035" max="2050">
+                <label class="toggle"><input type="checkbox" id="tog-fusion"><span class="toggle-track"></span></label>
+              </div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-lbl">Thermo Computing</div>
+                <div class="toggle-effect" id="eff-thermo">100× ground, 1000× space</div>
+              </div>
+              <div class="toggle-group">
+                <input type="number" class="year-input" id="year-thermo" value="2029" min="2026" max="2040">
+                <label class="toggle"><input type="checkbox" id="tog-thermo"><span class="toggle-track"></span></label>
+              </div>
+            </div>
+            <div class="slider-row" id="thermo-sliders" style="display: none; margin-top: 8px;">
+              <div class="slider-header"><span class="slider-lbl">Ground Mult</span><span class="slider-val"><span id="v-thermoGroundMult">100</span><span class="unit">×</span></span></div>
+              <input type="range" id="thermoGroundMult" min="1" max="4" step="0.1" value="2">
+              <div class="slider-header" style="margin-top: 6px;"><span class="slider-lbl">Space Mult</span><span class="slider-val"><span id="v-thermoSpaceMult">1000</span><span class="unit">×</span></span></div>
+              <input type="range" id="thermoSpaceMult" min="1" max="5" step="0.1" value="3">
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-lbl">Photonic Computing</div>
+                <div class="toggle-effect" id="eff-photonic">30× ground, 150× space</div>
+              </div>
+              <div class="toggle-group">
+                <input type="number" class="year-input" id="year-photonic" value="2035" min="2028" max="2045">
+                <label class="toggle"><input type="checkbox" id="tog-photonic"><span class="toggle-track"></span></label>
+              </div>
+            </div>
+            <div class="slider-row" id="photonic-sliders" style="display: none; margin-top: 8px;">
+              <div class="slider-header"><span class="slider-lbl">Ground Mult</span><span class="slider-val"><span id="v-photonicGroundMult">30</span><span class="unit">×</span></span></div>
+              <input type="range" id="photonicGroundMult" min="1" max="3" step="0.1" value="1.48">
+              <div class="slider-header" style="margin-top: 6px;"><span class="slider-lbl">Space Mult</span><span class="slider-val"><span id="v-photonicSpaceMult">150</span><span class="unit">×</span></span></div>
+              <input type="range" id="photonicSpaceMult" min="1" max="4" step="0.1" value="2.18">
+            </div>
+          </div>
+
+          <div class="sandbox-section">
+            <div class="section-title">Thermal</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Emissivity</span><span class="slider-val"><span id="v-emissivity">0.85</span></span></div>
+              <input type="range" id="emissivity" min="70" max="95" value="85">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Op Temp</span><span class="slider-val"><span id="v-opTemp">365</span><span class="unit">K</span></span></div>
+              <input type="range" id="opTemp" min="300" max="400" value="365">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Rad Learn</span><span class="slider-val"><span id="v-radLearn">50</span><span class="unit">kg/MW/yr</span></span></div>
+              <input type="range" id="radLearn" min="0" max="100" value="50">
+            </div>
+          </div>
+
+          <div class="sandbox-section">
+            <div class="section-title">Power</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Solar Eff</span><span class="slider-val"><span id="v-solarEff">20</span><span class="unit">%</span></span></div>
+              <input type="range" id="solarEff" min="15" max="50" value="20">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Solar Learn</span><span class="slider-val"><span id="v-solarLearn">0.8</span><span class="unit">%/yr</span></span></div>
+              <input type="range" id="solarLearn" min="0" max="20" value="8">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Base Power</span><span class="slider-val"><span id="v-basePower">300</span><span class="unit">kW</span></span></div>
+              <input type="range" id="basePower" min="100" max="800" value="300">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Compute %</span><span class="slider-val"><span id="v-computeFrac">68</span><span class="unit">%</span></span></div>
+              <input type="range" id="computeFrac" min="50" max="80" value="68">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Battery Dens</span><span class="slider-val"><span id="v-battDens">280</span><span class="unit">Wh/kg</span></span></div>
+              <input type="range" id="battDens" min="200" max="500" value="280">
+            </div>
+          </div>
+
+          <div class="sandbox-section">
+            <div class="section-title">Compute</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Rad Penalty</span><span class="slider-val"><span id="v-radPen">30</span><span class="unit">%</span></span></div>
+              <input type="range" id="radPen" min="10" max="60" value="30">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">AI Learn Rate</span><span class="slider-val"><span id="v-aiLearn">20</span><span class="unit">%/yr</span></span></div>
+              <input type="range" id="aiLearn" min="5" max="35" value="20">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Sat Lifetime</span><span class="slider-val"><span id="v-satLife">10</span><span class="unit">yrs</span></span></div>
+              <input type="range" id="satLife" min="3" max="15" value="10">
+            </div>
+          </div>
+
+          <div class="sandbox-section">
+            <div class="section-title">Economics</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Launch $/kg</span><span class="slider-val">$<span id="v-launchCost">1500</span></span></div>
+              <input type="range" id="launchCost" min="200" max="2500" value="1500">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Launch Learn</span><span class="slider-val"><span id="v-launchLearn">18</span><span class="unit">%</span></span></div>
+              <input type="range" id="launchLearn" min="10" max="50" value="18">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Launch Floor</span><span class="slider-val">$<span id="v-launchFloor">10</span><span class="unit">/kg</span></span></div>
+              <input type="range" id="launchFloor" min="5" max="50" value="10">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Mfg Mult</span><span class="slider-val"><span id="v-prodMult">2.5</span><span class="unit">×</span></span></div>
+              <input type="range" id="prodMult" min="10" max="50" value="25">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Maint Cost</span><span class="slider-val"><span id="v-maintCost">2</span><span class="unit">%/yr</span></span></div>
+              <input type="range" id="maintCost" min="1" max="30" value="2">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">WACC Orbital</span><span class="slider-val"><span id="v-waccOrbital">10</span><span class="unit">%</span></span></div>
+              <input type="range" id="waccOrbital" min="5" max="20" value="10">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">WACC Ground</span><span class="slider-val"><span id="v-waccGround">8</span><span class="unit">%</span></span></div>
+              <input type="range" id="waccGround" min="4" max="15" value="8">
+            </div>
+          </div>
+
+          <div class="sandbox-section">
+            <div class="section-title ground">Ground</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">PUE</span><span class="slider-val ground"><span id="v-groundPue">1.30</span></span></div>
+              <input type="range" class="ground" id="groundPue" min="110" max="180" value="130">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Energy Cost</span><span class="slider-val ground">$<span id="v-energyCost">0.065</span><span class="unit">/kWh</span></span></div>
+              <input type="range" class="ground" id="energyCost" min="30" max="120" value="65">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Energy Escal</span><span class="slider-val ground"><span id="v-energyEscal">4</span><span class="unit">%/yr</span></span></div>
+              <input type="range" class="ground" id="energyEscal" min="0" max="10" value="4">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Queue Delay</span><span class="slider-val ground"><span id="v-interconnect">48</span><span class="unit">mo</span></span></div>
+              <input type="range" class="ground" id="interconnect" min="12" max="72" value="48">
+            </div>
+          </div>
+
+          <div class="sandbox-section">
+            <div class="section-title">Bandwidth</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">2026 BW</span><span class="slider-val"><span id="v-bandwidth">50</span><span class="unit">Tbps</span></span></div>
+              <input type="range" id="bandwidth" min="10" max="200" value="50">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">BW Growth</span><span class="slider-val"><span id="v-bwGrowth">35</span><span class="unit">%/yr</span></span></div>
+              <input type="range" id="bwGrowth" min="10" max="60" value="35">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Batch Eligible</span><span class="slider-val"><span id="v-orbitalEligibleShare">35</span><span class="unit">%</span></span></div>
+              <input type="range" id="orbitalEligibleShare" min="10" max="80" value="35">
+            </div>
+          </div>
+
+          <div class="sandbox-section">
+            <div class="section-title ground">Market</div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">2026 Demand</span><span class="slider-val ground"><span id="v-demand2025">195</span><span class="unit">Exaflops</span></span></div>
+              <input type="range" class="ground" id="demand2025" min="90" max="450" value="195">
+              <div class="slider-context" id="demand-context">(≈ 307 Petatok/yr | ≈ 65 GW @ baseline)</div>
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Demand Growth</span><span class="slider-val ground"><span id="v-demandGrowth">55</span><span class="unit">%/yr</span></span></div>
+              <input type="range" class="ground" id="demandGrowth" min="20" max="80" value="55">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">2026 Supply</span><span class="slider-val ground"><span id="v-supply2025">60</span><span class="unit">GW</span></span></div>
+              <input type="range" class="ground" id="supply2025" min="30" max="150" value="60">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header"><span class="slider-lbl">Supply Growth</span><span class="slider-val ground"><span id="v-supplyGrowth">8</span><span class="unit">%/yr</span></span></div>
+              <input type="range" class="ground" id="supplyGrowth" min="5" max="25" value="8">
+            </div>
+          </div>
+
+          </div>
+        </details>
 
         <!-- Core Charts for World Tab -->
         <div class="world-summary" style="padding: 16px;">
@@ -108,6 +330,8 @@
           <div class="kpi ground"><div class="kpi-label">Gnd 2040</div><div class="kpi-value" id="kpi-gnd40">--</div></div>
           <div class="kpi orbital"><div class="kpi-label">Orb 2050</div><div class="kpi-value" id="kpi-orb50">--</div></div>
           <div class="kpi ground"><div class="kpi-label">Gnd 2050</div><div class="kpi-value" id="kpi-gnd50">--</div></div>
+          <div class="kpi warning"><div class="kpi-label">Delivered 2035</div><div class="kpi-value" id="kpi-tokens35">--</div></div>
+          <div class="kpi accent"><div class="kpi-label">Delivered 2050</div><div class="kpi-value" id="kpi-tokens50">--</div></div>
         </div>
         <div class="charts">
           <div class="chart-card wide tall">
@@ -400,259 +624,6 @@
             <div class="legend">
               <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
               <div class="legend-item"><div class="legend-dot" style="background:rgba(26,138,106,0.3)"></div>Orbital range</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- SANDBOX TAB -->
-      <div class="tab-panel" data-tab="sandbox">
-        <div class="sandbox-grid">
-          <div class="sandbox-section">
-            <div class="section-title">Breakthroughs</div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Thermal Breakthrough</span><span class="slider-val"><span id="v-thermalYear">2030</span></span></div>
-              <input type="range" id="thermalYear" min="2026" max="2040" value="2030">
-              <div class="toggle-effect" id="eff-thermal">50× lighter heat rejection, MW-class platforms</div>
-            </div>
-            <div class="toggle-row">
-              <div>
-                <div class="toggle-lbl">Space Fission</div>
-                <div class="toggle-effect" id="eff-fission">10-100× orbital power only</div>
-              </div>
-              <div class="toggle-group">
-                <input type="number" class="year-input" id="year-fission" value="2035" min="2028" max="2050">
-                <label class="toggle"><input type="checkbox" id="tog-fission" checked><span class="toggle-track"></span></label>
-              </div>
-            </div>
-            <div class="toggle-row">
-              <div>
-                <div class="toggle-lbl">Ground SMR Buildout</div>
-                <div class="toggle-effect" id="eff-smr">Ground supply +10-25 GW/yr</div>
-              </div>
-              <div class="toggle-group">
-                <input type="number" class="year-input" id="year-smr" value="2032" min="2028" max="2050">
-                <label class="toggle"><input type="checkbox" id="tog-smr" checked><span class="toggle-track"></span></label>
-              </div>
-            </div>
-            <div class="toggle-row">
-              <div>
-                <div class="toggle-lbl">Fusion Power</div>
-                <div class="toggle-effect" id="eff-fusion">GW stations, 100× ground</div>
-              </div>
-              <div class="toggle-group">
-                <input type="number" class="year-input" id="year-fusion" value="2045" min="2035" max="2050">
-                <label class="toggle"><input type="checkbox" id="tog-fusion"><span class="toggle-track"></span></label>
-              </div>
-            </div>
-          </div>
-          
-          <div class="sandbox-section">
-            <div class="section-title">Thermal</div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Emissivity</span><span class="slider-val"><span id="v-emissivity">0.85</span></span></div>
-              <input type="range" id="emissivity" min="70" max="95" value="85">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Op Temp</span><span class="slider-val"><span id="v-opTemp">365</span><span class="unit">K</span></span></div>
-              <input type="range" id="opTemp" min="300" max="400" value="365">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Rad Learn</span><span class="slider-val"><span id="v-radLearn">50</span><span class="unit">kg/MW/yr</span></span></div>
-              <input type="range" id="radLearn" min="0" max="100" value="50">
-            </div>
-          </div>
-          
-          <div class="sandbox-section">
-            <div class="section-title">Power</div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Solar Eff</span><span class="slider-val"><span id="v-solarEff">20</span><span class="unit">%</span></span></div>
-              <input type="range" id="solarEff" min="15" max="50" value="20">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Solar Learn</span><span class="slider-val"><span id="v-solarLearn">0.8</span><span class="unit">%/yr</span></span></div>
-              <input type="range" id="solarLearn" min="0" max="20" value="8">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Base Power</span><span class="slider-val"><span id="v-basePower">300</span><span class="unit">kW</span></span></div>
-              <input type="range" id="basePower" min="100" max="800" value="300">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Compute %</span><span class="slider-val"><span id="v-computeFrac">68</span><span class="unit">%</span></span></div>
-              <input type="range" id="computeFrac" min="50" max="80" value="68">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Battery Dens</span><span class="slider-val"><span id="v-battDens">280</span><span class="unit">Wh/kg</span></span></div>
-              <input type="range" id="battDens" min="200" max="500" value="280">
-            </div>
-          </div>
-          
-          <div class="sandbox-section">
-            <div class="section-title">Compute</div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Rad Penalty</span><span class="slider-val"><span id="v-radPen">30</span><span class="unit">%</span></span></div>
-              <input type="range" id="radPen" min="10" max="60" value="30">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">AI Learn Rate</span><span class="slider-val"><span id="v-aiLearn">20</span><span class="unit">%/yr</span></span></div>
-              <input type="range" id="aiLearn" min="5" max="35" value="20">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Sat Lifetime</span><span class="slider-val"><span id="v-satLife">10</span><span class="unit">yrs</span></span></div>
-              <input type="range" id="satLife" min="3" max="15" value="10">
-            </div>
-          </div>
-          
-          <div class="sandbox-section">
-            <div class="section-title">Economics</div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Launch $/kg</span><span class="slider-val">$<span id="v-launchCost">1500</span></span></div>
-              <input type="range" id="launchCost" min="200" max="2500" value="1500">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Launch Learn</span><span class="slider-val"><span id="v-launchLearn">18</span><span class="unit">%</span></span></div>
-              <input type="range" id="launchLearn" min="10" max="50" value="18">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Launch Floor</span><span class="slider-val">$<span id="v-launchFloor">10</span><span class="unit">/kg</span></span></div>
-              <input type="range" id="launchFloor" min="5" max="50" value="10">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Mfg Mult</span><span class="slider-val"><span id="v-prodMult">2.5</span><span class="unit">×</span></span></div>
-              <input type="range" id="prodMult" min="10" max="50" value="25">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Maint Cost</span><span class="slider-val"><span id="v-maintCost">2</span><span class="unit">%/yr</span></span></div>
-              <input type="range" id="maintCost" min="1" max="30" value="2">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">WACC Orbital</span><span class="slider-val"><span id="v-waccOrbital">10</span><span class="unit">%</span></span></div>
-              <input type="range" id="waccOrbital" min="5" max="20" value="10">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">WACC Ground</span><span class="slider-val"><span id="v-waccGround">8</span><span class="unit">%</span></span></div>
-              <input type="range" id="waccGround" min="4" max="15" value="8">
-            </div>
-          </div>
-          
-          <div class="sandbox-section">
-            <div class="section-title ground">Ground</div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">PUE</span><span class="slider-val ground"><span id="v-groundPue">1.30</span></span></div>
-              <input type="range" class="ground" id="groundPue" min="110" max="180" value="130">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Energy Cost</span><span class="slider-val ground">$<span id="v-energyCost">0.065</span><span class="unit">/kWh</span></span></div>
-              <input type="range" class="ground" id="energyCost" min="30" max="120" value="65">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Energy Escal</span><span class="slider-val ground"><span id="v-energyEscal">4</span><span class="unit">%/yr</span></span></div>
-              <input type="range" class="ground" id="energyEscal" min="0" max="10" value="4">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Queue Delay</span><span class="slider-val ground"><span id="v-interconnect">48</span><span class="unit">mo</span></span></div>
-              <input type="range" class="ground" id="interconnect" min="12" max="72" value="48">
-            </div>
-          </div>
-          
-          <div class="sandbox-section">
-            <div class="section-title">Bandwidth</div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">2026 BW</span><span class="slider-val"><span id="v-bandwidth">50</span><span class="unit">Tbps</span></span></div>
-              <input type="range" id="bandwidth" min="10" max="200" value="50">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">BW Growth</span><span class="slider-val"><span id="v-bwGrowth">35</span><span class="unit">%/yr</span></span></div>
-              <input type="range" id="bwGrowth" min="10" max="60" value="35">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Batch Eligible</span><span class="slider-val"><span id="v-orbitalEligibleShare">35</span><span class="unit">%</span></span></div>
-              <input type="range" id="orbitalEligibleShare" min="10" max="80" value="35">
-            </div>
-          </div>
-          
-          <div class="sandbox-section">
-            <div class="section-title ground">Market</div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">2026 Demand</span><span class="slider-val ground"><span id="v-demand2025">65</span><span class="unit">GW</span></span></div>
-              <input type="range" class="ground" id="demand2025" min="20" max="150" value="65">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Demand Growth</span><span class="slider-val ground"><span id="v-demandGrowth">55</span><span class="unit">%/yr</span></span></div>
-              <input type="range" class="ground" id="demandGrowth" min="20" max="80" value="55">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">2026 Supply</span><span class="slider-val ground"><span id="v-supply2025">60</span><span class="unit">GW</span></span></div>
-              <input type="range" class="ground" id="supply2025" min="30" max="150" value="60">
-            </div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Supply Growth</span><span class="slider-val ground"><span id="v-supplyGrowth">8</span><span class="unit">%/yr</span></span></div>
-              <input type="range" class="ground" id="supplyGrowth" min="5" max="25" value="8">
-            </div>
-          </div>
-          
-          <div class="sandbox-section derived-section">
-            <div class="section-title">Derived Values</div>
-            <div class="derived-grid">
-              <div class="derived-item">
-                <span class="derived-label">Rad Power</span>
-                <span class="derived-value" id="d-radPower">--</span>
-                <span class="derived-unit">W/m²</span>
-              </div>
-              <div class="derived-item">
-                <span class="derived-label">Rad Mass</span>
-                <span class="derived-value" id="d-radMass">--</span>
-                <span class="derived-unit">kg/MW</span>
-              </div>
-              <div class="derived-item">
-                <span class="derived-label">Launch LEO</span>
-                <span class="derived-value" id="d-launchLeo">--</span>
-                <span class="derived-unit">$/kg</span>
-              </div>
-              <div class="derived-item">
-                <span class="derived-label">Launch GEO</span>
-                <span class="derived-value" id="d-launchGeo">--</span>
-                <span class="derived-unit">$/kg</span>
-              </div>
-              <div class="derived-item">
-                <span class="derived-label">Sat Power</span>
-                <span class="derived-value" id="d-satPower">--</span>
-                <span class="derived-unit">kW</span>
-              </div>
-              <div class="derived-item">
-                <span class="derived-label">Sat Mass</span>
-                <span class="derived-value" id="d-satMass">--</span>
-                <span class="derived-unit">kg</span>
-              </div>
-              <div class="derived-item">
-                <span class="derived-label">Demand '35</span>
-                <span class="derived-value" id="d-demand35">--</span>
-                <span class="derived-unit">GW</span>
-              </div>
-              <div class="derived-item">
-                <span class="derived-label">Supply '35</span>
-                <span class="derived-value" id="d-supply35">--</span>
-                <span class="derived-unit">GW</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- LCOC Chart for Sandbox Tab -->
-        <div class="sandbox-summary" style="padding: 16px;">
-          <div class="charts">
-            <div class="chart-card wide tall">
-              <div class="chart-header">
-                <div class="chart-title">LCOC with Uncertainty ($/GPU-hr)</div>
-                <div class="chart-desc">Orbital vs Ground market price. Bands = scenario range.</div>
-                <div class="sla-note">SLA: 99.9% uptime (8.76 hrs/yr downtime)</div>
-              </div>
-              <div class="chart-box"><canvas id="c-lcoc-sandbox"></canvas></div>
-              <div class="legend">
-                <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
-                <div class="legend-item"><div class="legend-dot" style="background:rgba(26,138,106,0.3)"></div>Orbital range</div>
-                <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (market)</div>
-              </div>
             </div>
           </div>
         </div>

@@ -16,12 +16,12 @@ export const defaults: Params = {
   smrYear: 2032,         // Ground SMR deployment
   thermoOn: false,
   thermoYear: 2029,      // Thermodynamic computing availability
-  thermoGroundMult: 1000,   // Room-temp TSU efficiency multiplier
-  thermoSpaceMult: 10000,   // Superconducting TSU efficiency multiplier (passive cryo)
+  thermoGroundMult: 100,    // Room-temp TSU efficiency multiplier (Extropic claims orders of magnitude)
+  thermoSpaceMult: 1000,    // Superconducting TSU efficiency multiplier (10x from passive cryo: 3K vs 300K)
   photonicOn: false,
   photonicYear: 2035,    // Photonic computing availability
-  photonicGroundMult: 50,   // Ground photonic efficiency multiplier
-  photonicSpaceMult: 100,   // Space photonic efficiency multiplier (vacuum optics)
+  photonicGroundMult: 30,   // Ground photonic efficiency multiplier (Lightmatter/Luminous 10-100x for matrix ops)
+  photonicSpaceMult: 150,   // Space photonic efficiency multiplier (5x: radiation immunity + vacuum optics + thermal stability)
   workloadProbabilistic: 0.15, // Fraction of workloads that are sampling-heavy
 
   // Thermal
@@ -53,6 +53,7 @@ export const defaults: Params = {
   bandwidth: 50,         // Total capacity in 2025 (Tbps)
   bwGrowth: 0.35,        // Annual bandwidth growth rate
   gbpsPerTflop: 0.0001,  // Bandwidth per TFLOP (Gbps)
+  cislunarLocalRatio: 0.85,  // 85% of cislunar compute is local (no downlink needed)
 
   // Market
   orbitalEligibleShare: 0.35,  // Fraction of demand that is latency-tolerant

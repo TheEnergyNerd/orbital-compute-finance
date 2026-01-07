@@ -131,13 +131,42 @@ const sliderConfigs: SliderConfig[] = [
     transform: (v) => v / 100
   },
 
-  // Market
-  { id: 'demand2025', param: 'demand2025', valueId: 'v-demand2025' },
+  // Market - demand2025 handled specially below (Exaflops to GW conversion)
   {
     id: 'demandGrowth',
     param: 'demandGrowth',
     valueId: 'v-demandGrowth',
     transform: (v) => v / 100
+  },
+  // Thermo computing multipliers (logarithmic: 10^x)
+  {
+    id: 'thermoGroundMult',
+    param: 'thermoGroundMult',
+    valueId: 'v-thermoGroundMult',
+    transform: (v) => Math.pow(10, v),
+    format: (v) => Math.round(v).toString()
+  },
+  {
+    id: 'thermoSpaceMult',
+    param: 'thermoSpaceMult',
+    valueId: 'v-thermoSpaceMult',
+    transform: (v) => Math.pow(10, v),
+    format: (v) => Math.round(v).toString()
+  },
+  // Photonic computing multipliers (logarithmic: 10^x)
+  {
+    id: 'photonicGroundMult',
+    param: 'photonicGroundMult',
+    valueId: 'v-photonicGroundMult',
+    transform: (v) => Math.pow(10, v),
+    format: (v) => Math.round(v).toString()
+  },
+  {
+    id: 'photonicSpaceMult',
+    param: 'photonicSpaceMult',
+    valueId: 'v-photonicSpaceMult',
+    transform: (v) => Math.pow(10, v),
+    format: (v) => Math.round(v).toString()
   },
   { id: 'supply2025', param: 'supply2025', valueId: 'v-supply2025' },
   {
@@ -178,18 +207,24 @@ export function initSliders(): void {
   const toggleConfigs = [
     { togId: 'tog-fission', yearId: 'year-fission', onParam: 'fissionOn', yearParam: 'fissionYear' },
     { togId: 'tog-fusion', yearId: 'year-fusion', onParam: 'fusionOn', yearParam: 'fusionYear' },
-    { togId: 'tog-smr', yearId: 'year-smr', onParam: 'smrOn', yearParam: 'smrYear' }
+    { togId: 'tog-smr', yearId: 'year-smr', onParam: 'smrOn', yearParam: 'smrYear' },
+    { togId: 'tog-thermo', yearId: 'year-thermo', onParam: 'thermoOn', yearParam: 'thermoYear', slidersId: 'thermo-sliders' },
+    { togId: 'tog-photonic', yearId: 'year-photonic', onParam: 'photonicOn', yearParam: 'photonicYear', slidersId: 'photonic-sliders' }
   ];
 
   toggleConfigs.forEach((cfg) => {
     const toggle = document.getElementById(cfg.togId) as HTMLInputElement | null;
     const yearInput = document.getElementById(cfg.yearId) as HTMLInputElement | null;
+    const slidersDiv = cfg.slidersId ? document.getElementById(cfg.slidersId) : null;
 
     if (toggle) {
       toggle.addEventListener('change', () => {
         setParams({ [cfg.onParam]: toggle.checked } as Partial<Params>);
         if (yearInput) {
           yearInput.disabled = !toggle.checked;
+        }
+        if (slidersDiv) {
+          slidersDiv.style.display = toggle.checked ? 'block' : 'none';
         }
       });
     }
@@ -200,4 +235,31 @@ export function initSliders(): void {
       });
     }
   });
+
+  // Special handling for demand slider (Exaflops to GW conversion)
+  const BASELINE_EFFICIENCY = 3000; // GFLOPS/W standard datacenter
+
+  function formatDemandContext(exaflops: number): string {
+    // Convert to baseline GW (fixed reference)
+    const baselineGW = (exaflops * 1e12) / (BASELINE_EFFICIENCY * 1e9);
+    // Convert to tokens/year (fixed reference)
+    const tokensPerYear = exaflops * 1e6 * 0.05 * 8760 * 3600;
+    const petatok = tokensPerYear / 1e15;
+    return `(≈ ${petatok.toFixed(0)} Petatok/yr | ≈ ${baselineGW.toFixed(0)} GW @ baseline)`;
+  }
+
+  const demandSlider = document.getElementById('demand2025') as HTMLInputElement | null;
+  const demandVal = document.getElementById('v-demand2025');
+  const demandContext = document.getElementById('demand-context');
+
+  if (demandSlider) {
+    demandSlider.addEventListener('input', () => {
+      const exaflops = parseFloat(demandSlider.value);
+      // Convert Exaflops to GW for the model
+      const gw = (exaflops * 1000) / BASELINE_EFFICIENCY;
+      setParams({ demand2025: gw });
+      if (demandVal) demandVal.textContent = exaflops.toString();
+      if (demandContext) demandContext.textContent = formatDemandContext(exaflops);
+    });
+  }
 }

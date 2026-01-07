@@ -51,6 +51,7 @@ export interface Params {
   bwGrowth: number;
   gbpsPerTflop: number;
   orbitalEligibleShare: number;
+  cislunarLocalRatio: number;  // Fraction of cislunar compute that doesn't need downlink (85%)
 
   // Ground
   groundPue: number;
@@ -164,6 +165,14 @@ export interface FleetResult {
   cisUtil: number;
   bottleneck: string;
   replacementRate: number;
+  deliveredTokensPerYear: number;  // Llama-70B equivalent tokens/year
+  // Fleet mass & Starship metrics
+  totalPlatforms: number;
+  avgPlatformMassKg: number;
+  fleetMassKg: number;
+  starshipFlightsToDeploy: number;
+  annualMassKg: number;
+  annualStarshipFlights: number;
 }
 
 export interface ScenarioResult {
@@ -171,6 +180,10 @@ export interface ScenarioResult {
   fleets: FleetResult[];
   gnds: GroundResult[];
   crossoverYear: number | null;
+  // Simulation state tracking
+  states: SimulationState[];
+  lunarUnlockYear: number | null;
+  lunarReadinessDetails: LunarReadinessDetails[];
 }
 
 export interface Scenario {
@@ -178,4 +191,43 @@ export interface Scenario {
   techYearOffset: number;
   demandMult: number;
   launchLearnMult: number;
+}
+
+// Simulation state tracking for feedback loops
+export interface SimulationState {
+  year: number;
+  // Cumulative metrics (for learning curves & lunar readiness)
+  cumulativeMassToOrbitKg: number;
+  cumulativeOrbitalFlights: number;
+  cumulativeSatellitesBuilt: number;
+  // Current metrics
+  orbitalPowerTW: number;
+  deliveredComputeExaflops: number;
+  globalComputeExaflops: number;  // ground + orbital
+  // Derived/computed
+  rndStock: number;               // K, for AI acceleration
+  lunarReadiness: number;         // 0-1 index
+  effectiveLaunchLearnRate: number;
+  // Costs
+  launchCostPerKg: number;
+}
+
+// R&D acceleration boost results
+export interface RnDBoost {
+  chipEfficiencyMult: number;
+  solarEfficiencyMult: number;
+  manufacturingCostMult: number;
+  launchLearnBoost: number;
+}
+
+// Lunar readiness component scores
+export interface LunarReadinessDetails {
+  massScore: number;
+  computeScore: number;
+  powerScore: number;
+  timeScore: number;
+  techBonus: number;
+  efficiencyPenalty: number;
+  overallReadiness: number;
+  status: string;
 }
