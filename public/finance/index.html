@@ -6,6 +6,8 @@
   <link rel="icon" type="image/png" href="/favicon.png">
   <title>Orbital Compute Economics</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Load shared model via ES module -->
+  <script type="module" src="/src/finance/main.ts"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     :root {
@@ -920,879 +922,64 @@
   </div>
 </div>
 
-<script>
+<script type="module">
 /*
 ================================================================================
-ORBITAL COMPUTE ECONOMICS SIMULATOR
+ORBITAL COMPUTE ECONOMICS SIMULATOR - Finance View
 ================================================================================
-
-@author  Pranav Myana
-@license MIT
-
-A physics-first model for comparing orbital vs terrestrial data center economics
-using the Levelized Cost of Compute (LCOC) framework.
-
-Key features:
-- First-principles thermal, power, and mass calculations
-- Proper capital recovery (WACC/CRF) instead of naive depreciation
-- Bandwidth and demand constraints (sellable utilization)
-- TID/SEU radiation effects by orbital shell
-- Technology breakthroughs: thermal breakthrough, fission, fusion
-
-The model answers: when does orbital compute become cost-competitive with ground?
+Uses shared model from /src/model/ via OrbitalModel global
 ================================================================================
 */
 
-const STEFAN_BOLTZMANN = 5.67e-8;
-const SOLAR_CONSTANT = 1361;
+// Import shared model
+const {
+  STEFAN_BOLTZMANN, SOLAR_CONSTANT, YEARS, SLA, SHELLS, STARSHIP_PAYLOAD_KG,
+  SCENARIOS, defaults,
+  getLaunchCost, getRadiatorMassPerMW, getRadiatorPower, getGroundEfficiency,
+  getOrbitalEfficiency, getBandwidth, getLEOPower, getCislunarPower,
+  getCRF, getDemand, getBtmShare, getGroundSupply, getDemandPressure,
+  getShellRadiationEffects, getAllShellReliability,
+  calcSatellite, calcGround, calcFleet, resetFleetTracker,
+  getScenarioParams, runScenario,
+  updateRnDStock, updateLaunchLearning,
+  getLunarReadiness, getLunarUnlockYear
+} = window.OrbitalModel;
+
 const BASELINE_EFFICIENCY = 3000;  // GFLOPS/W for standard ground compute (fixed reference)
-const YEARS = Array.from({length: 45}, (_, i) => 2026 + i);  // 2026-2070 (extended for lunar timelines)
-const SLA = 0.999; // 99.9% uptime = 8.76 hours downtime/year
 
-// Shell definitions with separated radiation effects
-// tidMult: Total Ionizing Dose - affects lifetime/degradation (higher = worse)
-// seuMult: Single Event Upsets - affects reliability/redundancy overhead (higher = worse)
-const SHELLS = {
-  leo:      { alt: 550,    latency: 3.7,   tidMult: 1.0,  seuMult: 1.0,  capacity: 500000 },  // Low Earth Orbit (Elon's 500k Starlink v3)
-  meo:      { alt: 10000,  latency: 67,    tidMult: 3.0,  seuMult: 2.5,  capacity: 50000  },  // Van Allen radiation belt
-  geo:      { alt: 35786,  latency: 120,   tidMult: 0.6,  seuMult: 0.8,  capacity: 1800   },  // Geostationary orbit
-  cislunar: { alt: 384400, latency: 1300,  tidMult: 0.4,  seuMult: 1.2,  capacity: 700000 }   // Earth-Moon space
-};
-
-// Starship payload capacity (kg to LEO)
-const STARSHIP_PAYLOAD_KG = 150000;
-
-let P = {
-  thermalOn: true, thermalYear: 2030,
-  fissionOn: true, fissionYear: 2035,
-  fusionOn: false, fusionYear: 2045,
-  smrOn: true, smrYear: 2032,
-  thermoOn: false, thermoYear: 2029,
-  thermoGroundMult: 100, thermoSpaceMult: 1000,
-  photonicOn: false, photonicYear: 2035,
-  photonicGroundMult: 30, photonicSpaceMult: 150,
-  workloadProbabilistic: 0.15,
-  emissivity: 0.85, opTemp: 365, radLearn: 50,
-  solarEff: 0.20, solarLearn: 0.008, basePower: 300, // Silicon baseline
-  computeFrac: 0.68, // fraction of power to compute
-  battDens: 280, // battery density Wh/kg
-  satLife: 10, // satellite lifetime years
-  radPen: 0.30, aiLearn: 0.20,
-  launchCost: 1500, launchLearn: 0.18,
-  launchFloor: 10, // minimum $/kg
-  prodMult: 2.5,
-  maintCost: 0.015, // annual maintenance as fraction (1.5%)
-  bandwidth: 50, bwGrowth: 0.35,
-  bwCost: 50, // $k per Gbps annual
-  gbpsPerTflop: 0.0001, // 0.1 Mbps per TFLOP (batch inference - upload job, compute, download results)
-  cislunarLocalRatio: 0.85, // 85% of cislunar compute is local (no downlink needed)
-  orbitalEligibleShare: 0.35, // 35% of demand is batch/latency-tolerant (orbital-eligible)
-  // WACC: Cost of capital (fixes "free money" assumption)
-  waccOrbital: 0.10, // 10% for maturing space industry
-  waccGround: 0.08,  // 8% for established DC operators
-  // Ground params
-  groundPue: 1.30,
-  energyCost: 0.065, // $/kWh
-  energyEscal: 0.04, // 4%/yr
-  interconnect: 48, // months delay (US grid queues 4-5+ years)
-  // Market
-  demand2025: 65,
-  demandGrowth: 0.55,
-  supply2025: 60,       // actual global AI-ready DC capacity
-  supplyGrowth: 0.08,   // constrained by interconnect, chips, fabs
-  // Behind-the-meter
-  btmShare: 0.15,
-  btmShareGrowth: 0.02,
-  btmDelay: 12,
-  btmCapexMult: 1.35,
-  btmEnergyCost: 0.04
-};
+// P is mutable state that syncs with sliders
+let P = { ...defaults };
 
 let fleetResults = [];
 
-// ============================================
-// SCENARIO MODIFIERS
-// ============================================
 
-const SCENARIOS = {
-  aggressive: { learnMult: 1.4, techYearOffset: -3, demandMult: 1.3, launchLearnMult: 1.3 },
-  baseline:   { learnMult: 1.0, techYearOffset: 0,  demandMult: 1.0, launchLearnMult: 1.0 },
-  conservative: { learnMult: 0.6, techYearOffset: 5, demandMult: 0.7, launchLearnMult: 0.7 }
-};
-
-function getScenarioParams(scenario) {
-  const s = SCENARIOS[scenario];
-  return {
-    ...P,
-    aiLearn: P.aiLearn * s.learnMult,
-    launchLearn: P.launchLearn * s.launchLearnMult,
-    thermalYear: P.thermalYear + s.techYearOffset,
-    fissionYear: P.fissionYear + s.techYearOffset,
-    fusionYear: P.fusionYear + s.techYearOffset,
-    demandGrowth: P.demandGrowth * s.demandMult
-  };
+// Wrapper for runScenario - uses local P as base params
+function runFinanceScenario(scenario) {
+  return runScenario(scenario, P);
 }
 
-// ============================================
-// PHYSICS FUNCTIONS
-// ============================================
-
-function getLaunchCost(year, params = P, shell = 'leo') {
-  let cost = params.launchCost;
-  for (let y = 2026; y < year; y++) {
-    const demandPressure = getDemandPressure(y, params);
-    const orbitalLearningMult = Math.pow(demandPressure, 1.5);
-    const effectiveLearn = params.launchLearn * orbitalLearningMult;
-    cost *= (1 - effectiveLearn);
-    cost = Math.max(params.launchFloor, cost);
-  }
-  const shellMult = { leo: 1.0, meo: 1.3, geo: 1.6, cislunar: 2.5 };
-  return cost * (shellMult[shell] || 1.0);
-}
-
-function getThermalMult(year, params = P) {
-  if (!params.thermalOn || year < params.thermalYear) return 1.0;
-  const maturity = Math.min(1, (year - params.thermalYear) / 8);
-  return 5.0 + maturity * 5.0; // 5-10× thermal rejection improvement
-}
-
-function getRadiatorMassPerMW(year, powerKw, params = P) {
-  // Emissivity and opTemp affect radiator mass via Stefan-Boltzmann
-  // Higher temp = more radiation = less area = less mass
-  // Higher emissivity = more radiation = less mass
-  
-  // Thermal physics scaling (calibrated at 350K, 0.85 emissivity)
-  const tempFactor = Math.pow(350 / params.opTemp, 4);
-  const emissivityFactor = 0.85 / params.emissivity;
-  
-  if (!params.thermalOn || year < params.thermalYear) {
-    // Conventional: base ~4500 kg/MW at reference conditions
-    const baseMass = Math.max(800, (4500 * tempFactor * emissivityFactor) - (year - 2026) * params.radLearn);
-    const powerPenalty = 1 + (powerKw / 200) * 0.3;
-    return baseMass * powerPenalty;
-  }
-  // Advanced thermal: ~20 kg/MW base, but still scales with thermal physics
-  // Higher temp/emissivity = even less mass needed
-  const maturity = Math.min(1, (year - params.thermalYear) / 8);
-  const thermalBase = 20 - maturity * 12;
-  return thermalBase * tempFactor * emissivityFactor;
-}
-
-function getRadiatorPower(year, params = P) {
-  // Pure Stefan-Boltzmann physics: W/m² radiated
-  // Thermal breakthrough doesn't change this - it changes mass/area ratio
-  return params.emissivity * STEFAN_BOLTZMANN * Math.pow(params.opTemp, 4);
-}
-
-function getGroundEfficiency(year, params = P) {
-  let baseEff = 2800;
-  for (let y = 2026; y < year; y++) {
-    const demandPressure = getDemandPressure(y, params);
-    const groundLearningMult = 0.7 + 0.3 * demandPressure;
-    const baseLearn = Math.max(0.03, params.aiLearn - (y - 2026) * 0.007);
-    baseEff *= (1 + baseLearn * groundLearningMult);
-  }
-
-  const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
-  const hasPhotonic = params.photonicOn && year >= params.photonicYear;
-
-  if (hasThermoCompute || hasPhotonic) {
-    const deterministicFrac = 1 - params.workloadProbabilistic;
-    const probFrac = params.workloadProbabilistic;
-    const photonicMult = hasPhotonic ? params.photonicGroundMult : 1;
-    const thermoMult = hasThermoCompute ? params.thermoGroundMult : 1;
-    return baseEff * (photonicMult * deterministicFrac + thermoMult * probFrac);
-  }
-
-  return baseEff;
-}
-
-function getOrbitalEfficiency(year, params = P) {
-  let baseEff = 2800;
-  for (let y = 2026; y < year; y++) {
-    const demandPressure = getDemandPressure(y, params);
-    const groundLearningMult = 0.7 + 0.3 * demandPressure;
-    const baseLearn = Math.max(0.03, params.aiLearn - (y - 2026) * 0.007);
-    baseEff *= (1 + baseLearn * groundLearningMult);
-  }
-
-  const penalty = params.radPen * Math.pow(0.82, year - 2026);
-  baseEff *= (1 - Math.max(0.02, penalty));
-
-  const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
-  const hasPhotonic = params.photonicOn && year >= params.photonicYear;
-
-  if (hasThermoCompute || hasPhotonic) {
-    const deterministicFrac = 1 - params.workloadProbabilistic;
-    const probFrac = params.workloadProbabilistic;
-    const photonicMult = hasPhotonic ? params.photonicSpaceMult : 1;
-    const thermoMult = hasThermoCompute ? params.thermoSpaceMult : 1;
-    return baseEff * (photonicMult * deterministicFrac + thermoMult * probFrac);
-  }
-
-  return baseEff;
-}
-
-function getRadPenalty(year, params = P) {
-  return Math.max(0.02, params.radPen * Math.pow(0.82, year - 2026));
-}
-
-function getBandwidth(year, params = P) {
-  return params.bandwidth * Math.pow(1 + params.bwGrowth, year - 2026);
-}
-
-// ============================================
-// DEMAND & SUPPLY
-// ============================================
-
-function getDemand(year, params = P) {
-  const t = year - 2026;
-  const growth = Math.max(0.25, params.demandGrowth + 0.20 - t * 0.015);
-  return params.demand2025 * Math.pow(1 + growth, t);
-}
-
-function getBtmShare(year, params = P) {
-  const t = year - 2026;
-  const queuePain = params.interconnect / 36;
-  const energyPain = params.energyCost / 0.065;
-  const btmIncentive = (queuePain + energyPain) / 2;
-  return Math.min(0.5, params.btmShare * btmIncentive + t * params.btmShareGrowth);
-}
-
-function getGroundSupply(year, params = P) {
-  const t = year - 2026;
-  const yearBtmShare = getBtmShare(year, params);
-
-  // Grid-connected capacity (slow)
-  const gridDelay = params.interconnect / 12;
-  const gridEffectiveT = Math.max(0, t - gridDelay);
-  const annualGrowth = params.supplyGrowth * params.supply2025;
-  const gridCapacity = (1 - yearBtmShare) * annualGrowth * gridEffectiveT;
-
-  // BTM capacity (fast)
-  const btmDelay = params.btmDelay / 12;
-  const btmEffectiveT = Math.max(0, t - btmDelay);
-  const btmCapacity = yearBtmShare * annualGrowth * btmEffectiveT;
-
-  let baseSupply = params.supply2025 + gridCapacity + btmCapacity;
-
-  // SMR boost
-  if (params.smrOn && year >= params.smrYear) {
-    const smrMaturity = Math.min(1, (year - params.smrYear) / 5);
-    const smrBoost = (10 + smrMaturity * 15) * (year - params.smrYear);
-    baseSupply += smrBoost;
-  }
-
-  return baseSupply;
-}
-
-/**
- * Calculate demand pressure for Wright's Law learning rate coupling.
- * High demand = faster learning (more production volume).
- * Returns 0.2 to 2.0 multiplier.
- */
-// Format price with appropriate decimal places
+// Format helpers (not in shared model)
 function formatPrice(value) {
+  if (value >= 100) return value.toFixed(0);
+  if (value >= 10) return value.toFixed(1);
   if (value >= 1) return value.toFixed(2);
-  if (value >= 0.1) return value.toFixed(3);
-  if (value >= 0.01) return value.toFixed(4);
-  return value.toFixed(5);
+  return value.toFixed(3);
 }
 
-// Format delivered tokens per year in Petatokens for consistency
 function formatDeliveredTokens(tokens) {
   const peta = tokens / 1e15;
-  if (peta >= 100) {
-    return peta.toFixed(0) + ' Peta';
-  } else if (peta >= 10) {
-    return peta.toFixed(1) + ' Peta';
-  } else if (peta >= 1) {
-    return peta.toFixed(2) + ' Peta';
-  }
+  if (peta >= 100) return peta.toFixed(0) + ' Peta';
+  if (peta >= 10) return peta.toFixed(1) + ' Peta';
+  if (peta >= 1) return peta.toFixed(2) + ' Peta';
   return peta.toFixed(3) + ' Peta';
 }
 
-// Format demand context for slider display (baseline conversions)
 function formatDemandContext(exaflops) {
-  // Convert to baseline GW (fixed reference)
-  const baselineGW = (exaflops * 1e12) / (BASELINE_EFFICIENCY * 1e9);
-
-  // Convert to tokens/year (fixed reference)
-  const tokensPerYear = exaflops * 1e6 * 0.05 * 8760 * 3600;
-  const petatok = tokensPerYear / 1e15;
-
-  return `(≈ ${petatok.toFixed(0)} Petatok/yr | ≈ ${baselineGW.toFixed(0)} GW @ baseline)`;
+  const petatokPerYear = exaflops * 1.575;
+  const gw = exaflops / 3;
+  return '(≈ ' + petatokPerYear.toFixed(0) + ' Petatok/yr | ≈ ' + gw.toFixed(0) + ' GW @ baseline)';
 }
 
-function getDemandPressure(year, params = P) {
-  const demand = getDemand(year, params);
-  const supply = getGroundSupply(year, params);
-  return Math.max(0.2, Math.min(2.0, demand / supply));
-}
-
-// ============================================
-// PLATFORM POWER - TECH ENABLES SCALING
-// ============================================
-
-function getLEOPower(year, params = P) {
-  const t = year - 2026;
-  const hasThermal = params.thermalOn && year >= params.thermalYear;
-  const hasFission = params.fissionOn && year >= params.fissionYear;
-  const hasFusion = params.fusionOn && year >= params.fusionYear;
-
-  if (hasFusion) {
-    // Fusion: 100-500 MW LEO stations
-    return 100000 + Math.min(1, (year - params.fusionYear) / 10) * 400000;
-  }
-  if (hasFission) {
-    // Fission: 5-20 MW
-    return 5000 + Math.min(1, (year - params.fissionYear) / 10) * 15000;
-  }
-  if (hasThermal) {
-    // Thermal breakthrough IMMEDIATELY enables MW-class: 1.5 MW instant, grows to 5 MW
-    const maturity = Math.min(1, (year - params.thermalYear) / 6);
-    return 1500 + maturity * 3500; // 1.5 MW → 5 MW
-  }
-  // Conventional: HARD LIMITED to ~250 kW by thermal (radiators become prohibitively heavy)
-  // This is the key constraint that thermal breakthrough breaks
-  return Math.min(250, params.basePower * 0.8 + t * 5);
-}
-
-function getCislunarPower(year, params = P) {
-  const hasFission = params.fissionOn && year >= params.fissionYear;
-  const hasFusion = params.fusionOn && year >= params.fusionYear;
-  const hasThermal = params.thermalOn && year >= params.thermalYear;
-
-  if (hasFusion) {
-    // Fusion: 500 MW - 2 GW stations
-    return 500000 + Math.min(1, (year - params.fusionYear) / 10) * 1500000;
-  }
-  if (hasFission) {
-    // Fission enables cislunar: 50-150 MW
-    return 50000 + Math.min(1, (year - params.fissionYear) / 10) * 100000;
-  }
-  if (hasThermal && (year - params.thermalYear) >= 5) {
-    // Mature thermal can do cislunar at lower power
-    return Math.min(30000, 5000 + (year - params.thermalYear - 5) * 5000);
-  }
-  return 0;
-}
-
-// ============================================
-// WACC & CRF - Capital Recovery Factor
-// ============================================
-
-function getCRF(wacc, years) {
-  // Capital Recovery Factor: converts capex to annualized payment
-  // CRF = r(1+r)^n / ((1+r)^n - 1)
-  if (wacc <= 0 || years <= 0) return 1 / Math.max(1, years);
-  const r = wacc;
-  const n = years;
-  const factor = Math.pow(1 + r, n);
-  return (r * factor) / (factor - 1);
-}
-
-// ============================================
-// RADIATION: TID & SEU Effects by Shell
-// ============================================
-
-function getShellRadiationEffects(shell, year, params = P) {
-  const shellData = SHELLS[shell];
-  const t = year - 2026;
-  
-  // TID effect: reduces effective lifetime (higher tidMult = shorter life)
-  // Base lifetime modified by TID: effectiveLife = satLife / tidMult
-  const tidFactor = shellData.tidMult;
-  const effectiveLife = params.satLife / tidFactor;
-  
-  // SEU effect: reliability overhead (redundancy, ECC, spares)
-  // seuMult of 1.0 = no overhead, 2.0 = 2× compute needed for same reliable output
-  // Improves over time with rad-hard tech
-  // Higher radPen = slower improvement (higher base means slower decay)
-  const radHardBase = 0.82 + params.radPen * 0.1;
-  const radHardImprovement = Math.pow(radHardBase, t);
-  const seuPenalty = 1 + (shellData.seuMult - 1) * radHardImprovement;
-  
-  // Availability factor: fraction of compute that's usable after SEU overhead
-  const availabilityFactor = 1 / seuPenalty;
-  
-  // Replacement rate: driven by TID degradation
-  const baseReplacement = 1 / effectiveLife;
-  const replacementRate = Math.min(0.30, baseReplacement);
-  
-  return {
-    tidFactor,
-    effectiveLife,
-    seuPenalty,
-    availabilityFactor,
-    replacementRate
-  };
-}
-
-// Get reliability overhead for all shells (for charting)
-function getAllShellReliability(year, params = P) {
-  return {
-    leo: getShellRadiationEffects('leo', year, params),
-    meo: getShellRadiationEffects('meo', year, params),
-    geo: getShellRadiationEffects('geo', year, params),
-    cislunar: getShellRadiationEffects('cislunar', year, params)
-  };
-}
-
-// ============================================
-// SATELLITE CALCULATION
-// ============================================
-
-function calcSatellite(year, params = P, shell = 'leo') {
-  const t = year - 2026;
-  const hasThermal = params.thermalOn && year >= params.thermalYear;
-  const hasFission = params.fissionOn && year >= params.fissionYear;
-  const hasFusion = params.fusionOn && year >= params.fusionYear;
-  const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
-  const hasPhotonicCompute = params.photonicOn && year >= params.photonicYear;
-
-  const powerKw = getLEOPower(year, params);
-  const solarEff = Math.min(0.50, params.solarEff + t * params.solarLearn);
-  const radPower = getRadiatorPower(year, params);
-  const gflopsW = getOrbitalEfficiency(year, params);
-  const launchCost = getLaunchCost(year, params, shell);
-
-  // Demand-coupled manufacturing learning (Wright's Law)
-  let prodMult = params.prodMult;
-  for (let y = 2026; y < year; y++) {
-    const demandPressure = getDemandPressure(y, params);
-    const orbitalLearningMult = Math.pow(demandPressure, 1.5);
-    prodMult *= (1 - 0.32 * orbitalLearningMult);
-  }
-  prodMult = Math.max(0.25, prodMult);
-  const radMassPerMW = getRadiatorMassPerMW(year, powerKw, params);
-  
-  // Get shell-specific radiation effects
-  const radEffects = getShellRadiationEffects(shell, year, params);
-  
-  // Power source mass
-  let powerMass = 0, battMass = 0;
-  if (hasFusion) {
-    powerMass = powerKw * 0.004; // 4 kg/kW = 250 W/kg
-  } else if (hasFission) {
-    powerMass = powerKw * 0.010; // 10 kg/kW = 100 W/kg
-  } else {
-    // Solar panels
-    const panelArea = powerKw * 1000 / (solarEff * SOLAR_CONSTANT);
-    powerMass = panelArea * 1.2;
-    // Battery density from slider
-    const battDens = Math.min(1000, params.battDens + t * 35);
-    battMass = powerKw * 0.05 * 1.5 * 1000 / battDens;
-  }
-  
-  // Compute - apply SEU reliability overhead
-  const computeKw = powerKw * params.computeFrac;
-  const rawTflops = computeKw * gflopsW / 1000;
-  // SEU penalty: need extra compute for redundancy/ECC
-  const tflops = rawTflops * radEffects.availabilityFactor;
-  const gpuEq = tflops / 1979;
-  // Compute hardware mass scales with power input, not TFLOPS output
-  // Better efficiency means lighter hardware per TFLOP, not heavier
-  const compMass = Math.max(3, computeKw * 0.005); // ~5 kg per kW of compute power
-  
-  // Thermal: waste heat determines radiator mass
-  // Thermodynamic and photonic computing dramatically reduce waste heat per computation
-  const baseWasteKw = computeKw * 0.65;
-  let wasteKw = baseWasteKw;
-  if (hasThermoCompute || hasPhotonicCompute) {
-    const deterministicFrac = 1 - params.workloadProbabilistic;
-    const probFrac = params.workloadProbabilistic;
-    const photonicMult = hasPhotonicCompute ? params.photonicSpaceMult : 1;
-    const thermoMult = hasThermoCompute ? params.thermoSpaceMult : 1;
-    const avgMult = photonicMult * deterministicFrac + thermoMult * probFrac;
-    wasteKw = baseWasteKw / avgMult;
-  }
-  const radMass = wasteKw / 1000 * radMassPerMW;
-  
-  // Structure & margin
-  const subsystems = powerMass + battMass + compMass + radMass + 25;
-  const dryMass = subsystems * 1.10;
-  
-  // Specific power (W/kg) - key metric
-  const specPower = powerKw * 1000 / dryMass;
-  
-  // Solar array area (for solar platforms)
-  const solarArea = hasFission || hasFusion ? 0 : powerKw * 1000 / (solarEff * SOLAR_CONSTANT);
-  
-  // Data rate per platform (Gbps) - based on compute output
-  const dataRateGbps = tflops * params.gbpsPerTflop; // PARAMETERIZED (was magic 0.01)
-  
-  // Cost with WACC/CRF - proper capital recovery
-  const capex = dryMass * launchCost + dryMass * 350 * prodMult + 15000 * prodMult;
-  const crf = getCRF(params.waccOrbital, radEffects.effectiveLife);
-  const annualCapex = capex * crf; // Proper annualized capital cost
-  const annualMaint = capex * params.maintCost;
-  // Bandwidth cost: each Gbps of capacity costs $bwCost k/year (ground stations + spectrum)
-  const annualBwCost = dataRateGbps * params.bwCost * 1000;
-  const annual = annualCapex + annualMaint + annualBwCost;
-  const gpuHrs = gpuEq * 8760 * SLA;
-  const lcoc = gpuHrs > 0 ? annual / gpuHrs : Infinity;
-  
-  // Carbon - use effective lifetime
-  const carbonKg = dryMass * 95;
-  const carbonPerTflop = carbonKg * 1000 / Math.max(1, tflops * 8760 * radEffects.effectiveLife * 0.88);
-  
-  // EROL - use effective lifetime
-  const erol = (powerKw * 1000 * 8760 * 3600 * radEffects.effectiveLife * 0.88) / (dryMass * 400e6);
-  
-  return {
-    year, powerKw, dryMass, tflops, gpuEq, capex, lcoc, erol, carbonPerTflop, gflopsW, radPower,
-    specPower, solarArea, dataRateGbps, shell,
-    mass: { power: powerMass, batt: battMass, comp: compMass, rad: radMass, struct: subsystems * 0.10 },
-    hasThermal, hasFission, hasFusion, hasThermoCompute, hasPhotonicCompute, radMassPerMW,
-    radEffects // Include radiation effects in output
-  };
-}
-
-// ============================================
-// GROUND CALCULATION
-// ============================================
-
-function calcGround(year, orbitalSupplyGW = 0, params = P) {
-  const t = year - 2026;
-  const gflopsW = getGroundEfficiency(year, params);
-
-  const hasSmr = params.smrOn && year >= params.smrYear;
-  const smrDiscount = hasSmr ? 0.7 - Math.min(0.3, (year - params.smrYear) * 0.03) : 1.0;
-
-  // BTM share for this year
-  const yearBtmShare = getBtmShare(year, params);
-
-  // Hardware cost with WACC/CRF
-  const gpuPrice = 25000 * Math.pow(0.84, t);
-  const hwCapex = (gpuPrice / 3) / (gflopsW / 2800);
-
-  // Apply capex premium for BTM portion
-  const btmCapexOverhead = yearBtmShare * (params.btmCapexMult - 1);
-  const hwCapexAdjusted = hwCapex * (1 + btmCapexOverhead);
-
-  const groundHwLife = 5;
-  const crfGround = getCRF(params.waccGround, groundHwLife);
-  const hwCost = hwCapexAdjusted * crfGround;
-
-  // Blended energy costs (grid vs BTM)
-  const gridEnergy = params.energyCost * Math.pow(1 + params.energyEscal, t) * smrDiscount;
-  const btmEnergy = params.btmEnergyCost;
-  const blendedEnergy = gridEnergy * (1 - yearBtmShare) + btmEnergy * yearBtmShare;
-
-  const pue = Math.max(1.08, params.groundPue - t * 0.01);
-  const enCost = 700 * 8760 * SLA * blendedEnergy * pue / 1000;
-  const overhead = 0.20 * 8760 * SLA;
-  const base = (hwCost + enCost + overhead) / (8760 * SLA);
-  
-  const demand = getDemand(year, params);
-  const groundSupply = getGroundSupply(year, params);
-  const totalSupply = groundSupply + orbitalSupplyGW;
-  const unmetRatio = (demand - totalSupply) / totalSupply;
-
-  // Revised scarcity premium with demand destruction and oversupply discount
-  let premium;
-  if (unmetRatio <= -0.3) {
-    // Severe oversupply: price war (floor at 0.6x cost)
-    premium = Math.max(0.6, 0.85 + unmetRatio);
-  } else if (unmetRatio <= 0) {
-    // Mild oversupply: slight discount
-    premium = 1.0 + unmetRatio * 0.5;
-  } else if (unmetRatio <= 0.3) {
-    // Moderate scarcity: linear premium
-    premium = 1 + unmetRatio * 4;
-  } else if (unmetRatio <= 1.0) {
-    // High scarcity: slower growth (demand destruction kicks in)
-    premium = 2.2 + (unmetRatio - 0.3) * 2.5;
-  } else {
-    // Extreme scarcity: plateau (demand destruction dominates)
-    premium = Math.min(6, 4 + (unmetRatio - 1) * 0.5);
-  }
-  
-  const gridCarbon = 380 * Math.pow(0.97, t);
-  // Carbon calculation (dimensionally correct)
-  // gridCarbon: gCO2/kWh
-  // gflopsW: GFLOP/s per W
-  // For 1 TFLOP-hr: need (1000/gflopsW) W for 1 hr = (1/gflopsW) kWh
-  // With PUE: (pue/gflopsW) kWh
-  // Carbon: gridCarbon * (pue / gflopsW) gCO2/TFLOP-hr
-  const carbonPerTflop = gridCarbon * (pue / gflopsW) + 5;
-  
-  return { year, base, market: base * premium, premium, carbonPerTflop, gflopsW, demand, groundSupply, totalSupply, unmetRatio };
-}
-
-// ============================================
-// FLEET CALCULATION - MULTI-SHELL
-// Fleet scales DOWN to match available bandwidth (bandwidth-constrained scaling)
-// ============================================
-
-// Track previous year's platforms for annual mass calculation
-let prevTotalPlatforms = 0;
-
-function resetFleetTracker() {
-  prevTotalPlatforms = 0;
-}
-
-function calcFleet(year, crossoverYear = null, params = P) {
-  const sat = calcSatellite(year, params);
-  const cislunarPowerKw = getCislunarPower(year, params);
-  const t = year - 2026;
-
-  const hasFission = params.fissionOn && year >= params.fissionYear;
-  const hasFusion = params.fusionOn && year >= params.fusionYear;
-  const hasThermal = params.thermalOn && year >= params.thermalYear;
-
-  // STEP 1: Calculate UNCONSTRAINED platform counts (capacity-limited only)
-  let leoUnconstrained = 0, meoUnconstrained = 0, geoUnconstrained = 0, cisUnconstrained = 0;
-
-  if (!crossoverYear || year < crossoverYear) {
-    // Pre-crossover: minimal early adopters
-    leoUnconstrained = Math.min(500, 50 + t * 20);
-  } else {
-    const yearsPost = year - crossoverYear;
-
-    // LEO fills first and fastest - doubles every 1.2 years
-    leoUnconstrained = Math.min(SHELLS.leo.capacity, Math.round(500 * Math.pow(2, yearsPost / 1.2)));
-
-    // MEO: High radiation, slower growth - starts year 2
-    if (yearsPost >= 2) {
-      meoUnconstrained = Math.min(SHELLS.meo.capacity, Math.round(100 * Math.pow(1.8, (yearsPost - 2) / 1.5)));
-    }
-
-    // GEO: Limited slots, premium location - starts year 3
-    if (yearsPost >= 3) {
-      geoUnconstrained = Math.min(SHELLS.geo.capacity, Math.round(50 * Math.pow(1.5, (yearsPost - 3) / 2)));
-    }
-
-    // Cislunar: Requires fission/fusion - starts year 2
-    if (cislunarPowerKw > 0 && yearsPost >= 2) {
-      cisUnconstrained = Math.min(SHELLS.cislunar.capacity, Math.round(50 * Math.pow(2, (yearsPost - 2) / 2)));
-    }
-  }
-
-  // STEP 2: Calculate bandwidth per platform
-  const bwAvailTbps = getBandwidth(year, params);
-  const bwAvailGbps = bwAvailTbps * 1000;
-
-  // GEO can have much larger platforms (stable orbit, no drag)
-  const geoPowerKw = hasFission ? sat.powerKw * 20 : (hasThermal ? sat.powerKw * 10 : sat.powerKw * 5);
-
-  const geoTflopsPerPlatform = geoPowerKw * params.computeFrac * sat.gflopsW / 1000;
-  const cisTflopsPerPlatform = cislunarPowerKw * params.computeFrac * sat.gflopsW / 1000;
-
-  // Bandwidth per platform - cislunar gets local processing exemption
-  const leoBwPerPlatform = sat.tflops * params.gbpsPerTflop;
-  const meoBwPerPlatform = sat.tflops * 0.8 * params.gbpsPerTflop;
-  const geoBwPerPlatform = geoTflopsPerPlatform * params.gbpsPerTflop;
-  const cisBwPerPlatform = cisTflopsPerPlatform * params.gbpsPerTflop * (1 - params.cislunarLocalRatio);
-
-  // STEP 3: Scale fleet to match bandwidth
-  const totalUnconstrainedBw =
-    leoUnconstrained * leoBwPerPlatform +
-    meoUnconstrained * meoBwPerPlatform +
-    geoUnconstrained * geoBwPerPlatform +
-    cisUnconstrained * cisBwPerPlatform;
-
-  let leoPlatforms = leoUnconstrained;
-  let meoPlatforms = meoUnconstrained;
-  let geoPlatforms = geoUnconstrained;
-  let cisPlatforms = cisUnconstrained;
-
-  if (totalUnconstrainedBw > bwAvailGbps && totalUnconstrainedBw > 0) {
-    const bwScaleFactor = bwAvailGbps / totalUnconstrainedBw;
-    leoPlatforms = Math.round(leoUnconstrained * bwScaleFactor);
-    meoPlatforms = Math.round(meoUnconstrained * bwScaleFactor);
-    geoPlatforms = Math.round(geoUnconstrained * bwScaleFactor);
-    cisPlatforms = Math.round(cisUnconstrained * bwScaleFactor);
-  }
-
-  // === Power by shell ===
-  const leoPowerTw = leoPlatforms * sat.powerKw / 1e9;
-  const meoPowerTw = meoPlatforms * sat.powerKw * 0.8 / 1e9; // MEO Van Allen penalty
-  const geoPowerTw = geoPlatforms * geoPowerKw / 1e9;
-  const cisPowerTw = cisPlatforms * cislunarPowerKw / 1e9;
-  const totalPowerTw = leoPowerTw + meoPowerTw + geoPowerTw + cisPowerTw;
-
-  // === Recalculate fleet TFLOPS with scaled platform counts ===
-  const fleetTflops = leoPlatforms * sat.tflops +
-                      meoPlatforms * sat.tflops * 0.8 +
-                      geoPlatforms * geoTflopsPerPlatform +
-                      cisPlatforms * cisTflopsPerPlatform;
-
-  const bwNeededGbps = fleetTflops * params.gbpsPerTflop;
-
-  // bwSell: fraction of compute you can monetize (should be ~100% with bandwidth scaling)
-  const bwSell = (bwNeededGbps <= 0) ? 1 : Math.min(1, bwAvailGbps / bwNeededGbps);
-
-  // === Demand constraint ===
-  // Only orbitalEligibleShare of total demand is batch/latency-tolerant
-  const totalDemandGW = getDemand(year, params);
-  const eligibleDemandGW = totalDemandGW * params.orbitalEligibleShare;
-  const fleetPowerGW = totalPowerTw * 1000;
-
-  // demandSell: fraction of fleet capacity the market can absorb
-  const demandSell = (fleetPowerGW <= 0) ? 1 : Math.min(1, eligibleDemandGW / fleetPowerGW);
-
-  // Effective LCOC: inflated by whichever constraint binds (stranded capex)
-  const sellableUtil = Math.min(bwSell, demandSell);
-  const lcocEffective = sat.lcoc / Math.max(0.01, sellableUtil);
-
-  // For display
-  const bwUtil = bwAvailGbps > 0 ? Math.min(1, bwNeededGbps / bwAvailGbps) : 1;
-  const demandUtil = eligibleDemandGW > 0 ? Math.min(1, fleetPowerGW / eligibleDemandGW) : 0;
-
-  // Shell utilization (against capacity)
-  const leoUtil = leoPlatforms / SHELLS.leo.capacity;
-  const meoUtil = meoPlatforms / SHELLS.meo.capacity;
-  const geoUtil = geoPlatforms / SHELLS.geo.capacity;
-  const cisUtil = cisPlatforms / SHELLS.cislunar.capacity;
-
-  // Bandwidth constraint ratio for bottleneck detection
-  const bwConstraintRatio = totalUnconstrainedBw > 0 ? bwAvailGbps / totalUnconstrainedBw : 1;
-
-  // Bottleneck detection
-  let bottleneck = 'thermal';
-  if (!crossoverYear || year < crossoverYear) {
-    bottleneck = 'thermal';
-  } else {
-    if (bwConstraintRatio < 0.9 && bwConstraintRatio < demandSell) bottleneck = 'bandwidth';
-    else if (demandSell < 0.9) bottleneck = 'demand';
-    else if (leoUtil > 0.9 || geoUtil > 0.9) bottleneck = 'slots';
-    else if (!hasThermal && !hasFission) bottleneck = 'thermal';
-    else bottleneck = 'power';
-  }
-
-  const leoRadEffects = getShellRadiationEffects('leo', year, params);
-  const replacementRate = leoRadEffects.replacementRate;
-
-  // Calculate delivered compute metric (Llama-70B tokens/year)
-  // Llama-70B: ~0.05 tokens/sec per TFLOP (rough estimate)
-  const tokensPerTflopSec = 0.05;
-  const secondsPerYear = 8760 * 3600;
-  const deliveredTflops = fleetTflops * bwSell;  // Only count sellable compute
-  const deliveredTokensPerYear = deliveredTflops * tokensPerTflopSec * secondsPerYear;
-
-  // === Fleet mass & Starship equivalency ===
-  const totalPlatforms = leoPlatforms + meoPlatforms + geoPlatforms + cisPlatforms;
-  const avgPlatformMassKg = sat.dryMass;  // Use current sat mass as baseline
-  const fleetMassKg = totalPlatforms * avgPlatformMassKg;
-  const starshipFlightsToDeploy = fleetMassKg / STARSHIP_PAYLOAD_KG;
-
-  // Annual deployment: new platforms + replacements
-  const newPlatformsThisYear = Math.max(0, totalPlatforms - prevTotalPlatforms);
-  const replacementMassKg = totalPlatforms * replacementRate * avgPlatformMassKg;
-  const newDeploymentMassKg = newPlatformsThisYear * avgPlatformMassKg;
-  const annualMassKg = newDeploymentMassKg + replacementMassKg;
-  const annualStarshipFlights = annualMassKg / STARSHIP_PAYLOAD_KG;
-
-  // Update previous platforms for next iteration
-  prevTotalPlatforms = totalPlatforms;
-
-  return {
-    year,
-    leoPlatforms, meoPlatforms, geoPlatforms, cisPlatforms,
-    leoPowerTw, meoPowerTw, geoPowerTw, cisPowerTw, totalPowerTw,
-    lcocEffective, bwUtil, bwAvailGbps, bwNeededGbps, bwSell,
-    demandUtil, demandSell, eligibleDemandGW, fleetTflops, sellableUtil,
-    satPowerKw: sat.powerKw, cislunarPowerKw,
-    leoUtil, meoUtil, geoUtil, cisUtil,
-    bottleneck, replacementRate,
-    deliveredTokensPerYear,
-    // Fleet mass & Starship metrics
-    totalPlatforms, avgPlatformMassKg, fleetMassKg,
-    starshipFlightsToDeploy, annualMassKg, annualStarshipFlights
-  };
-}
-
-// ============================================
-// LUNAR READINESS & AI ACCELERATION
-// ============================================
-
-// Sigmoid function for smooth transitions
-function sigmoid(x, x0, k = 4) {
-  return 1 / (1 + Math.pow(x0 / Math.max(x, 0.001), k));
-}
-
-// Lunar readiness thresholds
-const LUNAR_MASS_THRESHOLD = 500000000;  // 500M kg cumulative mass
-const LUNAR_COMPUTE_THRESHOLD = 2000;     // 2,000 Exaflops global
-const LUNAR_POWER_THRESHOLD = 5;          // 5 TW orbital
-const LUNAR_TIME_THRESHOLD = 2050;        // Calendar year maturity
-
-// R&D stock parameters
-const RND_ALPHA = 0.15;
-const RND_DELTA = 0.05;
-const RND_C_REF = 100;
-const RND_K_MAX = 2.0;
-
-// Launch learning cadence parameters
-const CADENCE_BOOST_THRESHOLD = 100;
-const CADENCE_BOOST_MAX = 0.05;
-const BASELINE_FLIGHTS_PER_YEAR = 50;
-
-/**
- * Calculate lunar infrastructure readiness
- */
-function getLunarReadiness(state, params) {
-  const massScore = sigmoid(state.cumulativeMassToOrbitKg, LUNAR_MASS_THRESHOLD);
-  const computeScore = sigmoid(state.globalComputeExaflops, LUNAR_COMPUTE_THRESHOLD);
-  const powerScore = sigmoid(state.orbitalPowerTW, LUNAR_POWER_THRESHOLD);
-  const timeScore = sigmoid(state.year, LUNAR_TIME_THRESHOLD, 8);
-
-  let techBonus = 0;
-  if (params.fissionOn && state.year >= params.fissionYear) techBonus += 0.15;
-  if (params.fusionOn && state.year >= params.fusionYear) techBonus += 0.25;
-
-  let efficiencyPenalty = 0;
-  if (params.thermoOn && state.year >= params.thermoYear) efficiencyPenalty += 0.20;
-  if (params.photonicOn && state.year >= params.photonicYear) efficiencyPenalty += 0.10;
-
-  const baseReadiness = 0.35 * massScore + 0.25 * computeScore + 0.20 * powerScore + 0.20 * timeScore;
-  const overallReadiness = Math.min(1.0, Math.max(0, baseReadiness + techBonus - efficiencyPenalty));
-
-  let status;
-  if (overallReadiness >= 0.7) {
-    status = 'Ready for lunar infrastructure';
-  } else if (efficiencyPenalty > 0.15 && massScore < 0.3) {
-    status = 'Earth launch sufficient — high efficiency';
-  } else if (overallReadiness >= 0.4) {
-    status = 'Building toward viability';
-  } else {
-    status = 'Not yet viable';
-  }
-
-  return { massScore, computeScore, powerScore, timeScore, techBonus, efficiencyPenalty, overallReadiness, status };
-}
-
-/**
- * Calculate R&D stock update
- */
-function updateRnDStock(globalComputeExaflops, prevK) {
-  const dK = RND_ALPHA * Math.log10(1 + globalComputeExaflops / RND_C_REF) - RND_DELTA * prevK;
-  return Math.min(Math.max(0, prevK + dK), RND_K_MAX);
-}
-
-/**
- * Calculate launch learning boost from flight cadence
- */
-function getLaunchLearningBoost(annualMassKg) {
-  const orbitalFlights = annualMassKg / STARSHIP_PAYLOAD_KG;
-  const totalFlightsThisYear = orbitalFlights + BASELINE_FLIGHTS_PER_YEAR;
-  const cadenceBoost = Math.min(CADENCE_BOOST_MAX, (totalFlightsThisYear / CADENCE_BOOST_THRESHOLD) * CADENCE_BOOST_MAX);
-  return cadenceBoost;
-}
-
-/**
- * Get lunar unlock year from readiness history
- */
-function getLunarUnlockYear(readinessHistory) {
-  const thresholdYear = readinessHistory.find(r => r.readiness >= 0.7)?.year;
-  return thresholdYear ? thresholdYear + 10 : null;
-}
-
-/**
- * Format mass in human-readable units
- */
 function formatMass(kg) {
   if (kg >= 1e9) return (kg / 1e9).toFixed(1) + ' Mt';
   if (kg >= 1e6) return (kg / 1e6).toFixed(1) + ' kt';
@@ -1800,44 +987,15 @@ function formatMass(kg) {
   return kg.toFixed(0) + ' kg';
 }
 
-// ============================================
-// SCENARIO RUNNER
-// ============================================
+// Launch learning boost helper
+const CADENCE_BOOST_THRESHOLD = 100;
+const CADENCE_BOOST_MAX = 0.05;
+const BASELINE_FLIGHTS_PER_YEAR = 50;
 
-function runScenario(scenario) {
-  const params = getScenarioParams(scenario);
-
-  // Reset fleet tracker for fresh scenario
-  resetFleetTracker();
-
-  const sats = YEARS.map(y => calcSatellite(y, params));
-  resetFleetTracker();  // Reset again for pre-fleets
-  const preFleets = YEARS.map(y => calcFleet(y, null, params));
-  const preGnds = YEARS.map(y => calcGround(y, 0, params));
-
-  // Debug: log key values for crossover analysis
-  if (scenario === 'baseline') {
-    console.log('=== CROSSOVER DEBUG (Baseline) ===');
-    console.log('Key params:', { opTemp: params.opTemp, solarEff: params.solarEff, radPen: params.radPen, launchLearn: params.launchLearn, launchFloor: params.launchFloor });
-    [2030, 2031, 2032, 2033, 2034, 2035].forEach(y => {
-      const idx = YEARS.indexOf(y);
-      if (idx >= 0) {
-        const sat = sats[idx];
-        const fleet = preFleets[idx];
-        const gnd = preGnds[idx];
-        console.log(`${y}: orbitalLCOC=$${sat.lcoc.toFixed(2)}, effective=$${fleet.lcocEffective.toFixed(2)}, groundMarket=$${gnd.market.toFixed(2)}, cross=${fleet.lcocEffective < gnd.market}`);
-      }
-    });
-  }
-
-  const crossIdx = preFleets.findIndex((f, i) => f.lcocEffective < preGnds[i].market);
-  const crossoverYear = crossIdx >= 0 ? YEARS[crossIdx] : null;
-
-  resetFleetTracker();  // Reset for final fleet calculation
-  const fleets = YEARS.map(y => calcFleet(y, crossoverYear, params));
-  const gnds = YEARS.map((y, i) => calcGround(y, fleets[i].totalPowerTw * 1000, params));
-  
-  return { sats, fleets, gnds, crossoverYear };
+function getLaunchLearningBoost(annualMassKg) {
+  const orbitalFlights = annualMassKg / STARSHIP_PAYLOAD_KG;
+  const totalFlightsThisYear = orbitalFlights + BASELINE_FLIGHTS_PER_YEAR;
+  return Math.min(CADENCE_BOOST_MAX, (totalFlightsThisYear / CADENCE_BOOST_THRESHOLD) * CADENCE_BOOST_MAX);
 }
 
 // ============================================
@@ -2067,10 +1225,10 @@ function initCharts() {
 }
 
 function update() {
-  // Run all scenarios
-  const agg = runScenario('aggressive');
-  const base = runScenario('baseline');
-  const cons = runScenario('conservative');
+  // Run all scenarios using shared model with local P
+  const agg = runScenario('aggressive', P);
+  const base = runScenario('baseline', P);
+  const cons = runScenario('conservative', P);
   
   // Use baseline for main display
   const sats = base.sats;
@@ -2256,7 +1414,7 @@ function update() {
   charts.stranded.update();
   
   // Thermal: show radiator specific mass (kg/kW) - thermal breakthrough makes this 50× lower
-  charts.thermal.data.datasets[0].data = sats.map(s => getRadiatorMassPerMW(s.year, s.powerKw) / 1000);
+  charts.thermal.data.datasets[0].data = sats.map(s => getRadiatorMassPerMW(s.year, s.powerKw, P) / 1000);
   charts.thermal.update();
   
   charts.bottleneck.data.datasets[0].data = fleetResults.map(f => f.bottleneck === 'thermal' ? 1 : 0);
@@ -2299,7 +1457,7 @@ function update() {
   charts.powerBudget.data.datasets[2].data = YEARS.map(() => housePct);
   charts.powerBudget.update();
   
-  charts.launch.data.datasets[0].data = YEARS.map(y => getLaunchCost(y));
+  charts.launch.data.datasets[0].data = YEARS.map(y => getLaunchCost(y, P, 'leo'));
   charts.launch.update();
   
   charts.dataRate.data.datasets[0].data = sats.map(s => s.dataRateGbps);
