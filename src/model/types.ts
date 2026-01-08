@@ -49,6 +49,7 @@ export interface Params {
   // Bandwidth
   bandwidth: number;
   bwGrowth: number;
+  bwCost: number;  // Annual cost per Gbps ($k/Gbps/year)
   gbpsPerTflop: number;
   orbitalEligibleShare: number;
   cislunarLocalRatio: number;  // Fraction of cislunar compute that doesn't need downlink (85%)

@@ -1427,7 +1427,9 @@ function calcSatellite(year, params = P, shell = 'leo') {
   const crf = getCRF(params.waccOrbital, radEffects.effectiveLife);
   const annualCapex = capex * crf; // Proper annualized capital cost
   const annualMaint = capex * params.maintCost;
-  const annual = annualCapex + annualMaint;
+  // Bandwidth cost: each Gbps of capacity costs $bwCost k/year (ground stations + spectrum)
+  const annualBwCost = dataRateGbps * params.bwCost * 1000;
+  const annual = annualCapex + annualMaint + annualBwCost;
   const gpuHrs = gpuEq * 8760 * SLA;
   const lcoc = gpuHrs > 0 ? annual / gpuHrs : Infinity;
   
@@ -1804,7 +1806,12 @@ function formatMass(kg) {
 
 function runScenario(scenario) {
   const params = getScenarioParams(scenario);
+
+  // Reset fleet tracker for fresh scenario
+  resetFleetTracker();
+
   const sats = YEARS.map(y => calcSatellite(y, params));
+  resetFleetTracker();  // Reset again for pre-fleets
   const preFleets = YEARS.map(y => calcFleet(y, null, params));
   const preGnds = YEARS.map(y => calcGround(y, 0, params));
 
@@ -1825,7 +1832,8 @@ function runScenario(scenario) {
 
   const crossIdx = preFleets.findIndex((f, i) => f.lcocEffective < preGnds[i].market);
   const crossoverYear = crossIdx >= 0 ? YEARS[crossIdx] : null;
-  
+
+  resetFleetTracker();  // Reset for final fleet calculation
   const fleets = YEARS.map(y => calcFleet(y, crossoverYear, params));
   const gnds = YEARS.map((y, i) => calcGround(y, fleets[i].totalPowerTw * 1000, params));
   

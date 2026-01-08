@@ -100,13 +100,15 @@ export function calcSatellite(
   const dataRateGbps = tflops * params.gbpsPerTflop;
 
   // LCOC (Levelized Cost of Compute) calculation
-  // Accounts for WACC, CRF amortization, maintenance, and utilization
+  // Accounts for WACC, CRF amortization, maintenance, bandwidth, and utilization
   const capex =
     dryMass * launchCost + dryMass * 350 * prodMult + 15000 * prodMult;
   const crf = getCRF(params.waccOrbital, radEffects.effectiveLife);
   const annualCapex = capex * crf;
   const annualMaint = capex * params.maintCost;
-  const annual = annualCapex + annualMaint;
+  // Bandwidth cost: each Gbps of capacity costs $bwCost k/year (ground stations + spectrum)
+  const annualBwCost = dataRateGbps * params.bwCost * 1000;
+  const annual = annualCapex + annualMaint + annualBwCost;
   const gpuHrs = gpuEq * 8760 * SLA;
   const lcoc = gpuHrs > 0 ? annual / gpuHrs : Infinity;
 

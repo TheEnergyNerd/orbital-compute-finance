@@ -52,6 +52,7 @@ export const defaults: Params = {
   // Bandwidth
   bandwidth: 50,         // Total capacity in 2025 (Tbps)
   bwGrowth: 0.35,        // Annual bandwidth growth rate
+  bwCost: 50,            // Annual cost per Gbps ($k/Gbps/year) - ground station + spectrum
   gbpsPerTflop: 0.0001,  // Bandwidth per TFLOP (Gbps)
   cislunarLocalRatio: 0.85,  // 85% of cislunar compute is local (no downlink needed)
 

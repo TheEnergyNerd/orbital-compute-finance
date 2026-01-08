@@ -124,6 +124,7 @@ const sliderConfigs: SliderConfig[] = [
     valueId: 'v-bwGrowth',
     transform: (v) => v / 100
   },
+  { id: 'bwCost', param: 'bwCost', valueId: 'v-bwCost' },
   {
     id: 'orbitalEligibleShare',
     param: 'orbitalEligibleShare',
