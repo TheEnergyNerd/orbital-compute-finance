@@ -17,10 +17,14 @@ function sigmoid(x: number, x0: number, k: number = 4): number {
 }
 
 // Thresholds (x0 = 50% readiness point)
-const MASS_THRESHOLD = 20_000_000_000;   // 20M tonnes cumulative (20B kg)
-const COMPUTE_THRESHOLD = 10000;          // 10,000 Exaflops delivered
-const POWER_THRESHOLD = 50;               // 50 TW orbital
-const TIME_THRESHOLD = 2045;              // Calendar year maturity
+// Realistic values based on fleet scaling:
+// - 100k platforms × 1000kg = 100M kg cumulative mass
+// - Global compute ~1000 Exaflops by 2040
+// - Orbital power ~1 TW by 2040
+const MASS_THRESHOLD = 500_000_000;       // 500k tonnes cumulative (500M kg)
+const COMPUTE_THRESHOLD = 2000;            // 2,000 Exaflops global
+const POWER_THRESHOLD = 5;                 // 5 TW orbital
+const TIME_THRESHOLD = 2050;               // Calendar year maturity
 
 // Weights
 const W_MASS = 0.35;

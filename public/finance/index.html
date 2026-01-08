@@ -850,6 +850,35 @@
           <div class="kpi accent"><div class="kpi-label">Baseline</div><div class="kpi-value" id="kpi-crossBase">--</div></div>
           <div class="kpi ground"><div class="kpi-label">Conservative</div><div class="kpi-value" id="kpi-crossCons">--</div></div>
         </div>
+
+        <!-- Feedback Loops & Lunar Readiness -->
+        <div class="feedback-panels" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; padding: 16px;">
+          <!-- Fleet & Starship Panel -->
+          <div class="feedback-panel" style="background: var(--surface); border-radius: 12px; padding: 16px; border: 1px solid var(--border);">
+            <div class="panel-title" style="font-weight: 600; color: var(--orbital); margin-bottom: 12px; font-size: 14px;">Fleet (2040)</div>
+            <div class="panel-row" style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><span>LEO Platforms</span><span id="kpi-leoCapacity40" style="font-weight: 500;">--</span></div>
+            <div class="panel-row" style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><span>Total Fleet Mass</span><span id="kpi-fleetMass40" style="font-weight: 500;">--</span></div>
+            <div class="panel-row" style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><span>Starship Flights to Deploy</span><span id="kpi-starshipFlights40" style="font-weight: 500;">--</span></div>
+            <div class="panel-row" style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px;"><span>Annual Flights</span><span id="kpi-annualFlights40" style="font-weight: 500;">--</span></div>
+          </div>
+
+          <!-- AI Acceleration Panel -->
+          <div class="feedback-panel" style="background: var(--surface); border-radius: 12px; padding: 16px; border: 1px solid var(--border);">
+            <div class="panel-title" style="font-weight: 600; color: var(--accent); margin-bottom: 12px; font-size: 14px;">AI Acceleration (2040)</div>
+            <div class="panel-row" style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><span>Global Compute</span><span id="kpi-globalCompute40" style="font-weight: 500;">--</span></div>
+            <div class="panel-row" style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><span>R&D Stock (K)</span><span id="kpi-rndStock40" style="font-weight: 500;">--</span></div>
+            <div class="panel-row" style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px;"><span>Launch Learn Boost</span><span id="kpi-launchLearnBoost" style="font-weight: 500;">--</span></div>
+          </div>
+
+          <!-- Lunar Readiness Panel -->
+          <div class="feedback-panel" style="background: var(--surface); border-radius: 12px; padding: 16px; border: 1px solid var(--border);">
+            <div class="panel-title" style="font-weight: 600; color: var(--ground); margin-bottom: 12px; font-size: 14px;">Lunar Infrastructure</div>
+            <div class="panel-row" style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><span>Readiness (2040)</span><span id="kpi-lunarReadiness" style="font-weight: 500;">--</span></div>
+            <div class="panel-row" style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;"><span>Unlock Year</span><span id="kpi-lunarUnlock" style="font-weight: 500;">--</span></div>
+            <div class="panel-status" id="kpi-lunarStatus" style="margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.05); border-radius: 6px; font-size: 12px; color: var(--muted); text-align: center;">--</div>
+          </div>
+        </div>
+
         <div class="charts">
           <div class="chart-card wide tall">
             <div class="chart-header">
@@ -1674,6 +1703,102 @@ function calcFleet(year, crossoverYear = null, params = P) {
 }
 
 // ============================================
+// LUNAR READINESS & AI ACCELERATION
+// ============================================
+
+// Sigmoid function for smooth transitions
+function sigmoid(x, x0, k = 4) {
+  return 1 / (1 + Math.pow(x0 / Math.max(x, 0.001), k));
+}
+
+// Lunar readiness thresholds
+const LUNAR_MASS_THRESHOLD = 500000000;  // 500M kg cumulative mass
+const LUNAR_COMPUTE_THRESHOLD = 2000;     // 2,000 Exaflops global
+const LUNAR_POWER_THRESHOLD = 5;          // 5 TW orbital
+const LUNAR_TIME_THRESHOLD = 2050;        // Calendar year maturity
+
+// R&D stock parameters
+const RND_ALPHA = 0.15;
+const RND_DELTA = 0.05;
+const RND_C_REF = 100;
+const RND_K_MAX = 2.0;
+
+// Launch learning cadence parameters
+const CADENCE_BOOST_THRESHOLD = 100;
+const CADENCE_BOOST_MAX = 0.05;
+const BASELINE_FLIGHTS_PER_YEAR = 50;
+
+/**
+ * Calculate lunar infrastructure readiness
+ */
+function getLunarReadiness(state, params) {
+  const massScore = sigmoid(state.cumulativeMassToOrbitKg, LUNAR_MASS_THRESHOLD);
+  const computeScore = sigmoid(state.globalComputeExaflops, LUNAR_COMPUTE_THRESHOLD);
+  const powerScore = sigmoid(state.orbitalPowerTW, LUNAR_POWER_THRESHOLD);
+  const timeScore = sigmoid(state.year, LUNAR_TIME_THRESHOLD, 8);
+
+  let techBonus = 0;
+  if (params.fissionOn && state.year >= params.fissionYear) techBonus += 0.15;
+  if (params.fusionOn && state.year >= params.fusionYear) techBonus += 0.25;
+
+  let efficiencyPenalty = 0;
+  if (params.thermoOn && state.year >= params.thermoYear) efficiencyPenalty += 0.20;
+  if (params.photonicOn && state.year >= params.photonicYear) efficiencyPenalty += 0.10;
+
+  const baseReadiness = 0.35 * massScore + 0.25 * computeScore + 0.20 * powerScore + 0.20 * timeScore;
+  const overallReadiness = Math.min(1.0, Math.max(0, baseReadiness + techBonus - efficiencyPenalty));
+
+  let status;
+  if (overallReadiness >= 0.7) {
+    status = 'Ready for lunar infrastructure';
+  } else if (efficiencyPenalty > 0.15 && massScore < 0.3) {
+    status = 'Earth launch sufficient — high efficiency';
+  } else if (overallReadiness >= 0.4) {
+    status = 'Building toward viability';
+  } else {
+    status = 'Not yet viable';
+  }
+
+  return { massScore, computeScore, powerScore, timeScore, techBonus, efficiencyPenalty, overallReadiness, status };
+}
+
+/**
+ * Calculate R&D stock update
+ */
+function updateRnDStock(globalComputeExaflops, prevK) {
+  const dK = RND_ALPHA * Math.log10(1 + globalComputeExaflops / RND_C_REF) - RND_DELTA * prevK;
+  return Math.min(Math.max(0, prevK + dK), RND_K_MAX);
+}
+
+/**
+ * Calculate launch learning boost from flight cadence
+ */
+function getLaunchLearningBoost(annualMassKg) {
+  const orbitalFlights = annualMassKg / STARSHIP_PAYLOAD_KG;
+  const totalFlightsThisYear = orbitalFlights + BASELINE_FLIGHTS_PER_YEAR;
+  const cadenceBoost = Math.min(CADENCE_BOOST_MAX, (totalFlightsThisYear / CADENCE_BOOST_THRESHOLD) * CADENCE_BOOST_MAX);
+  return cadenceBoost;
+}
+
+/**
+ * Get lunar unlock year from readiness history
+ */
+function getLunarUnlockYear(readinessHistory) {
+  const thresholdYear = readinessHistory.find(r => r.readiness >= 0.7)?.year;
+  return thresholdYear ? thresholdYear + 10 : null;
+}
+
+/**
+ * Format mass in human-readable units
+ */
+function formatMass(kg) {
+  if (kg >= 1e9) return (kg / 1e9).toFixed(1) + ' Mt';
+  if (kg >= 1e6) return (kg / 1e6).toFixed(1) + ' kt';
+  if (kg >= 1e3) return (kg / 1e3).toFixed(0) + ' t';
+  return kg.toFixed(0) + ' kg';
+}
+
+// ============================================
 // SCENARIO RUNNER
 // ============================================
 
@@ -1999,7 +2124,74 @@ function update() {
   document.getElementById('kpi-crossAgg').textContent = agg.crossoverYear || 'Never';
   document.getElementById('kpi-crossBase').textContent = base.crossoverYear || 'Never';
   document.getElementById('kpi-crossCons').textContent = cons.crossoverYear || 'Never';
-  
+
+  // === FEEDBACK LOOP CALCULATIONS ===
+  // Track simulation state through years
+  let cumulativeMassToOrbitKg = 0;
+  let rndStock = 0;
+  const states = [];
+  const lunarReadinessHistory = [];
+
+  YEARS.forEach((year, i) => {
+    const fleet = fleetResults[i];
+    const gnd = gnds[i];
+
+    // Update cumulative mass
+    cumulativeMassToOrbitKg += fleet.annualMassKg;
+
+    // Current metrics
+    const orbitalPowerTW = fleet.totalPowerTw;
+    const deliveredComputeExaflops = fleet.fleetTflops / 1e6;  // TFLOPS to Exaflops
+    const groundComputeExaflops = gnd.groundSupply * 3;  // Rough: 3 Exaflops per GW
+    const globalComputeExaflops = deliveredComputeExaflops + groundComputeExaflops;
+
+    // Update R&D stock
+    rndStock = updateRnDStock(globalComputeExaflops, rndStock);
+
+    // Get launch learning boost
+    const launchLearnBoost = getLaunchLearningBoost(fleet.annualMassKg);
+    const effectiveLaunchLearnRate = P.launchLearn + launchLearnBoost;
+
+    const state = {
+      year,
+      cumulativeMassToOrbitKg,
+      orbitalPowerTW,
+      globalComputeExaflops,
+      rndStock,
+      effectiveLaunchLearnRate
+    };
+
+    // Calculate lunar readiness
+    const lunarDetails = getLunarReadiness(state, P);
+    state.lunarReadiness = lunarDetails.overallReadiness;
+
+    states.push(state);
+    lunarReadinessHistory.push({ year, readiness: lunarDetails.overallReadiness, details: lunarDetails });
+  });
+
+  // Get 2040 values (index 14)
+  const state40 = states[i40];
+  const lunar40 = lunarReadinessHistory[i40]?.details;
+  const lunarUnlockYear = getLunarUnlockYear(lunarReadinessHistory);
+
+  // Fleet & Starship KPIs (2040)
+  document.getElementById('kpi-leoCapacity40').textContent = `${(fleetResults[i40].leoPlatforms / 1000).toFixed(0)}k / ${(SHELLS.leo.capacity / 1000).toFixed(0)}k`;
+  document.getElementById('kpi-fleetMass40').textContent = formatMass(fleetResults[i40].fleetMassKg);
+  document.getElementById('kpi-starshipFlights40').textContent = Math.round(fleetResults[i40].starshipFlightsToDeploy).toLocaleString();
+  document.getElementById('kpi-annualFlights40').textContent = Math.round(fleetResults[i40].annualStarshipFlights).toLocaleString();
+
+  // AI Acceleration KPIs (2040)
+  document.getElementById('kpi-globalCompute40').textContent = state40.globalComputeExaflops.toFixed(0) + ' Exaflops';
+  document.getElementById('kpi-rndStock40').textContent = state40.rndStock.toFixed(2);
+  document.getElementById('kpi-launchLearnBoost').textContent = `+${((state40.effectiveLaunchLearnRate - P.launchLearn) * 100).toFixed(1)}%`;
+
+  // Lunar Readiness KPIs
+  if (lunar40) {
+    document.getElementById('kpi-lunarReadiness').textContent = (lunar40.overallReadiness * 100).toFixed(0) + '%';
+    document.getElementById('kpi-lunarStatus').textContent = lunar40.status;
+  }
+  document.getElementById('kpi-lunarUnlock').textContent = lunarUnlockYear?.toString() || 'Not viable';
+
   // Toggle effects - thermal is always on
   document.getElementById('eff-thermal').className = 'toggle-effect active';
   document.getElementById('eff-fission').className = 'toggle-effect' + (P.fissionOn ? ' active' : '');
