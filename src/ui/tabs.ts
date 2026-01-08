@@ -15,6 +15,12 @@ export function initTabs(): void {
       panels.forEach((panel) => {
         panel.classList.toggle('active', panel.dataset.tab === target);
       });
+
+      // Trigger resize for charts in newly visible panel
+      // Chart.js needs this when switching from display:none
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 50);
     });
   });
 }

@@ -10,9 +10,6 @@ interface SliderConfig {
 }
 
 const sliderConfigs: SliderConfig[] = [
-  // Breakthroughs
-  { id: 'thermalYear', param: 'thermalYear', valueId: 'v-thermalYear' },
-
   // Thermal
   {
     id: 'emissivity',
@@ -206,6 +203,7 @@ export function initSliders(): void {
 
   // Technology toggles
   const toggleConfigs = [
+    { togId: 'tog-thermal', yearId: 'year-thermal', onParam: 'thermalOn', yearParam: 'thermalYear' },
     { togId: 'tog-fission', yearId: 'year-fission', onParam: 'fissionOn', yearParam: 'fissionYear' },
     { togId: 'tog-fusion', yearId: 'year-fusion', onParam: 'fusionOn', yearParam: 'fusionYear' },
     { togId: 'tog-smr', yearId: 'year-smr', onParam: 'smrOn', yearParam: 'smrYear' },

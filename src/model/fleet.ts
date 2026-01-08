@@ -1,6 +1,6 @@
 import { SHELLS, STARSHIP_PAYLOAD_KG } from './constants';
 import type { Params, FleetResult } from './types';
-import { getLEOPower, getCislunarPower, getBandwidth } from './physics';
+import { getLEOPower, getCislunarPower, getBandwidth, getEffectiveBwPerTflop } from './physics';
 import { getDemand } from './market';
 import { getShellRadiationEffects } from './orbital';
 import { calcSatellite } from './satellite';
@@ -25,6 +25,16 @@ export function calcFleet(
   const hasFusion = params.fusionOn && year >= params.fusionYear;
   const hasThermal = params.thermalOn && year >= params.thermalYear;
 
+  // Dynamic eligible share: cheaper orbital compute expands addressable market
+  // As LCOC drops, more workloads justify the latency tradeoff
+  // Base: params.orbitalEligibleShare (35%)
+  // Fusion/advanced tech can push this to 60%+ as cost savings outweigh latency concerns
+  const baseEligible = params.orbitalEligibleShare;
+  // Reference LCOC ~$0.10/GPU-hr; at $0.02/GPU-hr, eligible share doubles
+  const lcocReference = 0.10;
+  const lcocBoost = Math.min(2.0, lcocReference / Math.max(0.01, sat.lcoc));
+  const dynamicEligibleShare = Math.min(0.70, baseEligible * lcocBoost);
+
   // STEP 1: Calculate UNCONSTRAINED platform counts (capacity-limited only)
   let leoUnconstrained = 0;
   let meoUnconstrained = 0;
@@ -37,29 +47,27 @@ export function calcFleet(
   } else {
     const yearsPost = year - crossoverYear;
 
-    // LEO fills first and fastest - doubles every 1.2 years
-    leoUnconstrained = Math.min(
-      SHELLS.leo.capacity,
-      Math.round(500 * Math.pow(2, yearsPost / 1.2))
-    );
+    // LEO fills FIRST - doubles every 1.2 years until full
+    const leoGrowth = Math.round(500 * Math.pow(2, yearsPost / 1.2));
+    leoUnconstrained = Math.min(SHELLS.leo.capacity, leoGrowth);
+    const leoFull = leoUnconstrained >= SHELLS.leo.capacity * 0.95;
 
-    // MEO: High radiation, slower growth - starts year 2
-    if (yearsPost >= 2) {
-      meoUnconstrained = Math.min(
-        SHELLS.meo.capacity,
-        Math.round(100 * Math.pow(1.8, (yearsPost - 2) / 1.5))
-      );
-    }
+    // MEO: NOT viable for compute (Van Allen radiation belts)
+    // capacity is 0, so this will always be 0
+    meoUnconstrained = 0;
 
-    // GEO: Limited slots, premium location - starts year 3
-    if (yearsPost >= 3) {
+    // GEO: Only expands significantly AFTER LEO is nearly full
+    // Limited slots (1800 ITU-allocated positions)
+    if (leoFull && yearsPost >= 2) {
+      const yearsPostLeoFull = Math.max(0, yearsPost - Math.log2(SHELLS.leo.capacity / 500) * 1.2);
       geoUnconstrained = Math.min(
         SHELLS.geo.capacity,
-        Math.round(50 * Math.pow(1.5, (yearsPost - 3) / 2))
+        Math.round(50 * Math.pow(1.5, yearsPostLeoFull / 1.5))
       );
     }
 
-    // Cislunar: Requires fission/fusion - starts year 2
+    // Cislunar: For batch processing (high latency OK), requires fission/fusion
+    // Grows independently since it serves different workloads (latency-tolerant batch)
     if (cislunarPowerKw > 0 && yearsPost >= 2) {
       cisUnconstrained = Math.min(
         SHELLS.cislunar.capacity,
@@ -83,11 +91,16 @@ export function calcFleet(
   const cisTflopsPerPlatform =
     (cislunarPowerKw * params.computeFrac * sat.gflopsW) / 1000;
 
-  // Bandwidth per platform - cislunar gets local processing exemption
-  const leoBwPerPlatform = sat.tflops * params.gbpsPerTflop;
-  const meoBwPerPlatform = sat.tflops * 0.8 * params.gbpsPerTflop;
-  const geoBwPerPlatform = geoTflopsPerPlatform * params.gbpsPerTflop;
-  const cisBwPerPlatform = cisTflopsPerPlatform * params.gbpsPerTflop * (1 - params.cislunarLocalRatio);
+  // Bandwidth per platform - scales with effective BW/TFLOP (lower with thermo/photonic)
+  // Larger power budgets enable better comms (high-gain antennas, laser links, edge processing)
+  const effectiveBwPerTflop = getEffectiveBwPerTflop(year, params);
+  // LEO/MEO/GEO use fission (2x efficiency); Cislunar uses fusion (5x efficiency)
+  const fissionBwEfficiency = hasFission ? 0.5 : 1.0;
+  const cislunarBwEfficiency = hasFusion ? 0.2 : fissionBwEfficiency;
+  const leoBwPerPlatform = sat.tflops * effectiveBwPerTflop * fissionBwEfficiency;
+  const meoBwPerPlatform = sat.tflops * 0.8 * effectiveBwPerTflop * fissionBwEfficiency;
+  const geoBwPerPlatform = geoTflopsPerPlatform * effectiveBwPerTflop * fissionBwEfficiency;
+  const cisBwPerPlatform = cisTflopsPerPlatform * effectiveBwPerTflop * (1 - params.cislunarLocalRatio) * cislunarBwEfficiency;
 
   // STEP 3: Scale fleet to match bandwidth
   const totalUnconstrainedBw =
@@ -96,25 +109,80 @@ export function calcFleet(
     geoUnconstrained * geoBwPerPlatform +
     cisUnconstrained * cisBwPerPlatform;
 
+  // LEO is PROTECTED - serves latency-sensitive workloads with priority
+  // Only scale down GEO/cislunar if bandwidth/demand constrained
   let leoPlatforms = leoUnconstrained;
   let meoPlatforms = meoUnconstrained;
   let geoPlatforms = geoUnconstrained;
   let cisPlatforms = cisUnconstrained;
 
-  if (totalUnconstrainedBw > bwAvailGbps && totalUnconstrainedBw > 0) {
-    const bwScaleFactor = bwAvailGbps / totalUnconstrainedBw;
-    leoPlatforms = Math.round(leoUnconstrained * bwScaleFactor);
-    meoPlatforms = Math.round(meoUnconstrained * bwScaleFactor);
-    geoPlatforms = Math.round(geoUnconstrained * bwScaleFactor);
-    cisPlatforms = Math.round(cisUnconstrained * bwScaleFactor);
+  // Calculate power per platform
+  const leoPowerPerPlatform = sat.powerKw / 1e6; // GW
+  const meoPowerPerPlatform = sat.powerKw * 0.8 / 1e6;
+  const geoPowerPerPlatformGW = geoPowerKw / 1e6;
+  const cisPowerPerPlatformGW = cislunarPowerKw / 1e6;
+
+  // Bandwidth constraint - LEO protected, scale GEO/cislunar first
+  const leoBwNeed = leoUnconstrained * leoBwPerPlatform;
+  const geoCisBwNeed = geoUnconstrained * geoBwPerPlatform + cisUnconstrained * cisBwPerPlatform;
+
+  if (leoBwNeed <= bwAvailGbps) {
+    // LEO fits - allocate remaining BW to GEO/cislunar
+    const remainingBw = bwAvailGbps - leoBwNeed;
+    if (geoCisBwNeed > remainingBw && geoCisBwNeed > 0) {
+      const geoCisScaleFactor = remainingBw / geoCisBwNeed;
+      geoPlatforms = Math.round(geoUnconstrained * geoCisScaleFactor);
+      cisPlatforms = Math.round(cisUnconstrained * geoCisScaleFactor);
+    }
+  } else {
+    // Even LEO alone exceeds bandwidth - scale LEO too
+    leoPlatforms = Math.round(bwAvailGbps / leoBwPerPlatform);
+    geoPlatforms = 0;
+    cisPlatforms = 0;
+  }
+
+  // STEP 3b: Demand constraint - LEO protected, scale GEO/cislunar first
+  const totalDemandGW = getDemand(year, params);
+  const eligibleDemandGW = totalDemandGW * dynamicEligibleShare;
+  const maxFleetPowerGW = eligibleDemandGW * 0.95;
+
+  const leoPowerGW = leoPlatforms * leoPowerPerPlatform;
+  const geoCisPowerGW = geoPlatforms * geoPowerPerPlatformGW + cisPlatforms * cisPowerPerPlatformGW;
+
+  if (leoPowerGW <= maxFleetPowerGW) {
+    // LEO fits within demand - allocate remaining to GEO/cislunar
+    const remainingDemandGW = maxFleetPowerGW - leoPowerGW;
+    if (geoCisPowerGW > remainingDemandGW && geoCisPowerGW > 0) {
+      const geoCisScaleFactor = remainingDemandGW / geoCisPowerGW;
+      geoPlatforms = Math.round(geoPlatforms * geoCisScaleFactor);
+      cisPlatforms = Math.round(cisPlatforms * geoCisScaleFactor);
+    }
+  } else {
+    // Even LEO alone exceeds demand - scale LEO too
+    leoPlatforms = Math.round(maxFleetPowerGW / leoPowerPerPlatform);
+    geoPlatforms = 0;
+    cisPlatforms = 0;
   }
 
   // === Power by shell ===
-  const leoPowerTw = (leoPlatforms * sat.powerKw) / 1e9;
-  const meoPowerTw = (meoPlatforms * sat.powerKw * 0.8) / 1e9; // MEO Van Allen penalty
-  const geoPowerTw = (geoPlatforms * geoPowerKw) / 1e9;
-  const cisPowerTw = (cisPlatforms * cislunarPowerKw) / 1e9;
-  const totalPowerTw = leoPowerTw + meoPowerTw + geoPowerTw + cisPowerTw;
+  let leoPowerTw = (leoPlatforms * sat.powerKw) / 1e9;
+  let meoPowerTw = (meoPlatforms * sat.powerKw * 0.8) / 1e9; // MEO Van Allen penalty
+  let geoPowerTw = (geoPlatforms * geoPowerKw) / 1e9;
+  let cisPowerTw = (cisPlatforms * cislunarPowerKw) / 1e9;
+  let totalPowerTw = leoPowerTw + meoPowerTw + geoPowerTw + cisPowerTw;
+
+  // Cap platforms at capacity (monotonic constraint could have pushed above)
+  leoPlatforms = Math.min(leoPlatforms, SHELLS.leo.capacity);
+  meoPlatforms = Math.min(meoPlatforms, SHELLS.meo.capacity);
+  geoPlatforms = Math.min(geoPlatforms, SHELLS.geo.capacity);
+  // Cislunar has effectively unlimited capacity, no cap needed
+
+  // Recalculate power after capping
+  leoPowerTw = (leoPlatforms * sat.powerKw) / 1e9;
+  meoPowerTw = (meoPlatforms * sat.powerKw * 0.8) / 1e9;
+  geoPowerTw = (geoPlatforms * geoPowerKw) / 1e9;
+  cisPowerTw = (cisPlatforms * cislunarPowerKw) / 1e9;
+  totalPowerTw = leoPowerTw + meoPowerTw + geoPowerTw + cisPowerTw;
 
   // === Recalculate fleet TFLOPS with scaled platform counts ===
   const fleetTflops =
@@ -123,15 +191,13 @@ export function calcFleet(
     geoPlatforms * geoTflopsPerPlatform +
     cisPlatforms * cisTflopsPerPlatform;
 
-  const bwNeededGbps = fleetTflops * params.gbpsPerTflop;
+  const bwNeededGbps = fleetTflops * effectiveBwPerTflop;
 
   // bwSell: fraction of compute you can monetize (should be ~100% with bandwidth scaling)
   const bwSell =
     bwNeededGbps <= 0 ? 1 : Math.min(1, bwAvailGbps / bwNeededGbps);
 
-  // === Demand constraint ===
-  const totalDemandGW = getDemand(year, params);
-  const eligibleDemandGW = totalDemandGW * params.orbitalEligibleShare;
+  // === Demand constraint (reusing values from Step 3b) ===
   const fleetPowerGW = totalPowerTw * 1000;
 
   // demandSell: fraction of fleet capacity the market can absorb
@@ -150,7 +216,7 @@ export function calcFleet(
 
   // Shell utilization (against unconstrained targets, not capacity)
   const leoUtil = leoPlatforms / SHELLS.leo.capacity;
-  const meoUtil = meoPlatforms / SHELLS.meo.capacity;
+  const meoUtil = SHELLS.meo.capacity > 0 ? meoPlatforms / SHELLS.meo.capacity : 0;
   const geoUtil = geoPlatforms / SHELLS.geo.capacity;
   const cisUtil = cisPlatforms / SHELLS.cislunar.capacity;
 
@@ -218,6 +284,7 @@ export function calcFleet(
     demandUtil,
     demandSell,
     eligibleDemandGW,
+    dynamicEligibleShare,
     fleetTflops,
     sellableUtil,
     satPowerKw: sat.powerKw,

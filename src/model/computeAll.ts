@@ -43,26 +43,6 @@ export function runScenario(
   const preFleets = YEARS.map((y) => calcFleet(y, null, params));
   const preGnds = YEARS.map((y) => calcGround(y, 0, params));
 
-  // Debug: log key values for crossover analysis
-  if (scenario === 'baseline') {
-    console.log('=== CROSSOVER DEBUG (Baseline) ===');
-    console.log('Key params:', {
-      opTemp: params.opTemp,
-      solarEff: params.solarEff,
-      radPen: params.radPen,
-      launchLearn: params.launchLearn,
-      launchFloor: params.launchFloor
-    });
-    [2030, 2031, 2032, 2033, 2034, 2035].forEach(y => {
-      const idx = YEARS.indexOf(y);
-      if (idx >= 0) {
-        const sat = sats[idx];
-        const fleet = preFleets[idx];
-        const gnd = preGnds[idx];
-        console.log(`${y}: orbitalLCOC=$${sat.lcoc.toFixed(2)}, effective=$${fleet.lcocEffective.toFixed(2)}, groundMarket=$${gnd.market.toFixed(2)}, cross=${fleet.lcocEffective < gnd.market}`);
-      }
-    });
-  }
 
   // Find crossover year
   const crossIdx = preFleets.findIndex(
@@ -76,6 +56,7 @@ export function runScenario(
   const gnds = YEARS.map((y, i) =>
     calcGround(y, fleets[i].totalPowerTw * 1000, params)
   );
+
 
   // Track simulation state through the years
   const states: SimulationState[] = [];

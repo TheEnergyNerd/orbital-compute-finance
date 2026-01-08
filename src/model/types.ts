@@ -156,6 +156,7 @@ export interface FleetResult {
   demandUtil: number;
   demandSell: number;
   eligibleDemandGW: number;
+  dynamicEligibleShare: number;
   fleetTflops: number;
   sellableUtil: number;
   satPowerKw: number;

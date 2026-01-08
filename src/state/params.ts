@@ -15,13 +15,27 @@ export const defaults: Params = {
   smrOn: true,
   smrYear: 2032,         // Ground SMR deployment
   thermoOn: false,
-  thermoYear: 2029,      // Thermodynamic computing availability
-  thermoGroundMult: 100,    // Room-temp TSU efficiency multiplier (Extropic claims orders of magnitude)
-  thermoSpaceMult: 1000,    // Superconducting TSU efficiency multiplier (10x from passive cryo: 3K vs 300K)
+  thermoYear: 2030,      // Thermodynamic computing availability
+  // Thermo ground: Extropic claims 10,000x, conservative 100x for probabilistic workloads
+  // Uses thermal noise for Boltzmann sampling - Landauer limit is kT*ln(2) per bit
+  thermoGroundMult: 100,
+  // Thermo space: Free passive cooling to 3K vs 300K ground
+  // - Landauer limit 100x lower (kT scales with temperature)
+  // - Superconducting circuits: 80-100x more efficient at 4K (IEEE, imec research)
+  // - No cooling overhead (radiate to cosmic background)
+  // Conservative 4x space bonus (practical vs theoretical 100x)
+  thermoSpaceMult: 400,
   photonicOn: false,
-  photonicYear: 2035,    // Photonic computing availability
-  photonicGroundMult: 30,   // Ground photonic efficiency multiplier (Lightmatter/Luminous 10-100x for matrix ops)
-  photonicSpaceMult: 150,   // Space photonic efficiency multiplier (5x: radiation immunity + vacuum optics + thermal stability)
+  photonicYear: 2034,    // Photonic computing availability (maturing from current demos)
+  // Photonic ground: Lightmatter claims 10-100x lower energy per MAC, 1000x less heat
+  // Conservative middle estimate for matrix multiplication workloads
+  photonicGroundMult: 40,
+  // Photonic space advantages (research-backed):
+  // - Vacuum optics: no air absorption/scattering, perfect waveguides (~1.5x)
+  // - Radiation immunity: photons unaffected by ionizing radiation (~1.3x)
+  // - Thermal stability: no thermal expansion drift, stable alignment (~1.3x)
+  // Combined: ~2.5x space bonus
+  photonicSpaceMult: 100,
   workloadProbabilistic: 0.15, // Fraction of workloads that are sampling-heavy
 
   // Thermal

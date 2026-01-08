@@ -38,6 +38,7 @@ export {
   getGroundEfficiency,
   getOrbitalEfficiency,
   getBandwidth,
+  getEffectiveBwPerTflop,
   getLEOPower,
   getCislunarPower
 } from './physics';

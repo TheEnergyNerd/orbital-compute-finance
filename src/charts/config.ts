@@ -9,7 +9,18 @@ export function getLineOptions(yLabel: string, log = false): ChartOptions<'line'
   return {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
+    interaction: {
+      mode: 'index',
+      intersect: false
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        enabled: true,
+        mode: 'index',
+        intersect: false
+      }
+    },
     scales: {
       y: {
         type: log ? 'logarithmic' : 'linear',
@@ -23,7 +34,18 @@ export function getStackedOptions(yLabel: string): ChartOptions<'bar'> {
   return {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
+    interaction: {
+      mode: 'index',
+      intersect: false
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        enabled: true,
+        mode: 'index',
+        intersect: false
+      }
+    },
     scales: {
       x: { stacked: true },
       y: { stacked: true, title: { display: true, text: yLabel } }

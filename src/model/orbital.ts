@@ -18,17 +18,24 @@ export function getShellRadiationEffects(
   const shellData = SHELLS[shell];
   const t = year - 2026;
 
+  // Check for photonic computing - photons are immune to ionizing radiation
+  const hasPhotonic = params.photonicOn && year >= params.photonicYear;
+
   // TID effect: reduces effective lifetime (higher tidMult = shorter life)
-  const tidFactor = shellData.tidMult;
+  // Photonic circuits don't degrade from ionizing radiation
+  const tidFactor = hasPhotonic ? 1.0 : shellData.tidMult;
   const effectiveLife = params.satLife / tidFactor;
 
   // SEU effect: reliability overhead (redundancy, ECC, spares)
   // seuMult of 1.0 = no overhead, 2.0 = 2× compute needed
   // Improves over time with rad-hard tech
-  // Higher radPen = slower improvement (higher base means slower decay)
-  const radHardBase = 0.82 + params.radPen * 0.1;
-  const radHardImprovement = Math.pow(radHardBase, t);
-  const seuPenalty = 1 + (shellData.seuMult - 1) * radHardImprovement;
+  // Photonic computing is completely immune to SEU - photons aren't affected by cosmic rays
+  let seuPenalty = 1.0;
+  if (!hasPhotonic) {
+    const radHardBase = 0.82 + params.radPen * 0.1;
+    const radHardImprovement = Math.pow(radHardBase, t);
+    seuPenalty = 1 + (shellData.seuMult - 1) * radHardImprovement;
+  }
 
   // Availability factor: fraction of compute usable after SEU overhead
   const availabilityFactor = 1 / seuPenalty;

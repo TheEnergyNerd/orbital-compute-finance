@@ -5,7 +5,8 @@ import {
   getLaunchCost,
   getRadiatorMassPerMW,
   getRadiatorPower,
-  getOrbitalEfficiency
+  getOrbitalEfficiency,
+  getEffectiveBwPerTflop
 } from './physics';
 import { getShellRadiationEffects } from './orbital';
 import { getCRF } from './finance';
@@ -48,13 +49,15 @@ export function calcSatellite(
   const radEffects = getShellRadiationEffects(shell, year, params);
 
   // Power source mass
+  // Note: LEO satellites use fission even when fusion is available
+  // (fusion reactors too large for LEO; fusion benefits cislunar only)
   let powerMass = 0;
   let battMass = 0;
 
-  if (hasFusion) {
-    powerMass = powerKw * 0.004; // 250 W/kg
-  } else if (hasFission) {
-    powerMass = powerKw * 0.01; // 100 W/kg - Kilopower-class
+  if (hasFission) {
+    // Fission: ~20 W/kg for advanced Kilopower/Megapower designs
+    // (Current Kilopower is ~2.5 W/kg, future targets 10-40 W/kg)
+    powerMass = powerKw * 0.05; // 20 W/kg
   } else {
     // Solar: area * areal density
     const panelArea = (powerKw * 1000) / (solarEff * SOLAR_CONSTANT);
@@ -97,17 +100,27 @@ export function calcSatellite(
     hasFission || hasFusion
       ? 0
       : (powerKw * 1000) / (solarEff * SOLAR_CONSTANT);
-  const dataRateGbps = tflops * params.gbpsPerTflop;
+  const effectiveBwPerTflop = getEffectiveBwPerTflop(year, params);
+  const dataRateGbps = tflops * effectiveBwPerTflop;
 
   // LCOC (Levelized Cost of Compute) calculation
   // Accounts for WACC, CRF amortization, maintenance, bandwidth, and utilization
+  // Integration cost per platform: base $15k, but scales sub-linearly with power (economies of scale)
+  // Fusion platforms (~500 MW) have ~10x lower $/MW integration cost vs fission (~20 MW)
+  const powerScale = Math.pow(powerKw / 1000, 0.3);  // 0.3 exponent = significant economies of scale
+  const integrationCost = 15000 * prodMult * Math.max(1, powerScale);
   const capex =
-    dryMass * launchCost + dryMass * 350 * prodMult + 15000 * prodMult;
+    dryMass * launchCost + dryMass * 350 * prodMult + integrationCost;
   const crf = getCRF(params.waccOrbital, radEffects.effectiveLife);
   const annualCapex = capex * crf;
   const annualMaint = capex * params.maintCost;
-  // Bandwidth cost: each Gbps of capacity costs $bwCost k/year (ground stations + spectrum)
-  const annualBwCost = dataRateGbps * params.bwCost * 1000;
+  // Bandwidth cost: decreases over time with ground station tech, laser links, spectrum efficiency
+  // ~15% annual improvement, floor at 10% of initial cost
+  const bwCostLearn = Math.max(0.1, Math.pow(0.85, t));
+  // Note: This calculates LEO satellite LCOC - LEO uses fission, NOT fusion
+  // Fission provides bandwidth advantages (2x cheaper) from higher power budgets for comms
+  const fissionBwDiscount = hasFission ? 0.5 : 1.0;
+  const annualBwCost = dataRateGbps * params.bwCost * 1000 * bwCostLearn * fissionBwDiscount;
   const annual = annualCapex + annualMaint + annualBwCost;
   const gpuHrs = gpuEq * 8760 * SLA;
   const lcoc = gpuHrs > 0 ? annual / gpuHrs : Infinity;

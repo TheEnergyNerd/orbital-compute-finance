@@ -46,10 +46,15 @@
           <div class="sandbox-grid">
           <div class="sandbox-section">
             <div class="section-title">Breakthroughs</div>
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-lbl">Thermal Breakthrough</span><span class="slider-val"><span id="v-thermalYear">2030</span></span></div>
-              <input type="range" id="thermalYear" min="2026" max="2040" value="2030">
-              <div class="toggle-effect" id="eff-thermal">50× lighter heat rejection, MW-class platforms</div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-lbl">Thermal Breakthrough</div>
+                <div class="toggle-effect" id="eff-thermal">50× lighter heat rejection, MW-class platforms</div>
+              </div>
+              <div class="toggle-group">
+                <input type="number" class="year-input" id="year-thermal" value="2030" min="2026" max="2040">
+                <label class="toggle"><input type="checkbox" id="tog-thermal" checked><span class="toggle-track"></span></label>
+              </div>
             </div>
             <div class="toggle-row">
               <div>

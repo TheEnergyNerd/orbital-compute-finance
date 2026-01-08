@@ -115,7 +115,53 @@ export function getOrbitalEfficiency(year: number, params: Params): number {
 }
 
 export function getBandwidth(year: number, params: Params): number {
-  return params.bandwidth * Math.pow(1 + params.bwGrowth, year - 2026);
+  const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
+  const hasPhotonic = params.photonicOn && year >= params.photonicYear;
+
+  let bw = params.bandwidth * Math.pow(1 + params.bwGrowth, year - 2026);
+
+  // Thermo/photonic breakthroughs drive bandwidth infrastructure investment
+  // (laser links, more ground stations, better spectrum utilization)
+  // Smooth exponential growth to avoid oscillation with fleet scaling
+  if (hasThermoCompute || hasPhotonic) {
+    const techYear = Math.min(
+      hasThermoCompute ? params.thermoYear : Infinity,
+      hasPhotonic ? params.photonicYear : Infinity
+    );
+    const yearsPost = year - techYear;
+    // Smooth asymptotic growth: starts at 1x, grows to 10x over ~15 years
+    const bwBoost = 1 + 9 * (1 - Math.exp(-yearsPost / 5));
+    bw *= bwBoost;
+  }
+
+  return bw;
+}
+
+/**
+ * Calculate effective bandwidth requirement per TFLOP.
+ * With thermo/photonic computing, more on-board processing means less data
+ * needs to be sent back to Earth (edge inference, only send results).
+ * Uses smooth exponential decay to avoid oscillation.
+ */
+export function getEffectiveBwPerTflop(year: number, params: Params): number {
+  const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
+  const hasPhotonic = params.photonicOn && year >= params.photonicYear;
+
+  let bwPerTflop = params.gbpsPerTflop;
+
+  if (hasThermoCompute || hasPhotonic) {
+    const techYear = Math.min(
+      hasThermoCompute ? params.thermoYear : Infinity,
+      hasPhotonic ? params.photonicYear : Infinity
+    );
+    const yearsPost = year - techYear;
+    // Smooth exponential decay: starts at 1x, asymptotes to 0.05x (20x reduction)
+    // Half-life of ~5 years for gradual transition
+    const reductionFactor = 0.05 + 0.95 * Math.exp(-yearsPost / 5);
+    bwPerTflop *= reductionFactor;
+  }
+
+  return bwPerTflop;
 }
 
 /**
@@ -126,14 +172,11 @@ export function getLEOPower(year: number, params: Params): number {
   const t = year - 2026;
   const hasThermal = params.thermalOn && year >= params.thermalYear;
   const hasFission = params.fissionOn && year >= params.fissionYear;
-  const hasFusion = params.fusionOn && year >= params.fusionYear;
+  // Note: Fusion does NOT apply to LEO - fusion reactors are too large/heavy for LEO platforms
+  // LEO stays at fission level for low-latency inference; fusion benefits cislunar only
 
-  if (hasFusion) {
-    // Fusion: 100-500 MW LEO stations
-    return 100000 + Math.min(1, (year - params.fusionYear) / 10) * 400000;
-  }
   if (hasFission) {
-    // Fission: 5-20 MW platforms
+    // Fission: 5-20 MW platforms (optimal for LEO latency-sensitive workloads)
     return 5000 + Math.min(1, (year - params.fissionYear) / 10) * 15000;
   }
   if (hasThermal) {

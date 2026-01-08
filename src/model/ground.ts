@@ -40,8 +40,14 @@ export function calcGround(
 
   const pue = Math.max(1.08, params.groundPue - t * 0.01);
   const enCost = (700 * 8760 * SLA * blendedEnergy * pue) / 1000;
-  const overhead = 0.2 * 8760 * SLA;
-  const base = (hwCost + enCost + overhead) / (8760 * SLA);
+
+  // Overhead: datacenter opex, staff, networking, real estate, profit margin
+  // $0.50/hr baseline reflects real cloud GPU pricing overhead
+  const overhead = 0.50 * 8760 * SLA;
+
+  // Utilization factor: datacenters don't run at 100% - typical 60-80%
+  const utilization = 0.70;
+  const base = (hwCost + enCost + overhead) / (8760 * SLA * utilization);
 
   // Market dynamics
   const demand = getDemand(year, params);
