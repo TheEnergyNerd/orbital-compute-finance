@@ -1218,29 +1218,41 @@ var Model = (() => {
   var H100_TFLOPS = 1979;
   var H100_WATTS = 700;
   var H100_GFLOPS_W = H100_TFLOPS * 1e3 / H100_WATTS;
-  function getPlatformMass(year, params) {
-    const hasFission = params.fissionOn && year >= params.fissionYear;
-    const hasFusion = params.fusionOn && year >= params.fusionYear;
+  function getPlatformMass(year, params, forcedPowerSource = null) {
+    // Platform mass depends on:
+    // 1. Launch vehicle (Starship enables larger platforms)
+    // 2. Thermal capability (droplet radiators enable more power density)
+    // 3. Power source (only if fission/fusion is ACTUALLY selected, not just available)
     const hasThermal = params.thermalOn && year >= params.thermalYear;
     const starshipYear = params.starshipOn ? (params.starshipYear || 2029) : 2100;
     const hasStarship = params.starshipOn && year >= starshipYear;
     const t = year - 2026;
-    if (hasFusion) {
+
+    // Only use fission/fusion mass if that power source is actually selected
+    if (forcedPowerSource === 'fusion') {
       const fusionMaturity = Math.min(1, (year - params.fusionYear) / 15);
-      return 2e5 + fusionMaturity * 8e5;
+      return 2e5 + fusionMaturity * 8e5;  // 200-1000 tonnes for fusion stations
     }
-    if (hasFission) {
+    if (forcedPowerSource === 'fission') {
       const fissionMaturity = Math.min(1, (year - params.fissionYear) / 15);
-      return 5e4 + fissionMaturity * 15e4;
+      return 5e4 + fissionMaturity * 15e4;  // 50-200 tonnes for fission platforms
     }
+
+    // Solar platforms - size limited by launch vehicle and thermal rejection
     if (hasStarship) {
       const starshipMaturity = Math.min(1, (year - starshipYear) / 3);
       if (hasThermal) {
-        return 4e3 + starshipMaturity * 11e3;
+        // THERMAL BREAKTHROUGH IS HUGE:
+        // Without thermal: limited to ~200kW by heat rejection (conventional radiators too heavy)
+        // With thermal: droplet radiators enable MW-class platforms
+        // Starship can lift 100-150t to LEO - thermal is no longer the limit
+        const thermalMaturity = Math.min(1, (year - params.thermalYear) / 5);
+        return 5e3 + starshipMaturity * 15e3 + thermalMaturity * 30e3;  // 5-50 tonnes with thermal
       }
-      return 4e3 + starshipMaturity * 8e3;
+      // Without thermal breakthrough: heat rejection limits platform size severely
+      return 3e3 + starshipMaturity * 5e3;  // 3-8 tonnes without thermal (thermally limited)
     }
-    // Pre-Starship: small satellites (Falcon 9 limited)
+    // Pre-Starship: small satellites (Falcon 9 limited to ~2t useful payload)
     return Math.min(2e3, 1500 + t * 150);
   }
   function getSolarMassPerKw(year, params) {
@@ -1274,30 +1286,46 @@ var Model = (() => {
     return 1000 / specificPower; // 4 → 2 kg/kW
   }
   function getRadiatorPhysics(year, params) {
+    // PHYSICS-BASED RADIATOR CALCULATION
+    // Stefan-Boltzmann: P = εσT⁴
+    // At 350K: 723 W/m² per side, ~1200 W/m² two-sided after backside absorption
     const hasThermal = params.thermalOn && year >= params.thermalYear;
     const t = year - 2026;
     const baseTemp = params.opTemp || 365;
-    const opTemp = hasThermal ? Math.min(baseTemp + 25, baseTemp + (year - params.thermalYear) * 2.5) : Math.max(313, baseTemp - 52);
+
+    // Temperature: thermal breakthrough enables higher operating temps
+    const opTemp = hasThermal
+      ? Math.min(450, baseTemp + (year - params.thermalYear) * 8)  // Up to 450K with droplet radiators
+      : Math.max(320, baseTemp - 30);  // Limited without thermal tech
+
     const emittedWPerM2 = params.emissivity * STEFAN_BOLTZMANN * Math.pow(opTemp, 4);
     const twoSidedEmission = 2 * emittedWPerM2;
-    const attitudeQuality = hasThermal ? Math.min(0.85, 0.7 + (year - params.thermalYear) * 0.015) : Math.min(0.55, 0.35 + t * 0.025);
+
+    // Backside absorption from Earth IR and albedo
+    const attitudeQuality = hasThermal ? 0.85 : 0.5;
     const backsideAbsorbed = 350 * (1 - attitudeQuality) + 80 * attitudeQuality;
     const netWPerM2 = twoSidedEmission - backsideAbsorbed;
-    // Use radLearn from params
-    const radLearnRate = (params.radLearn || 50) / 1000;
+
+    // Areal density (kg/m²) - THIS IS THE KEY DIFFERENCE
+    // Conventional heat pipes: 5-10 kg/m² → 3000-7000 kg/MW
+    // Droplet radiators: 0.3-0.5 kg/m² → 50-200 kg/MW (10-100x lighter!)
     let kgPerM2;
     if (hasThermal) {
-      const maturity = Math.min(1, (year - params.thermalYear) / 15);
-      const baseKgPerM2 = 6.0 - maturity * 2.5;
-      kgPerM2 = Math.max(2.0, baseKgPerM2 - t * radLearnRate);
+      // Droplet radiators: 0.5 kg/m² initially, improving to 0.3 kg/m²
+      const maturity = Math.min(1, (year - params.thermalYear) / 8);
+      kgPerM2 = 0.5 - maturity * 0.2;  // 0.5 → 0.3 kg/m²
     } else {
-      kgPerM2 = Math.max(6.0, 9.0 - t * radLearnRate * 3);
+      // Conventional heat pipe radiators: 8-5 kg/m² with slow improvement
+      kgPerM2 = Math.max(5.0, 8.0 - t * 0.15);
     }
+
+    // kg per kW of thermal rejection
     const kgPerKwThermal = kgPerM2 / netWPerM2 * 1e3;
     return { netWPerM2, kgPerM2, kgPerKwThermal };
   }
   function getComputeEfficiency(year, params) {
     const t = year - 2026;
+    const hasThermal = params.thermalOn && year >= params.thermalYear;
     const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
     const hasPhotonicCompute = params.photonicOn && year >= params.photonicYear;
     let baseGflopsW = H100_GFLOPS_W;
@@ -1312,6 +1340,17 @@ var Model = (() => {
     const improvement = t * 0.012;
     const radHardPenalty = Math.min(0.98, startingEfficiency + improvement);
     let gflopsW = baseGflopsW * radHardPenalty;
+
+    // THERMAL BREAKTHROUGH EFFICIENCY BONUS
+    // Without proper cooling: chips thermal throttle, run at 70-80% of rated power
+    // With droplet radiators: chips run at full rated power, no throttling
+    // This is a ~25-40% efficiency improvement from thermal alone
+    if (hasThermal) {
+      const thermalMaturity = Math.min(1, (year - params.thermalYear) / 5);
+      const thermalBonus = 1.25 + thermalMaturity * 0.15;  // 1.25x → 1.40x efficiency
+      gflopsW *= thermalBonus;
+    }
+
     if (hasThermoCompute || hasPhotonicCompute) {
       const deterministicFrac = 1 - params.workloadProbabilistic;
       const probFrac = params.workloadProbabilistic;
@@ -1377,7 +1416,17 @@ var Model = (() => {
     const radPhysics = getRadiatorPhysics(year, params);
     const wasteHeatFrac = 0.95;
     const radiatorMassPerKwCompute = radPhysics.kgPerKwThermal * wasteHeatFrac;
-    const computeMassPerKw = Math.max(25, 35 - t * 1);
+
+    // COMPUTE MASS: Thermal breakthrough enables denser packing
+    // Without thermal: spread out chips to avoid hot spots, 35→25 kg/kW
+    // With thermal: efficient cooling allows 30% denser packing, 25→18 kg/kW
+    let computeMassPerKw;
+    if (hasThermal) {
+      const thermalMaturity = Math.min(1, (year - params.thermalYear) / 5);
+      computeMassPerKw = Math.max(18, 25 - thermalMaturity * 7);  // 25→18 kg/kW with thermal
+    } else {
+      computeMassPerKw = Math.max(25, 35 - t * 1);  // 35→25 kg/kW without thermal
+    }
     const battDens = Math.min(500, params.battDens + t * 15);
     // eclipseDurationHrs and base eclipseComputeFrac already defined above for power source selection
     const actualEclipseComputeFrac = hasFission ? 0 : 0.3;  // Fission doesn't need eclipse batteries
@@ -1460,24 +1509,37 @@ var Model = (() => {
     };
 
     // Apply learning curve and slider multiplier to each component
-    // NUCLEAR POWER DISCOUNTS:
-    // - Fission: Compact reactor replaces most solar/battery mass, 50% cost reduction
-    // - Fusion: Near-free power, 95% cost reduction on power systems
-    // Radiator costs also drop with nuclear (integrated thermal management)
+    // TECHNOLOGY DISCOUNTS:
+    // Thermal breakthrough: droplet radiators are simpler/cheaper than heat pipes
+    //                       AND compute can use simpler thermal packaging
+    // Fission/Fusion: compact reactors reduce power system costs
     let powerDiscount = 1.0;
     let thermalDiscount = 1.0;
+    let computeThermalDiscount = 1.0;
+
+    // Thermal breakthrough makes radiators MUCH cheaper (droplets vs heat pipes)
+    // AND compute hardware can use simpler thermal packaging
+    if (hasThermal) {
+      const thermalMaturity = Math.min(1, (year - params.thermalYear) / 5);
+      thermalDiscount = 0.5 - thermalMaturity * 0.3;  // 50% → 20% of conventional radiator cost
+      // Compute can use simpler packaging when thermal isn't the constraint
+      // Don't need exotic materials, vapor chambers, heat spreaders on every chip
+      computeThermalDiscount = 0.7 - thermalMaturity * 0.2;  // 70% → 50% of compute thermal overhead
+    }
+
+    // Nuclear power discounts (override thermal discount if better)
     if (hasFusion) {
       powerDiscount = 0.05;   // 95% reduction - fusion is nearly free power
-      thermalDiscount = 0.20; // 80% reduction - fusion has built-in cooling
+      thermalDiscount = Math.min(thermalDiscount, 0.10); // 90% reduction - fusion has built-in cooling
     } else if (hasFission) {
       powerDiscount = 0.40;   // 60% reduction - fission is compact but not free
-      thermalDiscount = 0.50; // 50% reduction - fission needs some thermal management
+      thermalDiscount = Math.min(thermalDiscount, 0.30); // 70% reduction - fission has integrated cooling
     }
 
     const compCosts = {
       solar: COMPONENT_COSTS_2026.solar * learnMult * mfgMult * powerDiscount,
       battery: COMPONENT_COSTS_2026.battery * learnMult * mfgMult * powerDiscount,
-      compute: COMPONENT_COSTS_2026.compute * learnMult * mfgMult,
+      compute: COMPONENT_COSTS_2026.compute * learnMult * mfgMult * computeThermalDiscount,  // Thermal simplifies packaging
       radiator: COMPONENT_COSTS_2026.radiator * learnMult * mfgMult * thermalDiscount,
       structure: COMPONENT_COSTS_2026.structure * learnMult * mfgMult,
       avionics: COMPONENT_COSTS_2026.avionics * learnMult * mfgMult,

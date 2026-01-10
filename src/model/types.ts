@@ -38,9 +38,10 @@ export interface Params {
   aiLearn: number;
 
   // Economics
+  starshipOn: boolean;  // Starship available ($15/kg floor) vs conventional ($300/kg floor)
   launchCost: number;
   launchLearn: number;
-  launchFloor: number;
+  launchFloor: number;  // Base floor, overridden by starshipOn
   prodMult: number;
   maintCost: number;
   waccOrbital: number;
@@ -72,6 +73,9 @@ export interface Params {
   btmDelay: number;
   btmCapexMult: number;
   btmEnergyCost: number;
+
+  // Satellite manufacturing
+  satBuildDelay: number;  // months to build a satellite (affects carrying costs)
 }
 
 export interface Shell {
@@ -95,7 +99,9 @@ export interface MassBreakdown {
   batt: number;
   comp: number;
   rad: number;
+  shield: number;
   struct: number;
+  other: number;  // avionics + propulsion + comms + aocs
 }
 
 export interface SatelliteResult {

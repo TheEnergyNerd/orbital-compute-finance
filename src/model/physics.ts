@@ -13,13 +13,18 @@ import { getDemandPressure } from './market';
  * High demand accelerates cost reductions through increased production volume.
  */
 export function getLaunchCost(year: number, params: Params, shell = 'leo'): number {
+  // Launch floor depends on Starship availability
+  // Starship: $15/kg (propellant + amortization + ops)
+  // Conventional (Falcon 9, etc.): ~$300/kg
+  const launchFloor = params.starshipOn ? 15 : 300;
+
   let cost = params.launchCost;
   for (let y = 2026; y < year; y++) {
     const demandPressure = getDemandPressure(y, params);
     const orbitalLearningMult = Math.pow(demandPressure, 1.5); // 0.09x to 2.83x
     const effectiveLearn = params.launchLearn * orbitalLearningMult;
     cost *= (1 - effectiveLearn);
-    cost = Math.max(params.launchFloor, cost);
+    cost = Math.max(launchFloor, cost);
   }
   return cost * (SHELL_COST_MULT[shell] || 1.0);
 }
@@ -175,19 +180,31 @@ export function getLEOPower(year: number, params: Params): number {
   const t = year - 2026;
   const hasThermal = params.thermalOn && year >= params.thermalYear;
   const hasFission = params.fissionOn && year >= params.fissionYear;
-  // Note: Fusion does NOT apply to LEO - fusion reactors are too large/heavy for LEO platforms
-  // LEO stays at fission level for low-latency inference; fusion benefits cislunar only
+  const hasFusion = params.fusionOn && year >= params.fusionYear;
 
+  // Compact fusion (magneto-electrostatic mirror) enables 1-5 MWe in LEO
+  // Form factor: 1.6m diameter × 8m long for 5 MWe - fits on LEO platforms
+  if (hasFusion) {
+    // Fusion: 1-5 MWe platforms, scaling with maturity
+    // Start at 1 MWe, grow to 5 MWe over 10 years as tech matures
+    const maturity = Math.min(1, (year - params.fusionYear) / 10);
+    return 1000 + maturity * 4000; // 1 MW → 5 MW
+  }
   if (hasFission) {
     // Fission: 5-20 MW platforms (optimal for LEO latency-sensitive workloads)
     return 5000 + Math.min(1, (year - params.fissionYear) / 10) * 15000;
   }
   if (hasThermal) {
-    // Thermal breakthrough enables MW-class heat rejection
+    // Thermal breakthrough (droplet radiators) removes heat rejection as bottleneck
+    // BUT still limited by practical solar array size:
+    // - 1 MW needs ~2,500 m² of panels (half a football field)
+    // - ISS has 2,500 m² for just 120 kW
+    // - Practical limit ~500 kW - 1 MW even with perfect heat rejection
     const maturity = Math.min(1, (year - params.thermalYear) / 6);
-    return 1500 + maturity * 3500;
+    return 500 + maturity * 500; // 500 kW → 1 MW (array-limited, not thermal-limited)
   }
   // Conventional solar: limited by thermal rejection capacity
+  // Can't dump waste heat fast enough, even if you had more panels
   return Math.min(250, params.basePower * 0.8 + t * 5);
 }
 
@@ -209,8 +226,11 @@ export function getCislunarPower(year: number, params: Params): number {
     return 50000 + Math.min(1, (year - params.fissionYear) / 10) * 100000;
   }
   if (hasThermal && (year - params.thermalYear) >= 5) {
-    // Mature thermal tech enables limited cislunar operations
-    return Math.min(30000, 5000 + (year - params.thermalYear - 5) * 5000);
+    // Thermal-only cislunar is barely viable - massive solar arrays needed
+    // Same array limitations as LEO, but logistics are harder
+    // Practical limit: 1-2 MW max for early cislunar with just solar
+    const maturity = Math.min(1, (year - params.thermalYear - 5) / 5);
+    return 1000 + maturity * 1000; // 1 MW → 2 MW (array-limited)
   }
-  return 0;
+  return 0; // Cislunar not viable without thermal breakthrough at minimum
 }

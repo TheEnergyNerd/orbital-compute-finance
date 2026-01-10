@@ -56,9 +56,10 @@ export const defaults: Params = {
   aiLearn: 0.2,          // Annual compute efficiency improvement
 
   // Launch economics
+  starshipOn: true,      // Starship available (true = $15/kg floor, false = $300/kg floor)
   launchCost: 1500,      // Current launch cost ($/kg)
   launchLearn: 0.18,     // Learning rate per doubling (18% - historical aerospace)
-  launchFloor: 15,       // Physical floor: propellant (~$8) + amortization (~$4-7) + ops (~$2-4)
+  launchFloor: 15,       // Physical floor with Starship (conventional is ~$300/kg)
   prodMult: 2.5,         // Manufacturing cost multiplier
 
   maintCost: 0.015,      // Annual maintenance as fraction of capex (1.5%)
@@ -94,5 +95,8 @@ export const defaults: Params = {
   btmShareGrowth: 0.02,  // Base growth rate per year
   btmDelay: 12,          // Months to deploy BTM (vs interconnect for grid)
   btmCapexMult: 1.35,    // 35% higher capex for on-site generation
-  btmEnergyCost: 0.04    // $/kWh LCOS for solar+storage
+  btmEnergyCost: 0.04,   // $/kWh LCOS for solar+storage
+
+  // Satellite manufacturing
+  satBuildDelay: 24      // Months to build a satellite (affects carrying costs via IDC)
 };

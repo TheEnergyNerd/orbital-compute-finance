@@ -86,10 +86,11 @@ export function calcFleet(
       ? sat.powerKw * 10
       : sat.powerKw * 5;
 
+  // TFLOPS = powerKw * 1000 (W) * gflopsW (GFLOPS/W) / 1000 (GFLOPS→TFLOPS) = powerKw * gflopsW
   const geoTflopsPerPlatform =
-    (geoPowerKw * params.computeFrac * sat.gflopsW) / 1000;
+    geoPowerKw * params.computeFrac * sat.gflopsW;
   const cisTflopsPerPlatform =
-    (cislunarPowerKw * params.computeFrac * sat.gflopsW) / 1000;
+    cislunarPowerKw * params.computeFrac * sat.gflopsW;
 
   // Bandwidth per platform - scales with effective BW/TFLOP (lower with thermo/photonic)
   // Larger power budgets enable better comms (high-gain antennas, laser links, edge processing)

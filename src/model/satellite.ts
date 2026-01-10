@@ -54,47 +54,135 @@ export function calcSatellite(
   let powerMass = 0;
   let battMass = 0;
 
-  if (hasFission) {
+  // Constants for LEO Orbit Physics
+  const ECLIPSE_FRACTION = 0.40; // ~40% of orbit in shadow
+  const SUNLIGHT_FRACTION = 1.0 - ECLIPSE_FRACTION;
+  const BATTERY_HEADROOM = 1.2;  // Safety margin so we don't drain to 0%
+
+  // Track fusion-specific waste heat for combined radiator sizing
+  let fusionWasteKw = 0;
+
+  if (hasFusion) {
+    // Compact Magneto-Electrostatic Mirror Fusion
+    // Engineering specs: 150 W/kg, 1.6m × 8m for 5 MWe
+    // Uses SCO2 Brayton recompression cycle at 50% thermal efficiency
+    // → 1 MWth waste heat per 1 MWe electrical
+    const FUSION_W_PER_KG = 150; // Real engineering estimate (linear scaling 1-5 MWe)
+    powerMass = (powerKw * 1000) / FUSION_W_PER_KG;
+    // Fusion waste heat from SCO2 cycle (50% efficiency → equal thermal waste)
+    fusionWasteKw = powerKw; // 1 MWth per 1 MWe
+    // Fusion doesn't need batteries (continuous generation)
+  } else if (hasFission) {
     // Fission: ~50 W/kg for advanced MegaPower designs
     // Formula: mass = power / specific_power = (kW × 1000) / (W/kg)
     // At 50 W/kg: 5 MW = 5000 kW × 1000 / 50 = 100,000 kg = 100 tons
     const FISSION_W_PER_KG = 50;
     powerMass = (powerKw * 1000) / FISSION_W_PER_KG;
+    // Fission doesn't need batteries (continuous generation)
   } else {
-    // Solar: area × areal density
-    // Realistic thin-film: 2.0 kg/m² (Starlink V2 Mini ~2.3 kg/m²)
-    const panelArea = (powerKw * 1000) / (solarEff * SOLAR_CONSTANT);
+    // Solar Sizing: Must generate enough excess power in sunlight to cover the eclipse period
+    const generationDutyCycle = SUNLIGHT_FRACTION;
+    const panelArea = (powerKw * 1000) / (solarEff * SOLAR_CONSTANT * generationDutyCycle);
+
+    // Solar: area × areal density (2.0 kg/m² for thin-film, Starlink V2 Mini ~2.3 kg/m²)
     powerMass = panelArea * 2.0;
-    // Batteries for eclipse
+
+    // Battery Sizing: Must store enough energy to power the payload through eclipse
+    // Eclipse duration is approx 35-40 mins (~0.6 hours)
     const battDens = Math.min(1000, params.battDens + t * 35);
-    battMass = (powerKw * 0.05 * 1.5 * 1000) / battDens;
+    const eclipseHours = (90 / 60) * ECLIPSE_FRACTION; // ~0.6 hours
+    const requiredStorageWh = (powerKw * 1000) * eclipseHours * BATTERY_HEADROOM;
+    battMass = requiredStorageWh / battDens;
   }
 
   // Compute - apply SEU reliability overhead
   const computeKw = powerKw * params.computeFrac;
-  const rawTflops = (computeKw * gflopsW) / 1000;
+  // TFLOPS = computeKw * 1000 (W) * gflopsW (GFLOPS/W) / 1000 (GFLOPS→TFLOPS) = computeKw * gflopsW
+  const rawTflops = computeKw * gflopsW;
   const tflops = rawTflops * radEffects.availabilityFactor;
   const gpuEq = tflops / 1979; // H100 equivalents
-  // Compute hardware mass scales with power input
-  const compMass = Math.max(3, computeKw * 0.005); // ~5 kg per kW of compute power
+  // Compute hardware mass scales with power input: ~5 kg per kW of compute power
+  const compMass = Math.max(3, computeKw * 5);
 
   // Thermal: waste heat determines radiator mass
-  // Thermodynamic and photonic computing dramatically reduce waste heat per computation
-  const baseWasteKw = computeKw * 0.65;
-  let wasteKw = baseWasteKw;
+  // Modern chips convert ~90% of power to heat (only ~10% does useful work at system level)
+  const baseGpuWasteKw = computeKw * 0.90;
+  let gpuWasteKw = baseGpuWasteKw;
   if (hasThermoCompute || hasPhotonicCompute) {
     const deterministicFrac = 1 - params.workloadProbabilistic;
     const probFrac = params.workloadProbabilistic;
     const photonicMult = hasPhotonicCompute ? params.photonicSpaceMult : 1;
     const thermoMult = hasThermoCompute ? params.thermoSpaceMult : 1;
     const avgMult = photonicMult * deterministicFrac + thermoMult * probFrac;
-    wasteKw = baseWasteKw / avgMult;
+    gpuWasteKw = baseGpuWasteKw / avgMult;
   }
-  const radMass = (wasteKw / 1000) * radMassPerMW;
 
-  // Total mass
-  const subsystems = powerMass + battMass + compMass + radMass + 25;
-  const dryMass = subsystems * 1.1; // 10% structural margin
+  // THERMAL SYNERGY: Fusion + GPU share radiators
+  // Fusion SCO2 cycle requires low-temp rejection (20-23°C / 293K)
+  // GPUs can dump heat at similar temps → combined radiator system
+  let radMass: number;
+  if (hasFusion) {
+    // Combined waste heat: GPU + SCO2 cycle
+    // For 5 MWe: 5 MW GPU waste + 5 MW SCO2 waste = 10 MW total
+    const totalWasteKw = gpuWasteKw + fusionWasteKw;
+
+    // Low-temp radiators (293K / 20°C) for SCO2 compressor inlet
+    // Stefan-Boltzmann at 293K: P = εσT⁴ = 0.85 × 5.67e-8 × 293^4 = 355 W/m²
+    // Compare to 350K: 723 W/m² - half as efficient!
+    const LOW_TEMP_RAD_W_PER_M2 = 355;
+
+    // Advanced thin-film radiators: 0.5-1.0 kg/m² at maturity
+    const maturity = Math.min(1, (year - params.fusionYear) / 8);
+    const radKgPerM2 = 1.5 - maturity * 1.0; // 1.5 → 0.5 kg/m² over 8 years
+
+    const radAreaM2 = (totalWasteKw * 1000) / LOW_TEMP_RAD_W_PER_M2;
+    radMass = radAreaM2 * radKgPerM2;
+
+    // Thermal synergy bonus: shared infrastructure, control systems
+    // ~15% mass reduction from not duplicating thermal control
+    radMass *= 0.85;
+  } else {
+    // Non-fusion: use standard high-temp radiators
+    radMass = (gpuWasteKw / 1000) * radMassPerMW;
+  }
+
+  // Calculate data rate early (needed for comms mass estimation)
+  const effectiveBwPerTflop = getEffectiveBwPerTflop(year, params);
+  const dataRateGbps = tflops * effectiveBwPerTflop;
+
+  // Fixed subsystems (from first principles):
+  // - Avionics: flight computer, sensors, GNC - 50kg baseline, scales slightly with power
+  // - Propulsion: thrusters, tanks, fuel - scales with platform mass
+  // - Communications: antennas, transponders - scales with data rate
+  // - AOCS: reaction wheels, magnetorquers - scales with platform size
+  const avionicsMass = 50 + powerKw * 0.02; // 50kg base + 20g per kW
+  const propulsionMass = 30 + (powerMass + battMass + compMass) * 0.03; // 30kg base + 3% of payload
+  const commsMass = 20 + dataRateGbps * 0.5; // 20kg base + 0.5kg per Gbps
+  const aocsMass = 15 + powerKw * 0.01; // 15kg base + 10g per kW
+  const otherSystemsMass = avionicsMass + propulsionMass + commsMass + aocsMass;
+
+  // Calculate temporary mass to estimate volume/surface area for shielding
+  const baseMass = powerMass + battMass + compMass + radMass + otherSystemsMass;
+
+  // Radiation shielding mass
+  // Currently, radiation limits lifetime but adds zero mass cost. This fixes that.
+  let shieldMass = 0;
+  if (shell === 'leo') {
+    // LEO: Minimal shielding (mostly thermal/micrometeoroid)
+    shieldMass = baseMass * 0.02;
+  } else {
+    // MEO/Cislunar: Van Allen belts require heavy shielding for COTS silicon
+    // Approximation: 50kg/m² (5g/cm²) shielding on the surface area
+    // Estimate surface area assuming density of ~100kg/m³
+    const structureArea = Math.pow(baseMass / 100, 0.66) * 6;
+    const shieldThicknessKgM2 = 50;
+    shieldMass = structureArea * shieldThicknessKgM2;
+  }
+
+  // Total mass (including shielding)
+  const subsystems = baseMass + shieldMass;
+  const structMass = subsystems * 0.1; // 10% structural margin
+  const dryMass = subsystems + structMass;
 
   // Specific power
   const specPower = (powerKw * 1000) / dryMass;
@@ -103,17 +191,104 @@ export function calcSatellite(
     hasFission || hasFusion
       ? 0
       : (powerKw * 1000) / (solarEff * SOLAR_CONSTANT);
-  const effectiveBwPerTflop = getEffectiveBwPerTflop(year, params);
-  const dataRateGbps = tflops * effectiveBwPerTflop;
 
-  // LCOC (Levelized Cost of Compute) calculation
-  // Accounts for WACC, CRF amortization, maintenance, bandwidth, and utilization
-  // Integration cost per platform: base $15k, but scales sub-linearly with power (economies of scale)
-  // Fusion platforms (~500 MW) have ~10x lower $/MW integration cost vs fission (~20 MW)
-  const powerScale = Math.pow(powerKw / 1000, 0.3);  // 0.3 exponent = significant economies of scale
-  const integrationCost = 15000 * prodMult * Math.max(1, powerScale);
-  const capex =
-    dryMass * launchCost + dryMass * 350 * prodMult + integrationCost;
+  // =====================================================
+  // LCOC (Levelized Cost of Compute) - REALISTIC COSTING
+  // =====================================================
+  // Reference: 15 kW GEO comsat = $200-500M
+  // A 240 kW LEO compute platform should be $500M-1B+ in 2026
+
+  // POWER SYSTEM COSTS ($/W basis with learning curves)
+  // Each technology has its own learning trajectory
+
+  // SOLAR: Mature technology, slow learning (10%/yr), floor at $100/W
+  // 2026: $500/W → 2040: ~$100/W
+  const solarLearnRate = 0.10;
+  const solarCostPerW = Math.max(100, 500 * Math.pow(1 - solarLearnRate, t));
+
+  // FISSION: Industrial nuclear, moderate learning (12%/yr), floor at $15/W
+  // First units $50/W, mature at $15/W (similar to ground SMRs at scale)
+  const fissionMaturity = hasFission ? Math.min(1, (year - params.fissionYear) / 12) : 0;
+  const fissionCostPerW = Math.max(15, 50 * (1 - fissionMaturity * 0.7));
+
+  // FUSION: New tech, FAST learning (20%/yr from first deployment), floor at $10/W
+  // Compact magneto-electrostatic mirror is industrial equipment, not semiconductor
+  // First units $100/W, drops rapidly to $10-20/W as manufacturing scales
+  const fusionMaturity = hasFusion ? Math.min(1, (year - params.fusionYear) / 8) : 0;
+  const fusionCostPerW = Math.max(10, 100 * (1 - fusionMaturity * 0.9));
+
+  const POWER_COST_PER_W = {
+    solar: solarCostPerW,
+    fission: fissionCostPerW,
+    fusion: fusionCostPerW,
+  };
+
+  // OTHER COMPONENT COSTS ($/kg basis)
+  const COMPONENT_COSTS_PER_KG = {
+    battery: 500,     // $/kg - space-rated Li-ion (not commodity!)
+    compute: 50000,   // $/kg - rad-hard compute (GPUs + boards + enclosures)
+    radiator: 5000,   // $/kg - deployable radiator systems
+    shield: 1000,     // $/kg - radiation shielding
+    structure: 3000,  // $/kg - composite bus structure
+    avionics: 100000, // $/kg - flight computers, sensors, GNC
+    propulsion: 8000, // $/kg - electric propulsion + propellant
+    aocs: 15000,      // $/kg - reaction wheels, star trackers
+  };
+
+  // OPTICAL COMMUNICATION TERMINALS
+  // High-bandwidth laser links are expensive: $5-20M per terminal in 2026
+  // Cost decreases with volume production
+  const opticalTerminalCost = 8e6 * prodMult; // $8M baseline, scales with learning
+  const numOpticalTerminals = Math.max(2, Math.ceil(dataRateGbps / 10)); // ~10 Gbps per terminal
+  const opticalCommsCost = numOpticalTerminals * opticalTerminalCost;
+
+  // Calculate hardware costs
+  let mfgCostPower: number;
+  if (hasFusion) {
+    mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.fusion * prodMult;
+  } else if (hasFission) {
+    mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.fission * prodMult;
+  } else {
+    mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.solar * prodMult;
+  }
+  const mfgCostBatt = battMass * COMPONENT_COSTS_PER_KG.battery * prodMult;
+  const mfgCostCompute = compMass * COMPONENT_COSTS_PER_KG.compute * prodMult;
+  const mfgCostRadiator = radMass * COMPONENT_COSTS_PER_KG.radiator * prodMult;
+  const mfgCostShield = shieldMass * COMPONENT_COSTS_PER_KG.shield * prodMult;
+  const mfgCostStruct = structMass * COMPONENT_COSTS_PER_KG.structure * prodMult;
+  const mfgCostAvionics = avionicsMass * COMPONENT_COSTS_PER_KG.avionics * prodMult;
+  const mfgCostPropulsion = propulsionMass * COMPONENT_COSTS_PER_KG.propulsion * prodMult;
+  const mfgCostAocs = aocsMass * COMPONENT_COSTS_PER_KG.aocs * prodMult;
+
+  const hardwareCost = mfgCostPower + mfgCostBatt + mfgCostCompute +
+                       mfgCostRadiator + mfgCostShield + mfgCostStruct +
+                       mfgCostAvionics + mfgCostPropulsion + mfgCostAocs + opticalCommsCost;
+
+  // INTEGRATION & TEST: 60% of hardware cost (industry standard)
+  const integrationCost = hardwareCost * 0.60;
+
+  // LAUNCH COST
+  const launchCostTotal = dryMass * launchCost;
+
+  // INSURANCE: 12% of (hardware + launch) for launch + first year on-orbit
+  const insuranceCost = (hardwareCost + integrationCost + launchCostTotal) * 0.12;
+
+  // GROUND SEGMENT: Mission ops center, ground stations, customer infrastructure
+  // Base $15M + scales with data rate (more ground stations needed)
+  // Note: Ground segment doesn't scale with satellite prodMult, but does improve over time
+  const groundSegmentLearn = Math.max(0.4, Math.pow(0.90, t)); // 10% annual improvement, floor at 40%
+  const groundSegmentCost = (15e6 + dataRateGbps * 0.5e6) * groundSegmentLearn;
+
+  // INTEREST DURING CONSTRUCTION (IDC)
+  // Longer build times = more carrying cost on capital before revenue starts
+  // IDC = CAPEX * WACC * (build_time / 2) - assuming linear spending over build period
+  const buildMonths = params.satBuildDelay || 24; // default 24 months if not specified
+  const buildYears = buildMonths / 12;
+  const baseCapex = hardwareCost + integrationCost + launchCostTotal + insuranceCost + groundSegmentCost;
+  const idc = baseCapex * params.waccOrbital * (buildYears / 2);
+
+  // Total CAPEX = base costs + interest during construction
+  const capex = baseCapex + idc;
   const crf = getCRF(params.waccOrbital, radEffects.effectiveLife);
   const annualCapex = capex * crf;
   const annualMaint = capex * params.maintCost;
@@ -160,7 +335,9 @@ export function calcSatellite(
       batt: battMass,
       comp: compMass,
       rad: radMass,
-      struct: subsystems * 0.1
+      shield: shieldMass,
+      struct: structMass,
+      other: otherSystemsMass  // avionics + propulsion + comms + aocs
     },
     hasThermal,
     hasFission,
