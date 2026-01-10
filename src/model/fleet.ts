@@ -262,18 +262,20 @@ export function calcFleet(
   // Each constraint ratio: <1 means constrained, lower = tighter
   const constraints: { name: string; ratio: number }[] = [];
 
-  // 1. Thermal constraint - ALWAYS check this first
-  // Before thermal/fission breakthrough, heat rejection limits everything
-  // Even after breakthroughs, satellite may still be thermally limited
-  if (sat.thermalLimited) {
-    // Satellite compute is clipped by radiator capacity
-    constraints.push({ name: 'thermal', ratio: 1 - sat.thermalMargin });
-  } else if (!hasThermal && !hasFission && !hasFusion) {
-    // No breakthrough yet - thermal is definitely the limit
-    // Ratio based on how far we are from thermal breakthrough
-    const yearsToThermal = params.thermalYear - year;
-    const thermalRatio = Math.max(0.1, yearsToThermal / 10);
-    constraints.push({ name: 'thermal', ratio: thermalRatio });
+  // 1. Thermal constraint - ALWAYS present, varies by headroom
+  // thermalMargin = waste/capacity, so headroom = 1 - margin
+  // Lower headroom = tighter constraint
+  const thermalHeadroom = Math.max(0, 1 - sat.thermalMargin);
+
+  // Before breakthroughs, thermal is extra-constrained
+  // After breakthroughs, still constrained if near capacity
+  if (!hasThermal && !hasFission && !hasFusion) {
+    // Pre-breakthrough: thermal is VERY limiting (small radiator budget)
+    // Force thermal to be tight constraint
+    constraints.push({ name: 'thermal', ratio: Math.min(0.2, thermalHeadroom) });
+  } else if (sat.thermalLimited || thermalHeadroom < 0.3) {
+    // Post-breakthrough but still thermally constrained
+    constraints.push({ name: 'thermal', ratio: thermalHeadroom });
   }
 
   // 2. Launch capacity
