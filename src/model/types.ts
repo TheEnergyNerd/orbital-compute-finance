@@ -128,6 +128,11 @@ export interface SatelliteResult {
   hasPhotonicCompute: boolean;
   radMassPerMW: number;
   radEffects: RadiationEffects;
+  // Thermal constraint tracking
+  thermalLimited: boolean;      // True if compute was clipped by thermal capacity
+  radCapacityKw: number;        // Radiator heat rejection capacity
+  computeKw: number;            // Actual compute power (may be less than desired)
+  thermalMargin: number;        // Fraction of thermal capacity used (0-1)
 }
 
 export interface GroundResult {

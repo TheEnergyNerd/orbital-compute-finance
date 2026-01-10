@@ -22,8 +22,11 @@ export function calcGround(
   const yearBtmShare = getBtmShare(year, params);
 
   // Hardware cost with WACC/CRF
+  // GPU price declines ~16%/year (Moore's Law + competition)
   const gpuPrice = 25000 * Math.pow(0.84, t);
-  const hwCapex = (gpuPrice / 3) / (gflopsW / 2800);
+  // Server overhead (chassis, networking, power supplies) = 1.5x raw GPU cost
+  // Note: /3 was wrong - that's depreciation, which CRF already handles
+  const hwCapex = (gpuPrice * 1.5) / (gflopsW / 2800);
 
   // Apply capex premium for BTM portion
   const btmCapexOverhead = yearBtmShare * (params.btmCapexMult - 1);

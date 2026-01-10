@@ -7,10 +7,18 @@ import { calcSatellite } from './satellite';
 
 /**
  * FLEET CALCULATION - MULTI-SHELL
- * Fleet scales DOWN to match available bandwidth (bandwidth-constrained scaling)
+ * Fleet scales DOWN to match constraints:
+ * - Bandwidth capacity
+ * - Market demand
+ * - Launch capacity (Starship flights/year)
  */
 // Track previous year's platforms for annual mass calculation
 let prevTotalPlatforms = 0;
+
+// Maximum Starship launches per year (aggressive but plausible)
+// SpaceX targets ~100 flights/year by 2026, scaling to ~1000+ by 2030s
+// 2000/year represents mature operations with multiple launch sites
+const MAX_LAUNCHES_PER_YEAR = 2000;
 
 export function calcFleet(
   year: number,
@@ -47,8 +55,9 @@ export function calcFleet(
   } else {
     const yearsPost = year - crossoverYear;
 
-    // LEO fills FIRST - doubles every 1.2 years until full
-    const leoGrowth = Math.round(500 * Math.pow(2, yearsPost / 1.2));
+    // LEO fills FIRST - doubles every 2.5 years (was 1.2, unrealistic)
+    // This reflects manufacturing ramp, supply chain, workforce scaling
+    const leoGrowth = Math.round(500 * Math.pow(2, yearsPost / 2.5));
     leoUnconstrained = Math.min(SHELLS.leo.capacity, leoGrowth);
     const leoFull = leoUnconstrained >= SHELLS.leo.capacity * 0.95;
 
@@ -165,6 +174,31 @@ export function calcFleet(
     cisPlatforms = 0;
   }
 
+  // STEP 3c: Launch capacity constraint
+  // Calculate annual mass needed and check against Starship capacity
+  const totalPlatformsPreLaunch = leoPlatforms + meoPlatforms + geoPlatforms + cisPlatforms;
+  const leoRadEffectsForCalc = getShellRadiationEffects('leo', year, params);
+  const replacementRateForCalc = leoRadEffectsForCalc.replacementRate;
+
+  // Annual mass = new platforms + replacements
+  const newPlatformsPreLaunch = Math.max(0, totalPlatformsPreLaunch - prevTotalPlatforms);
+  const replacementMassPreLaunch = totalPlatformsPreLaunch * replacementRateForCalc * sat.dryMass;
+  const newDeploymentMassPreLaunch = newPlatformsPreLaunch * sat.dryMass;
+  const annualMassPreLaunch = newDeploymentMassPreLaunch + replacementMassPreLaunch;
+  const requiredFlights = annualMassPreLaunch / STARSHIP_PAYLOAD_KG;
+
+  // Track if launch capacity is binding
+  let launchConstrained = false;
+  if (requiredFlights > MAX_LAUNCHES_PER_YEAR) {
+    launchConstrained = true;
+    // Scale down ALL shells proportionally to fit launch capacity
+    const launchScaleFactor = MAX_LAUNCHES_PER_YEAR / requiredFlights;
+    leoPlatforms = Math.round(leoPlatforms * launchScaleFactor);
+    meoPlatforms = Math.round(meoPlatforms * launchScaleFactor);
+    geoPlatforms = Math.round(geoPlatforms * launchScaleFactor);
+    cisPlatforms = Math.round(cisPlatforms * launchScaleFactor);
+  }
+
   // === Power by shell ===
   let leoPowerTw = (leoPlatforms * sat.powerKw) / 1e9;
   let meoPowerTw = (meoPlatforms * sat.powerKw * 0.8) / 1e9; // MEO Van Allen penalty
@@ -229,7 +263,9 @@ export function calcFleet(
   if (!crossoverYear || year < crossoverYear) {
     bottleneck = 'thermal';
   } else {
-    if (bwConstraintRatio < 0.9 && bwConstraintRatio < demandSell) bottleneck = 'bandwidth';
+    // Launch capacity is most binding constraint
+    if (launchConstrained) bottleneck = 'launch_capacity';
+    else if (bwConstraintRatio < 0.9 && bwConstraintRatio < demandSell) bottleneck = 'bandwidth';
     else if (demandSell < 0.9) bottleneck = 'demand';
     else if (leoUtil > 0.9 || geoUtil > 0.9) bottleneck = 'slots';
     else if (!hasThermal && !hasFission) bottleneck = 'thermal';

@@ -1,4 +1,4 @@
-import { SLA, SOLAR_CONSTANT } from './constants';
+import { SLA, SOLAR_CONSTANT, STEFAN_BOLTZMANN } from './constants';
 import type { Params, SatelliteResult } from './types';
 import {
   getLEOPower,
@@ -95,56 +95,103 @@ export function calcSatellite(
     battMass = requiredStorageWh / battDens;
   }
 
-  // Compute - apply SEU reliability overhead
-  const computeKw = powerKw * params.computeFrac;
-  // TFLOPS = computeKw * 1000 (W) * gflopsW (GFLOPS/W) / 1000 (GFLOPS→TFLOPS) = computeKw * gflopsW
-  const rawTflops = computeKw * gflopsW;
-  const tflops = rawTflops * radEffects.availabilityFactor;
-  const gpuEq = tflops / 1979; // H100 equivalents
-  // Compute hardware mass scales with power input: ~5 kg per kW of compute power
-  const compMass = Math.max(3, computeKw * 5);
+  // =====================================================
+  // THERMAL CONSTRAINT MODEL
+  // =====================================================
+  // Radiator capacity is a CONSTRAINT that limits compute power.
+  // Instead of sizing radiators to match waste heat (infinite scaling),
+  // we define a radiator budget and clip compute if it exceeds capacity.
 
-  // Thermal: waste heat determines radiator mass
-  // Modern chips convert ~90% of power to heat (only ~10% does useful work at system level)
-  const baseGpuWasteKw = computeKw * 0.90;
-  let gpuWasteKw = baseGpuWasteKw;
+  // Step 1: Define radiator mass budget based on platform class
+  // Radiators are typically 10-25% of spacecraft dry mass
+  // Larger platforms can afford more radiator mass
+  let radMassBudget: number;
+  let radTempK: number;
+  let radKgPerM2: number;
+
+  if (hasFusion) {
+    // Fusion: SCO2 cycle requires low-temp rejection (293K)
+    // Larger radiator budget due to combined GPU + SCO2 waste
+    radMassBudget = powerMass * 0.40; // 40% of power system mass for radiators
+    radTempK = 293; // 20°C for SCO2 compressor inlet
+    const maturity = Math.min(1, (year - params.fusionYear) / 8);
+    radKgPerM2 = 1.5 - maturity * 1.0; // 1.5 → 0.5 kg/m² over 8 years
+  } else if (hasFission) {
+    // Fission: can run at higher temps, more efficient radiators
+    radMassBudget = powerMass * 0.25; // 25% of power system mass
+    radTempK = params.opTemp; // Use operating temp parameter
+    radKgPerM2 = hasThermal ? 0.8 : 2.5; // Droplet vs conventional
+  } else {
+    // Solar: limited mass budget, conventional radiators
+    radMassBudget = (powerMass + battMass) * 0.20; // 20% of power+battery mass
+    radTempK = params.opTemp;
+    radKgPerM2 = hasThermal ? 1.0 : 3.0; // Droplet vs conventional
+  }
+
+  // Apply minimum radiator mass (can't go below structural minimum)
+  radMassBudget = Math.max(50, radMassBudget);
+
+  // Step 2: Calculate radiator heat rejection capacity (Stefan-Boltzmann)
+  // P = εσT⁴ × Area, so Area = radMassBudget / radKgPerM2
+  // Capacity = ε × σ × T⁴ × Area
+  const radAreaM2 = radMassBudget / radKgPerM2;
+  const radCapacityW = params.emissivity * STEFAN_BOLTZMANN * Math.pow(radTempK, 4) * radAreaM2;
+  const radCapacityKw = radCapacityW / 1000;
+
+  // Step 3: Calculate maximum compute power based on thermal capacity
+  // GPU waste heat fraction (90% of compute power becomes heat)
+  const GPU_WASTE_FRACTION = 0.90;
+
+  // For fusion, must also account for SCO2 cycle waste heat
+  let thermalBudgetForCompute: number;
+  if (hasFusion) {
+    // Fusion waste = electrical output (50% thermal efficiency)
+    // Thermal budget for compute = total capacity - fusion waste
+    thermalBudgetForCompute = Math.max(0, radCapacityKw - fusionWasteKw);
+  } else {
+    thermalBudgetForCompute = radCapacityKw;
+  }
+
+  // Thermo/photonic computing reduces waste heat per compute
+  let wasteHeatMultiplier = GPU_WASTE_FRACTION;
   if (hasThermoCompute || hasPhotonicCompute) {
     const deterministicFrac = 1 - params.workloadProbabilistic;
     const probFrac = params.workloadProbabilistic;
     const photonicMult = hasPhotonicCompute ? params.photonicSpaceMult : 1;
     const thermoMult = hasThermoCompute ? params.thermoSpaceMult : 1;
     const avgMult = photonicMult * deterministicFrac + thermoMult * probFrac;
-    gpuWasteKw = baseGpuWasteKw / avgMult;
+    wasteHeatMultiplier = GPU_WASTE_FRACTION / avgMult;
   }
 
-  // THERMAL SYNERGY: Fusion + GPU share radiators
-  // Fusion SCO2 cycle requires low-temp rejection (20-23°C / 293K)
-  // GPUs can dump heat at similar temps → combined radiator system
-  let radMass: number;
-  if (hasFusion) {
-    // Combined waste heat: GPU + SCO2 cycle
-    // For 5 MWe: 5 MW GPU waste + 5 MW SCO2 waste = 10 MW total
-    const totalWasteKw = gpuWasteKw + fusionWasteKw;
+  // Max compute before thermal limit: thermalBudget = computeKw × wasteHeatMultiplier
+  const maxComputeKwThermal = thermalBudgetForCompute / wasteHeatMultiplier;
 
-    // Low-temp radiators (293K / 20°C) for SCO2 compressor inlet
-    // Stefan-Boltzmann at 293K: P = εσT⁴ = 0.85 × 5.67e-8 × 293^4 = 355 W/m²
-    // Compare to 350K: 723 W/m² - half as efficient!
-    const LOW_TEMP_RAD_W_PER_M2 = 355;
+  // Step 4: Compute is limited by BOTH power availability AND thermal capacity
+  const desiredComputeKw = powerKw * params.computeFrac;
+  const computeKw = Math.min(desiredComputeKw, maxComputeKwThermal);
+  const thermalLimited = computeKw < desiredComputeKw * 0.99; // Flag if thermally constrained
 
-    // Advanced thin-film radiators: 0.5-1.0 kg/m² at maturity
-    const maturity = Math.min(1, (year - params.fusionYear) / 8);
-    const radKgPerM2 = 1.5 - maturity * 1.0; // 1.5 → 0.5 kg/m² over 8 years
+  // Step 5: Calculate actual waste heat and verify constraint
+  const actualGpuWasteKw = computeKw * wasteHeatMultiplier;
+  const totalWasteKw = actualGpuWasteKw + (hasFusion ? fusionWasteKw : 0);
 
-    const radAreaM2 = (totalWasteKw * 1000) / LOW_TEMP_RAD_W_PER_M2;
-    radMass = radAreaM2 * radKgPerM2;
-
-    // Thermal synergy bonus: shared infrastructure, control systems
-    // ~15% mass reduction from not duplicating thermal control
-    radMass *= 0.85;
-  } else {
-    // Non-fusion: use standard high-temp radiators
-    radMass = (gpuWasteKw / 1000) * radMassPerMW;
+  // Sanity check: waste heat must not exceed radiator capacity
+  if (totalWasteKw > radCapacityKw * 1.01) {
+    console.warn(`Thermal violation: ${totalWasteKw.toFixed(0)} kW waste > ${radCapacityKw.toFixed(0)} kW capacity`);
   }
+
+  // Step 6: Calculate actual radiator mass used (may be less than budget if not needed)
+  const actualRadAreaM2 = (totalWasteKw * 1000) / (params.emissivity * STEFAN_BOLTZMANN * Math.pow(radTempK, 4));
+  const radMass = Math.min(radMassBudget, actualRadAreaM2 * radKgPerM2);
+
+  // Now calculate compute output from constrained compute power
+  // TFLOPS = computeKw × gflopsW (since kW × GFLOPS/W = GFLOPS, then /1000 for TFLOPS... but actually kW×1000×GFLOPS/W/1000 = kW×GFLOPS/W)
+  const rawTflops = computeKw * gflopsW;
+  const tflops = rawTflops * radEffects.availabilityFactor;
+  const gpuEq = tflops / 1979; // H100 equivalents
+
+  // Compute hardware mass scales with power input: ~5 kg per kW of compute power
+  const compMass = Math.max(3, computeKw * 5);
 
   // Calculate data rate early (needed for comms mass estimation)
   const effectiveBwPerTflop = getEffectiveBwPerTflop(year, params);
@@ -345,6 +392,11 @@ export function calcSatellite(
     hasThermoCompute,
     hasPhotonicCompute,
     radMassPerMW,
-    radEffects
+    radEffects,
+    // Thermal constraint tracking
+    thermalLimited,
+    radCapacityKw,
+    computeKw,
+    thermalMargin: totalWasteKw / radCapacityKw
   };
 }
