@@ -258,52 +258,53 @@ export function calcFleet(
   // Bandwidth constraint ratio for bottleneck detection
   const bwConstraintRatio = totalUnconstrainedBw > 0 ? bwAvailGbps / totalUnconstrainedBw : 1;
 
-  // Bottleneck detection - identify the tightest constraint
+  // Bottleneck detection - identify the tightest physical constraint
   // Each constraint ratio: <1 means constrained, lower = tighter
-  let bottleneck = 'none';
+  const constraints: { name: string; ratio: number }[] = [];
 
-  if (!crossoverYear || year < crossoverYear) {
-    // Pre-crossover: not economically viable yet
-    bottleneck = 'economics';
+  // 1. Thermal constraint - ALWAYS check this first
+  // Before thermal/fission breakthrough, heat rejection limits everything
+  // Even after breakthroughs, satellite may still be thermally limited
+  if (sat.thermalLimited) {
+    // Satellite compute is clipped by radiator capacity
+    constraints.push({ name: 'thermal', ratio: 1 - sat.thermalMargin });
+  } else if (!hasThermal && !hasFission && !hasFusion) {
+    // No breakthrough yet - thermal is definitely the limit
+    // Ratio based on how far we are from thermal breakthrough
+    const yearsToThermal = params.thermalYear - year;
+    const thermalRatio = Math.max(0.1, yearsToThermal / 10);
+    constraints.push({ name: 'thermal', ratio: thermalRatio });
+  }
+
+  // 2. Launch capacity
+  if (launchConstrained) {
+    constraints.push({ name: 'launch_capacity', ratio: 0.5 });
+  }
+
+  // 3. Bandwidth constraint
+  if (bwConstraintRatio < 1) {
+    constraints.push({ name: 'bandwidth', ratio: bwConstraintRatio });
+  }
+
+  // 4. Demand constraint
+  if (demandSell < 1) {
+    constraints.push({ name: 'demand', ratio: demandSell });
+  }
+
+  // 5. Orbital slot capacity
+  const slotUtil = Math.max(leoUtil, geoUtil);
+  if (slotUtil > 0.8) {
+    constraints.push({ name: 'slots', ratio: 1 - slotUtil });
+  }
+
+  // Find the tightest constraint (lowest ratio)
+  let bottleneck: string;
+  if (constraints.length === 0) {
+    // No constraints binding - power/manufacturing is the limit
+    bottleneck = 'power';
   } else {
-    // Calculate constraint tightness (lower = more binding)
-    const constraints: { name: string; ratio: number }[] = [];
-
-    // 1. Launch capacity (launchConstrained flag or ratio)
-    if (launchConstrained) {
-      constraints.push({ name: 'launch_capacity', ratio: 0.5 }); // Already binding
-    }
-
-    // 2. Bandwidth constraint
-    if (bwConstraintRatio < 1) {
-      constraints.push({ name: 'bandwidth', ratio: bwConstraintRatio });
-    }
-
-    // 3. Demand constraint
-    if (demandSell < 1) {
-      constraints.push({ name: 'demand', ratio: demandSell });
-    }
-
-    // 4. Orbital slot capacity
-    const slotUtil = Math.max(leoUtil, geoUtil);
-    if (slotUtil > 0.8) {
-      constraints.push({ name: 'slots', ratio: 1 - slotUtil });
-    }
-
-    // 5. Satellite thermal constraint (from calcSatellite)
-    if (sat.thermalLimited) {
-      constraints.push({ name: 'thermal', ratio: 1 - sat.thermalMargin });
-    }
-
-    // 6. Power system scaling
-    // If none of the above are binding, power scaling is the limit
-    if (constraints.length === 0) {
-      bottleneck = 'power';
-    } else {
-      // Find the tightest (lowest ratio) constraint
-      constraints.sort((a, b) => a.ratio - b.ratio);
-      bottleneck = constraints[0].name;
-    }
+    constraints.sort((a, b) => a.ratio - b.ratio);
+    bottleneck = constraints[0].name;
   }
 
   const leoRadEffects = getShellRadiationEffects('leo', year, params);
