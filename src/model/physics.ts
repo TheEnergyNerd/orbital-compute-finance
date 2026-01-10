@@ -37,9 +37,12 @@ export function getRadiatorMassPerMW(year: number, powerKw: number, params: Para
     return baseMass * powerPenalty;
   }
 
-  // Advanced thermal: ~20 kg/MW base
+  // Advanced thermal (droplet radiators):
+  // Stefan-Boltzmann: at 350K, 723 W/m². At 0.3-0.5 kg/m²: 415-690 kg/MW
+  // At higher temps (500K): ~100 kg/MW achievable
+  // Model: 50-100 kg/MW mature (aggressive but within physics bounds)
   const maturity = Math.min(1, (year - params.thermalYear) / 8);
-  const advancedBase = 20 - maturity * 12;
+  const advancedBase = 100 - maturity * 50; // 100 kg/MW → 50 kg/MW over 8 years
   return advancedBase * tempFactor * emissivityFactor;
 }
 

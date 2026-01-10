@@ -23,7 +23,7 @@ export const SLA = 0.999;
  * - capacity: Maximum platform count before orbital congestion issues
  */
 export const SHELLS: Record<string, Shell> = {
-  leo:      { alt: 550,    latency: 3.7,   tidMult: 1.0,  seuMult: 1.0,  capacity: 500000 },   // Low Earth Orbit (Elon's 500k Starlink v3 validates)
+  leo:      { alt: 550,    latency: 3.7,   tidMult: 1.0,  seuMult: 1.0,  capacity: 2000000 },  // Low Earth Orbit - 200-2000km shell supports millions
   meo:      { alt: 10000,  latency: 67,    tidMult: 50.0, seuMult: 20.0, capacity: 0      },   // Van Allen belts - NOT viable for compute (GPS works but simple payloads)
   geo:      { alt: 35786,  latency: 120,   tidMult: 0.6,  seuMult: 0.8,  capacity: 1800   },   // Geostationary orbit (ITU slot-limited)
   cislunar: { alt: 384400, latency: 1300,  tidMult: 0.4,  seuMult: 1.2,  capacity: 1e8    }    // Earth-Moon space (~10^18 km³, effectively unlimited)

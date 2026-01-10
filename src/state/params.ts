@@ -58,7 +58,7 @@ export const defaults: Params = {
   // Launch economics
   launchCost: 1500,      // Current launch cost ($/kg)
   launchLearn: 0.18,     // Learning rate per doubling (18% - historical aerospace)
-  launchFloor: 10,       // Minimum achievable launch cost ($/kg)
+  launchFloor: 15,       // Physical floor: propellant (~$8) + amortization (~$4-7) + ops (~$2-4)
   prodMult: 2.5,         // Manufacturing cost multiplier
 
   maintCost: 0.015,      // Annual maintenance as fraction of capex (1.5%)

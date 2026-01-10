@@ -55,13 +55,16 @@ export function calcSatellite(
   let battMass = 0;
 
   if (hasFission) {
-    // Fission: ~20 W/kg for advanced Kilopower/Megapower designs
-    // (Current Kilopower is ~2.5 W/kg, future targets 10-40 W/kg)
-    powerMass = powerKw * 0.05; // 20 W/kg
+    // Fission: ~50 W/kg for advanced MegaPower designs
+    // Formula: mass = power / specific_power = (kW × 1000) / (W/kg)
+    // At 50 W/kg: 5 MW = 5000 kW × 1000 / 50 = 100,000 kg = 100 tons
+    const FISSION_W_PER_KG = 50;
+    powerMass = (powerKw * 1000) / FISSION_W_PER_KG;
   } else {
-    // Solar: area * areal density
+    // Solar: area × areal density
+    // Realistic thin-film: 2.0 kg/m² (Starlink V2 Mini ~2.3 kg/m²)
     const panelArea = (powerKw * 1000) / (solarEff * SOLAR_CONSTANT);
-    powerMass = panelArea * 1.2;
+    powerMass = panelArea * 2.0;
     // Batteries for eclipse
     const battDens = Math.min(1000, params.battDens + t * 35);
     battMass = (powerKw * 0.05 * 1.5 * 1000) / battDens;

@@ -70,8 +70,11 @@ export function calcGround(
     // High scarcity: slower growth (demand destruction kicks in)
     premium = 2.2 + (unmetRatio - 0.3) * 2.5;
   } else {
-    // Extreme scarcity: plateau (demand destruction dominates)
-    premium = Math.min(6, 4 + (unmetRatio - 1) * 0.5);
+    // Extreme scarcity: logarithmic growth (demand destruction slows price rise but doesn't stop it)
+    // At 10x demand/supply: ~6x premium
+    // At 100x demand/supply: ~10x premium
+    // At 1000x demand/supply: ~14x premium
+    premium = 4 + 2 * Math.log10(unmetRatio);
   }
 
   // Carbon intensity
