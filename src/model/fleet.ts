@@ -258,18 +258,52 @@ export function calcFleet(
   // Bandwidth constraint ratio for bottleneck detection
   const bwConstraintRatio = totalUnconstrainedBw > 0 ? bwAvailGbps / totalUnconstrainedBw : 1;
 
-  // Bottleneck detection
-  let bottleneck = 'thermal';
+  // Bottleneck detection - identify the tightest constraint
+  // Each constraint ratio: <1 means constrained, lower = tighter
+  let bottleneck = 'none';
+
   if (!crossoverYear || year < crossoverYear) {
-    bottleneck = 'thermal';
+    // Pre-crossover: not economically viable yet
+    bottleneck = 'economics';
   } else {
-    // Launch capacity is most binding constraint
-    if (launchConstrained) bottleneck = 'launch_capacity';
-    else if (bwConstraintRatio < 0.9 && bwConstraintRatio < demandSell) bottleneck = 'bandwidth';
-    else if (demandSell < 0.9) bottleneck = 'demand';
-    else if (leoUtil > 0.9 || geoUtil > 0.9) bottleneck = 'slots';
-    else if (!hasThermal && !hasFission) bottleneck = 'thermal';
-    else bottleneck = 'power';
+    // Calculate constraint tightness (lower = more binding)
+    const constraints: { name: string; ratio: number }[] = [];
+
+    // 1. Launch capacity (launchConstrained flag or ratio)
+    if (launchConstrained) {
+      constraints.push({ name: 'launch_capacity', ratio: 0.5 }); // Already binding
+    }
+
+    // 2. Bandwidth constraint
+    if (bwConstraintRatio < 1) {
+      constraints.push({ name: 'bandwidth', ratio: bwConstraintRatio });
+    }
+
+    // 3. Demand constraint
+    if (demandSell < 1) {
+      constraints.push({ name: 'demand', ratio: demandSell });
+    }
+
+    // 4. Orbital slot capacity
+    const slotUtil = Math.max(leoUtil, geoUtil);
+    if (slotUtil > 0.8) {
+      constraints.push({ name: 'slots', ratio: 1 - slotUtil });
+    }
+
+    // 5. Satellite thermal constraint (from calcSatellite)
+    if (sat.thermalLimited) {
+      constraints.push({ name: 'thermal', ratio: 1 - sat.thermalMargin });
+    }
+
+    // 6. Power system scaling
+    // If none of the above are binding, power scaling is the limit
+    if (constraints.length === 0) {
+      bottleneck = 'power';
+    } else {
+      // Find the tightest (lowest ratio) constraint
+      constraints.sort((a, b) => a.ratio - b.ratio);
+      bottleneck = constraints[0].name;
+    }
   }
 
   const leoRadEffects = getShellRadiationEffects('leo', year, params);

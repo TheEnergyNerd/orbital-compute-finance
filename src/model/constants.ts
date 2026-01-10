@@ -41,8 +41,9 @@ export const SHELL_COST_MULT: Record<string, number> = {
 };
 
 // Scenario definitions for sensitivity analysis
+// Wider bands to capture true uncertainty in multi-decade projections
 export const SCENARIOS: Record<string, Scenario> = {
-  aggressive:   { learnMult: 1.4, techYearOffset: -3, demandMult: 1.3, launchLearnMult: 1.3 },  // Optimistic technology and market assumptions
+  aggressive:   { learnMult: 2.0, techYearOffset: -5, demandMult: 1.5, launchLearnMult: 1.5 },  // Optimistic: faster tech, higher demand, better economics
   baseline:     { learnMult: 1.0, techYearOffset: 0,  demandMult: 1.0, launchLearnMult: 1.0 },  // Reference case
-  conservative: { learnMult: 0.6, techYearOffset: 5,  demandMult: 0.7, launchLearnMult: 0.7 }   // Pessimistic assumptions
+  conservative: { learnMult: 0.4, techYearOffset: 8,  demandMult: 0.5, launchLearnMult: 0.5 }   // Pessimistic: slower tech, lower demand, worse economics
 };
