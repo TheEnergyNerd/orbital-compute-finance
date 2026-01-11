@@ -252,7 +252,7 @@ export interface SimulationState {
   cumulativeSatellitesBuilt: number;
   // Current metrics
   orbitalPowerTW: number;
-  deliveredComputeExaflops: number;
+  fleetCapacityExaflops: number;  // Instantaneous orbital compute capacity (not delivered)
   globalComputeExaflops: number;  // ground + orbital
   // Derived/computed
   rndStock: number;               // K, for AI acceleration

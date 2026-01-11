@@ -5,6 +5,7 @@ import { calcGround } from './ground';
 import { calcFleet, resetFleetTracker } from './fleet';
 import { updateRnDStock, updateLaunchLearning, initSimulationState } from './learning';
 import { getLunarReadiness, getLunarUnlockYear } from './lunar';
+import { getGroundEfficiency } from './physics';
 
 /**
  * Get scenario-adjusted parameters
@@ -75,9 +76,11 @@ export function runScenario(
 
     // Current metrics
     const orbitalPowerTW = fleet.totalPowerTw;
-    const deliveredComputeExaflops = fleet.fleetTflops / 1e6;  // TFLOPS to Exaflops
-    const groundComputeExaflops = gnd.groundSupply * 3;  // Rough: 3 Exaflops per GW
-    const globalComputeExaflops = deliveredComputeExaflops + groundComputeExaflops;
+    const fleetCapacityExaflops = fleet.fleetTflops / 1e6;  // TFLOPS to ExaFLOPS (instantaneous capacity)
+    // Ground compute: GW * GFLOPS/W = 1e9 W * 1e9 FLOPS/W = 1e18 FLOPS = ExaFLOPS
+    const groundGflopsW = getGroundEfficiency(year, params);
+    const groundComputeExaflops = gnd.groundSupply * groundGflopsW;
+    const globalComputeExaflops = fleetCapacityExaflops + groundComputeExaflops;
 
     // Update R&D stock
     const rndStock = updateRnDStock(globalComputeExaflops, prevState.rndStock);
@@ -99,7 +102,7 @@ export function runScenario(
       cumulativeOrbitalFlights,
       cumulativeSatellitesBuilt,
       orbitalPowerTW,
-      deliveredComputeExaflops,
+      fleetCapacityExaflops,
       globalComputeExaflops,
       rndStock,
       lunarReadiness: 0,  // Will be set below

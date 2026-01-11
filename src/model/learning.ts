@@ -94,7 +94,7 @@ export function initSimulationState(): SimulationState {
     cumulativeOrbitalFlights: 0,
     cumulativeSatellitesBuilt: 0,
     orbitalPowerTW: 0,
-    deliveredComputeExaflops: 0,
+    fleetCapacityExaflops: 0,
     globalComputeExaflops: 100,  // 2026 baseline
     rndStock: 0,
     lunarReadiness: 0,

@@ -539,6 +539,9 @@ export function calcSatellite(
   const annualBwCost = dataRateGbps * params.bwCost * 1000 * bwCostLearn * fissionBwDiscount;
   const annual = annualCapex + annualMaint + annualBwCost;
   const gpuHrs = gpuEq * 8760 * SLA;
+  // LCOC (Levelized Cost of Compute): production cost per GPU-hr assuming 100% sellability
+  // This is the marginal production cost. For delivered cost accounting for unsold capacity
+  // (demand/bandwidth/slot constraints), see fleet.lcocEffective which divides by sellableUtil
   const lcoc = gpuHrs > 0 ? annual / gpuHrs : Infinity;
 
   // Carbon intensity

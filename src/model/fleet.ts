@@ -310,7 +310,9 @@ export function calcFleet(
   const demandSell =
     fleetPowerGW <= 0 ? 1 : Math.min(1, eligibleDemandGW / fleetPowerGW);
 
-  // Effective LCOC: inflated by whichever constraint binds
+  // Effective LCOC (delivered cost): production cost inflated by unsold capacity
+  // If only 50% of compute can be sold (due to bandwidth/demand constraints),
+  // the effective cost per delivered GPU-hr doubles. See satellite.lcoc for production cost.
   const sellableUtil = Math.min(bwSell, demandSell);
   const lcocEffective = sat.lcoc / Math.max(0.01, sellableUtil);
 
