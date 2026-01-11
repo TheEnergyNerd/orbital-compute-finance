@@ -2311,8 +2311,10 @@ function runScenario(scenario) {
     });
   }
 
-  // Crossover: when orbital LCOC beats ground LCOC (base cost, not market price)
-  const crossIdx = preFleets.findIndex((f, i) => f.lcocEffective < preGnds[i].base);
+  // Crossover: when orbital production LCOC beats ground LCOC
+  // Use sat.lcoc (production cost) not lcocEffective (which depends on sellability)
+  // This gives a stable crossover point that matches what the chart shows
+  const crossIdx = sats.findIndex((sat, i) => sat.lcoc < preGnds[i].base);
   const crossoverYear = crossIdx >= 0 ? YEARS[crossIdx] : null;
   
   const fleets = YEARS.map(y => calcFleet(y, crossoverYear, params));
@@ -2670,23 +2672,24 @@ function update() {
   document.getElementById('eff-thermo').className = 'toggle-effect' + (P.thermoOn ? ' active' : '');
   
   // Core charts - LCOC with uncertainty
+  // Use sat.lcoc (production cost) for cleaner curves that match crossover detection
   // Apply mid-timeline architectural uncertainty (bands re-widen 2035-2045)
-  charts.lcoc.data.datasets[0].data = agg.fleets.map((f, i) => {
+  charts.lcoc.data.datasets[0].data = agg.sats.map((sat, i) => {
     const year = YEARS[i];
-    const baseLcoc = base.fleets[i].lcocEffective;
-    const aggLcoc = f.lcocEffective;
+    const baseLcoc = base.sats[i].lcoc;
+    const aggLcoc = sat.lcoc;
     const factor = getArchitecturalUncertainty(year, 'aggressive');
     return baseLcoc + (aggLcoc - baseLcoc) * factor;
   });
-  charts.lcoc.data.datasets[1].data = base.fleets.map(f => f.lcocEffective);
-  charts.lcoc.data.datasets[2].data = cons.fleets.map((f, i) => {
+  charts.lcoc.data.datasets[1].data = base.sats.map(s => s.lcoc);  // Production cost
+  charts.lcoc.data.datasets[2].data = cons.sats.map((sat, i) => {
     const year = YEARS[i];
-    const baseLcoc = base.fleets[i].lcocEffective;
-    const consLcoc = f.lcocEffective;
+    const baseLcoc = base.sats[i].lcoc;
+    const consLcoc = sat.lcoc;
     const factor = getArchitecturalUncertainty(year, 'conservative');
     return baseLcoc + (consLcoc - baseLcoc) * factor;
   });
-  charts.lcoc.data.datasets[3].data = gnds.map(g => g.base);  // LCOC = cost basis, not market price
+  charts.lcoc.data.datasets[3].data = gnds.map(g => g.base);  // Ground production cost
 
   charts.lcoc.update();
   
@@ -2799,21 +2802,21 @@ function update() {
   charts.powerPerTflop.data.datasets[1].data = gnds.map(g => 1 / g.gflopsW);  // Ground
   charts.powerPerTflop.update();
 
-  // Futures charts - apply architectural uncertainty to all scenario charts
-  charts.lcocScenarios.data.datasets[0].data = agg.fleets.map((f, i) => {
+  // Futures charts - use sat.lcoc (production cost) for consistency with main LCOC chart
+  charts.lcocScenarios.data.datasets[0].data = agg.sats.map((sat, i) => {
     const year = YEARS[i];
-    const baseLcoc = base.fleets[i].lcocEffective;
+    const baseLcoc = base.sats[i].lcoc;
     const factor = getArchitecturalUncertainty(year, 'aggressive');
-    return baseLcoc + (f.lcocEffective - baseLcoc) * factor;
+    return baseLcoc + (sat.lcoc - baseLcoc) * factor;
   });
-  charts.lcocScenarios.data.datasets[1].data = base.fleets.map(f => f.lcocEffective);
-  charts.lcocScenarios.data.datasets[2].data = cons.fleets.map((f, i) => {
+  charts.lcocScenarios.data.datasets[1].data = base.sats.map(s => s.lcoc);
+  charts.lcocScenarios.data.datasets[2].data = cons.sats.map((sat, i) => {
     const year = YEARS[i];
-    const baseLcoc = base.fleets[i].lcocEffective;
+    const baseLcoc = base.sats[i].lcoc;
     const factor = getArchitecturalUncertainty(year, 'conservative');
-    return baseLcoc + (f.lcocEffective - baseLcoc) * factor;
+    return baseLcoc + (sat.lcoc - baseLcoc) * factor;
   });
-  charts.lcocScenarios.data.datasets[3].data = base.gnds.map(g => g.base);  // LCOC = cost basis
+  charts.lcocScenarios.data.datasets[3].data = base.gnds.map(g => g.base);  // Ground production cost
   charts.lcocScenarios.update();
 
   charts.carbonScenarios.data.datasets[0].data = agg.sats.map((s, i) => {
