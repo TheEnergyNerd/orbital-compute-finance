@@ -38,6 +38,14 @@ export function calcSatellite(
   const gflopsW = getOrbitalEfficiency(year, params);
   const launchCost = getLaunchCost(year, params, shell);
 
+  // =====================================================
+  // GOLD-PLATED PAYLOAD FIX
+  // =====================================================
+  // When launch is cheap (Starship era), we use COTS hardware with shielding
+  // instead of expensive rad-hard hardware. This is economically coherent:
+  // cheap mass → use cheap heavy hardware, not expensive lightweight hardware.
+  const isStarshipEra = launchCost < 200;
+
   // Demand-coupled manufacturing learning (Wright's Law)
   let prodMult = params.prodMult;
   for (let y = 2026; y < year; y++) {
@@ -105,12 +113,45 @@ export function calcSatellite(
   // - Total dry mass influences radiator budget
   // - Radiator capacity then clips compute
   // - Iterate until stable (<=1% change) or max 20 iterations
+  //
+  // SEPARATE THERMAL LOOPS FOR FUSION:
+  // - Fusion SCO2 cycle needs 293K rejection (low temp for compressor inlet)
+  // - GPUs can reject at 350K (params.radTempK)
+  // - Model these as separate radiator systems so fusion waste heat
+  //   doesn't eat the compute thermal budget
 
   // Get eclipse-aware net flux for radiative balance
   const eclipseFrac = getEclipseFraction(params, year, shell);
-  const qNetSun = getRadiatorNetWPerM2(params, year, false);
-  const qNetEcl = getRadiatorNetWPerM2(params, year, true);
-  const qNetAvg = (1 - eclipseFrac) * qNetSun + eclipseFrac * qNetEcl;
+
+  // Compute radiators: operate at GPU temperature (350K default)
+  const qNetSunCompute = getRadiatorNetWPerM2(params, year, false);
+  const qNetEclCompute = getRadiatorNetWPerM2(params, year, true);
+  const qNetAvgCompute = (1 - eclipseFrac) * qNetSunCompute + eclipseFrac * qNetEclCompute;
+
+  // Fusion radiators: operate at 293K (SCO2 cycle requirement)
+  // Lower temp = less Stefan-Boltzmann power = need more area
+  let qNetAvgFusion = qNetAvgCompute;
+  if (hasFusion) {
+    const fusionRadTemp = 293; // K, SCO2 cycle inlet temp
+    const sigma = 5.670374419e-8;
+    const eps = params.radEmissivity || 0.85;
+    const sides = (params.radTwoSided !== false) ? 2 : 1;
+
+    // Fusion radiator emission (lower temp = lower power)
+    const qEmitFusion = sides * eps * sigma * Math.pow(fusionRadTemp, 4);
+
+    // Absorbed heat (same as compute radiators)
+    const qSolarAbs = (params.qSolarAbsWPerM2 || 200);
+    const qAlbedoAbs = (params.qAlbedoAbsWPerM2 || 50);
+    const qEarthIrAbs = (params.qEarthIrAbsWPerM2 || 150);
+
+    // Eclipse-weighted average
+    const qAbsSun = qSolarAbs + qAlbedoAbs + qEarthIrAbs;
+    const qAbsEcl = qEarthIrAbs;
+    const qNetSunFusion = Math.max(1, qEmitFusion - qAbsSun);
+    const qNetEclFusion = Math.max(1, qEmitFusion - qAbsEcl);
+    qNetAvgFusion = (1 - eclipseFrac) * qNetSunFusion + eclipseFrac * qNetEclFusion;
+  }
 
   // Radiator areal density (kg/m²) - varies with tech
   const radKgPerM2 = params.radKgPerM2 || (hasThermal ? 1.0 : 3.0);
@@ -142,7 +183,8 @@ export function calcSatellite(
   // FIXED-POINT ITERATION FOR MASS CLOSURE
   // =====================================================
   let computeKw = powerKw * params.computeFrac;
-  let radMass = 50;  // Initial guess
+  let radMass = 50;  // Initial guess (compute radiators)
+  let fusionRadMass = 0;  // Fusion radiator mass (separate loop)
   let radAreaM2 = 0;
   let totalDryMass = 0;
   let thermalLimited = false;
@@ -150,6 +192,14 @@ export function calcSatellite(
   let invalidReason: string | undefined;
   let compMass = 0;
   let commsMass = 0;
+
+  // Calculate fusion radiator mass FIRST (fixed, not iterated)
+  // Fusion radiators are sized to reject fusionWasteKw at 293K
+  if (hasFusion && fusionWasteKw > 0) {
+    const fusionRejectW = fusionWasteKw * 1000;
+    const fusionRadArea = fusionRejectW / qNetAvgFusion;
+    fusionRadMass = fusionRadArea * radKgPerM2;
+  }
 
   const MAX_ITERATIONS = 20;
   const CONVERGENCE_THRESHOLD = 0.01;
@@ -169,39 +219,41 @@ export function calcSatellite(
     const propulsionMass = propulsionMassBase + (powerMass + battMass + compMass) * 0.03;
     const otherMass = avionicsMassBase + propulsionMass + commsMass + aocsMassBase;
 
+    // Total radiator mass = compute radiators + fusion radiators (separate loops)
+    const totalRadMass = radMass + fusionRadMass;
+
     // Estimate dry mass with current radiator mass
-    const baseMass = powerMass + battMass + compMass + radMass + otherMass;
+    const baseMass = powerMass + battMass + compMass + totalRadMass + otherMass;
     const shieldMass = shell === 'leo' ? baseMass * 0.02 : baseMass * 0.15;
     const structMass = (baseMass + shieldMass) * 0.1;
     const estDryMass = baseMass + shieldMass + structMass;
 
-    // Radiator mass budget is fraction of total dry mass
-    const radBudget = Math.max(50, radMassFrac * estDryMass);
+    // Compute radiator budget (fusion radiators are separate, already sized)
+    // Budget for compute = total budget - fusion radiator mass
+    const totalRadBudget = Math.max(50, radMassFrac * estDryMass);
+    const computeRadBudget = Math.max(50, totalRadBudget - fusionRadMass);
 
     // Derive max rejection from budget using areal density
-    const maxArea = radBudget / radKgPerM2;
-    const maxRejectW = qNetAvg * maxArea;
+    const maxArea = computeRadBudget / radKgPerM2;
+    const maxRejectW = qNetAvgCompute * maxArea;
     const maxRejectKw = maxRejectW / 1000;
 
-    // For fusion, account for SCO2 cycle waste
-    let thermalBudgetForCompute = maxRejectKw;
-    if (hasFusion) {
-      thermalBudgetForCompute = Math.max(0, maxRejectKw - fusionWasteKw);
-    }
+    // Compute thermal budget is SEPARATE from fusion (no longer shared)
+    const thermalBudgetForCompute = maxRejectKw;
 
     // Thermal limit on compute
     const thermalLimitKw = thermalBudgetForCompute / wasteHeatFrac;
     const powerLimitKw = powerKw * params.computeFrac;
     const newComputeKw = Math.min(powerLimitKw, thermalLimitKw);
 
-    // Update radiator sizing based on required rejection
-    const reqRejectW = (newComputeKw * wasteHeatFrac + (hasFusion ? fusionWasteKw : 0)) * 1000;
-    const reqArea = reqRejectW / qNetAvg;
+    // Update compute radiator sizing based on required rejection
+    const reqRejectW = newComputeKw * wasteHeatFrac * 1000;
+    const reqArea = reqRejectW / qNetAvgCompute;
     radAreaM2 = Math.min(reqArea, maxArea);
     const newRadMass = radAreaM2 * radKgPerM2;
 
-    // Track radiator capacity
-    radCapacityKw = (qNetAvg * radAreaM2) / 1000;
+    // Track radiator capacity (compute only - fusion is fixed)
+    radCapacityKw = (qNetAvgCompute * radAreaM2) / 1000;
 
     // Check convergence
     const computeChange = Math.abs(newComputeKw - computeKw) / Math.max(1, computeKw);
@@ -222,9 +274,12 @@ export function calcSatellite(
     invalidReason = 'Thermal limit too restrictive: cannot achieve minimum compute';
   }
 
-  // Calculate total waste heat
+  // Calculate total waste heat (compute + fusion, but from separate radiators)
   const actualGpuWasteKw = computeKw * wasteHeatFrac;
   const totalWasteKw = actualGpuWasteKw + (hasFusion ? fusionWasteKw : 0);
+
+  // Total radiator mass includes both loops
+  radMass = radMass + fusionRadMass;
 
   // Now calculate compute output from constrained compute power
   // TFLOPS = computeKw × gflopsW (since kW × GFLOPS/W = GFLOPS = TFLOPS for our units)
@@ -243,12 +298,26 @@ export function calcSatellite(
   const baseMass = powerMass + battMass + compMass + radMass + otherSystemsMass;
 
   // Radiation shielding mass
+  // In Starship era, we add massive COTS shielding (water/polyethylene)
+  // This is where cheap launch pays off - trading expensive rad-hardening for cheap mass
   let shieldMass = 0;
+  let cotsShieldMass = 0;
+
+  if (isStarshipEra) {
+    // COTS approach: 3-5 tons of water/polyethylene shielding to protect cheap hardware
+    // Scales with compute power (more compute = more shielding needed)
+    const baseCotsShield = 3000; // 3 tons baseline
+    const powerScale = Math.min(2, computeKw / 500); // Up to 2x for high power
+    cotsShieldMass = baseCotsShield * (1 + powerScale * 0.67); // 3-5 tons
+  }
+
   if (shell === 'leo') {
-    shieldMass = baseMass * 0.02;
+    // LEO: Minimal additional shielding (mostly thermal/micrometeoroid)
+    shieldMass = baseMass * 0.02 + cotsShieldMass;
   } else {
+    // MEO/Cislunar: Van Allen belts require heavy shielding even for rad-hard
     const structureArea = Math.pow(baseMass / 100, 0.66) * 6;
-    shieldMass = structureArea * 50;
+    shieldMass = structureArea * 50 + cotsShieldMass;
   }
 
   // Final dry mass
@@ -325,15 +394,18 @@ export function calcSatellite(
   };
 
   // OTHER COMPONENT COSTS ($/kg basis)
+  // Gold-Plated Payload Fix: In Starship era, use COTS + shielding instead of rad-hard
+  // Rad-hard: $50k/kg (radiation-hardened chips, space-qualified everything)
+  // COTS+shielding: $8k/kg (commodity servers in shielded enclosures)
   const COMPONENT_COSTS_PER_KG = {
     battery: 500,     // $/kg - space-rated Li-ion (not commodity!)
-    compute: 50000,   // $/kg - rad-hard compute (GPUs + boards + enclosures)
+    compute: isStarshipEra ? 8000 : 50000,  // COTS+shielding vs rad-hard
     radiator: 5000,   // $/kg - deployable radiator systems
-    shield: 1000,     // $/kg - radiation shielding
+    shield: isStarshipEra ? 200 : 1000,     // Water/poly is cheap vs aerospace shielding
     structure: 3000,  // $/kg - composite bus structure
-    avionics: 100000, // $/kg - flight computers, sensors, GNC
+    avionics: isStarshipEra ? 20000 : 100000, // COTS avionics vs rad-hard
     propulsion: 8000, // $/kg - electric propulsion + propellant
-    aocs: 15000,      // $/kg - reaction wheels, star trackers
+    aocs: isStarshipEra ? 5000 : 15000,     // COTS sensors vs space-qualified
   };
 
   // OPTICAL COMMUNICATION TERMINALS

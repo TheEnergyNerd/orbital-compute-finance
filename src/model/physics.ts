@@ -328,13 +328,14 @@ export function getLEOPower(year: number, params: Params): number {
   const hasFission = params.fissionOn && year >= params.fissionYear;
   const hasFusion = params.fusionOn && year >= params.fusionYear;
 
-  // Compact fusion (magneto-electrostatic mirror) enables 1-5 MWe in LEO
-  // Form factor: 1.6m diameter × 8m long for 5 MWe - fits on LEO platforms
+  // Compact fusion enables 5-50 MWe in LEO
+  // Nuclear has strong economies of scale - a 50 MW plant has much better $/W than 5 MW
+  // This also makes thermal a binding constraint, so radiator sliders work
   if (hasFusion) {
-    // Fusion: 1-5 MWe platforms, scaling with maturity
-    // Start at 1 MWe, grow to 5 MWe over 10 years as tech matures
+    // Fusion: 5-50 MWe platforms, scaling with maturity
+    // Start at 5 MWe, grow to 50 MWe over 10 years as tech matures
     const maturity = Math.min(1, (year - params.fusionYear) / 10);
-    return 1000 + maturity * 4000; // 1 MW → 5 MW
+    return 5000 + maturity * 45000; // 5 MW → 50 MW
   }
   if (hasFission) {
     // Fission: 5-20 MW platforms (optimal for LEO latency-sensitive workloads)
