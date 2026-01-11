@@ -260,15 +260,10 @@
           <input type="range" id="thermalYear" min="2026" max="2040" value="2030">
           <div class="toggle-effect" id="eff-thermal">50× lighter heat rejection, MW-class platforms</div>
         </div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-lbl">Starship</div>
-            <div class="toggle-effect" id="eff-starship">5-10× larger satellites, $200→$10/kg launch</div>
-          </div>
-          <div class="toggle-group">
-            <input type="number" class="year-input" id="year-starship" value="2029" min="2027" max="2040">
-            <label class="toggle"><input type="checkbox" id="tog-starship" checked><span class="toggle-track"></span></label>
-          </div>
+        <div class="slider-row">
+          <div class="slider-header"><span class="slider-lbl">Starship</span><span class="slider-val"><span id="v-starshipYear">2029</span></span></div>
+          <input type="range" id="starshipYear" min="2026" max="2040" value="2029">
+          <div class="toggle-effect" id="eff-starship">5-10× larger satellites, $200→$10/kg launch</div>
         </div>
         <div class="toggle-row">
           <div>
@@ -2897,9 +2892,21 @@ document.addEventListener('DOMContentLoaded', () => {
       update();
     });
   }
-  
+
+  // Starship is always on - just handle the year slider
+  P.starshipOn = true;
+  const starshipYearSlider = document.getElementById('starshipYear');
+  const starshipYearVal = document.getElementById('v-starshipYear');
+  if (starshipYearSlider) {
+    starshipYearSlider.addEventListener('input', () => {
+      P.starshipYear = parseInt(starshipYearSlider.value);
+      if (starshipYearVal) starshipYearVal.textContent = P.starshipYear;
+      update();
+    });
+  }
+
   // Other breakthroughs have toggles
-  ['starship', 'fission', 'fusion', 'smr', 'thermo', 'photonic'].forEach(tech => {
+  ['fission', 'fusion', 'smr', 'thermo', 'photonic'].forEach(tech => {
     const toggle = document.getElementById('tog-' + tech);
     const yearInput = document.getElementById('year-' + tech);
     if (!toggle) return;
