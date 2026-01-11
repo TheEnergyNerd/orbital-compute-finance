@@ -320,13 +320,22 @@ export function getTokensPerYear(tflops: number, params: Params, availability = 
 
 /**
  * Calculate LEO platform power capacity (kW) for a given year.
- * Power scales with technology breakthroughs.
+ * Power scales with technology breakthroughs AND launch cost.
+ *
+ * KEY INSIGHT: When launch is cheap (Starship), you build BIGGER satellites:
+ * - More mass → more solar panels → more power → more compute
+ * - At $15/kg, a 100-ton satellite is economically viable
+ * - At $1500/kg, you optimize for mass → 20-ton satellites
  */
 export function getLEOPower(year: number, params: Params): number {
   const t = year - 2026;
   const hasThermal = params.thermalOn && year >= params.thermalYear;
   const hasFission = params.fissionOn && year >= params.fissionYear;
   const hasFusion = params.fusionOn && year >= params.fusionYear;
+
+  // Get launch cost to determine platform scaling
+  const launchCost = getLaunchCost(year, params);
+  const isStarshipEra = launchCost < 200;
 
   // Compact fusion enables 5-50 MWe in LEO
   // Nuclear has strong economies of scale - a 50 MW plant has much better $/W than 5 MW
@@ -341,16 +350,29 @@ export function getLEOPower(year: number, params: Params): number {
     // Fission: 5-20 MW platforms (optimal for LEO latency-sensitive workloads)
     return 5000 + Math.min(1, (year - params.fissionYear) / 10) * 15000;
   }
+
+  // STARSHIP ERA: "Brute force" approach with massive solar arrays
+  // When mass is cheap, build bigger satellites (Starlink V2 is 4x heavier than V1)
+  // Economic optimization: spend $ on hardware, not launch
+  if (isStarshipEra) {
+    const maturity = Math.min(1, (year - 2030) / 8);
+    if (hasThermal) {
+      // With thermal breakthrough + Starship: 1 MW → 4 MW
+      return 1000 + maturity * 3000;
+    }
+    // With Starship but no thermal: 500 kW → 2 MW (still thermal-limited but bigger)
+    return 500 + maturity * 1500;
+  }
+
   if (hasThermal) {
     // Thermal breakthrough (droplet radiators) removes heat rejection as bottleneck
-    // BUT still limited by practical solar array size:
-    // - 1 MW needs ~2,500 m² of panels (half a football field)
-    // - ISS has 2,500 m² for just 120 kW
-    // - Practical limit ~500 kW - 1 MW even with perfect heat rejection
+    // BUT without Starship, still mass-constrained
+    // Practical limit ~500 kW - 1 MW even with perfect heat rejection
     const maturity = Math.min(1, (year - params.thermalYear) / 6);
-    return 500 + maturity * 500; // 500 kW → 1 MW (array-limited, not thermal-limited)
+    return 500 + maturity * 500; // 500 kW → 1 MW (mass-limited)
   }
-  // Conventional solar: limited by thermal rejection capacity
+
+  // Conventional (no Starship, no thermal): mass AND thermal limited
   // Can't dump waste heat fast enough, even if you had more panels
   return Math.min(250, params.basePower * 0.8 + t * 5);
 }

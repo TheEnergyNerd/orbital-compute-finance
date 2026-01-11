@@ -18,23 +18,36 @@ export function getShellRadiationEffects(
   const shellData = SHELLS[shell];
   const t = year - 2026;
 
-  // Check for photonic computing - photons are immune to ionizing radiation
+  // Check for photonic computing
   const hasPhotonic = params.photonicOn && year >= params.photonicYear;
 
+  // Photonic systems have PARTIAL radiation immunity (70% mitigation, not 100%)
+  // While photons themselves are immune to radiation, photonic systems still need:
+  // - Control electronics (ASICs, FPGAs)
+  // - Memory and drivers
+  // - Power electronics
+  // - Photodetectors (which degrade)
+  // - Packaging and interconnects
+  // These components still suffer radiation damage
+  const photonicMitigation = 0.7;  // 70% reduction in radiation effects
+
   // TID effect: reduces effective lifetime (higher tidMult = shorter life)
-  // Photonic circuits don't degrade from ionizing radiation
-  const tidFactor = hasPhotonic ? 1.0 : shellData.tidMult;
+  let tidFactor = shellData.tidMult;
+  if (hasPhotonic) {
+    // Reduce TID penalty by 70% (e.g., 50x becomes 15.7x)
+    tidFactor = 1 + (shellData.tidMult - 1) * (1 - photonicMitigation);
+  }
   const effectiveLife = params.satLife / tidFactor;
 
   // SEU effect: reliability overhead (redundancy, ECC, spares)
   // seuMult of 1.0 = no overhead, 2.0 = 2× compute needed
   // Improves over time with rad-hard tech
-  // Photonic computing is completely immune to SEU - photons aren't affected by cosmic rays
-  let seuPenalty = 1.0;
-  if (!hasPhotonic) {
-    const radHardBase = 0.82 + params.radPen * 0.1;
-    const radHardImprovement = Math.pow(radHardBase, t);
-    seuPenalty = 1 + (shellData.seuMult - 1) * radHardImprovement;
+  const radHardBase = 0.82 + params.radPen * 0.1;
+  const radHardImprovement = Math.pow(radHardBase, t);
+  let seuPenalty = 1 + (shellData.seuMult - 1) * radHardImprovement;
+  if (hasPhotonic) {
+    // Photonic reduces SEU penalty by 70% (e.g., 5.4x becomes ~2.3x)
+    seuPenalty = 1 + (seuPenalty - 1) * (1 - photonicMitigation);
   }
 
   // Availability factor: fraction of compute usable after SEU overhead

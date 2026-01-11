@@ -2,6 +2,7 @@ import { SLA, SOLAR_CONSTANT, STEFAN_BOLTZMANN } from './constants';
 import type { Params, SatelliteResult, ConstraintLimits, ConstraintMargins } from './types';
 import {
   getLEOPower,
+  getCislunarPower,
   getLaunchCost,
   getRadiatorMassPerMW,
   getRadiatorPower,
@@ -31,20 +32,25 @@ export function calcSatellite(
   const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
   const hasPhotonicCompute = params.photonicOn && year >= params.photonicYear;
 
-  // Platform specifications
-  const powerKw = getLEOPower(year, params);
+  // Platform specifications - use correct power function based on shell
+  const powerKw = (shell === 'cislunar')
+    ? getCislunarPower(year, params)
+    : getLEOPower(year, params);
   const solarEff = Math.min(0.5, params.solarEff + t * params.solarLearn);
   const radPower = getRadiatorPower(params);
   const gflopsW = getOrbitalEfficiency(year, params);
   const launchCost = getLaunchCost(year, params, shell);
 
   // =====================================================
-  // GOLD-PLATED PAYLOAD FIX
+  // GOLD-PLATED PAYLOAD FIX - SMOOTH COTS BLEND
   // =====================================================
-  // When launch is cheap (Starship era), we use COTS hardware with shielding
-  // instead of expensive rad-hard hardware. This is economically coherent:
-  // cheap mass → use cheap heavy hardware, not expensive lightweight hardware.
-  const isStarshipEra = launchCost < 200;
+  // When launch is cheap, we use COTS hardware with shielding instead of
+  // expensive rad-hard hardware. Uses smooth interpolation to avoid kinks:
+  // - cotsBlend = 0 at $500/kg (fully rad-hard)
+  // - cotsBlend = 1 at $100/kg (fully COTS)
+  // - Linear blend between
+  const cotsBlend = Math.max(0, Math.min(1, (500 - launchCost) / 400));
+  const isStarshipEra = cotsBlend > 0.5;  // For backward compatibility
 
   // Demand-coupled manufacturing learning (Wright's Law)
   let prodMult = params.prodMult;
@@ -157,21 +163,19 @@ export function calcSatellite(
 
   // Radiator areal density (kg/m²) - varies with tech
   const radKgPerM2 = params.radKgPerM2 || (hasThermal ? 1.0 : 3.0);
-  const radMassFrac = params.radMassFrac || 0.15;  // 15% of dry mass default
 
-  // Waste heat fraction
-  const baseWasteHeatFrac = params.wasteHeatFrac || 0.90;
+  // Radiator mass budget as fraction of dry mass
+  // Fusion platforms need MUCH higher radiator budget (50% vs 15%) because:
+  // - 50% thermal efficiency → waste heat equals electrical output
+  // - Low rejection temp (320K) requires more radiator area
+  // - Fusion economies of scale justify the extra radiator mass
+  const radMassFrac = hasFusion ? 0.50 : (params.radMassFrac || 0.15);
 
-  // Thermo/photonic computing reduces waste heat per compute
-  let wasteHeatFrac = baseWasteHeatFrac;
-  if (hasThermoCompute || hasPhotonicCompute) {
-    const deterministicFrac = 1 - params.workloadProbabilistic;
-    const probFrac = params.workloadProbabilistic;
-    const photonicMult = hasPhotonicCompute ? params.photonicSpaceMult : 1;
-    const thermoMult = hasThermoCompute ? params.thermoSpaceMult : 1;
-    const avgMult = photonicMult * deterministicFrac + thermoMult * probFrac;
-    wasteHeatFrac = baseWasteHeatFrac / avgMult;
-  }
+  // Waste heat fraction - CONSTANT regardless of compute paradigm
+  // Physics: 1 watt consumed → ~1 watt of heat (First Law of Thermodynamics)
+  // Photonic/thermo efficiency gains are in GFLOPS/W, NOT in heat per watt
+  // The benefit is: fewer watts needed for same compute, not less heat per watt
+  const wasteHeatFrac = params.wasteHeatFrac || 0.90;
 
   // Calculate data rate early (needed for comms mass estimation)
   const effectiveBwPerTflop = getEffectiveBwPerTflop(year, params);
@@ -406,15 +410,17 @@ export function calcSatellite(
   // Gold-Plated Payload Fix: In Starship era, use COTS + shielding instead of rad-hard
   // Rad-hard: $50k/kg (radiation-hardened chips, space-qualified everything)
   // COTS+shielding: $8k/kg (commodity servers in shielded enclosures)
+  // Component costs with SMOOTH COTS blend (no discontinuities)
+  // Uses cotsBlend to interpolate between rad-hard ($500/kg) and COTS ($100/kg)
   const COMPONENT_COSTS_PER_KG = {
     battery: 500,     // $/kg - space-rated Li-ion (not commodity!)
-    compute: isStarshipEra ? 8000 : 50000,  // COTS+shielding vs rad-hard
+    compute: 50000 - cotsBlend * 42000,     // 50k→8k smoothly
     radiator: 5000,   // $/kg - deployable radiator systems
-    shield: isStarshipEra ? 200 : 1000,     // Water/poly is cheap vs aerospace shielding
+    shield: 1000 - cotsBlend * 800,         // 1k→200 smoothly
     structure: 3000,  // $/kg - composite bus structure
-    avionics: isStarshipEra ? 20000 : 100000, // COTS avionics vs rad-hard
+    avionics: 100000 - cotsBlend * 80000,   // 100k→20k smoothly
     propulsion: 8000, // $/kg - electric propulsion + propellant
-    aocs: isStarshipEra ? 5000 : 15000,     // COTS sensors vs space-qualified
+    aocs: 15000 - cotsBlend * 10000,        // 15k→5k smoothly
   };
 
   // OPTICAL COMMUNICATION TERMINALS
