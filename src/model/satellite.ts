@@ -228,10 +228,12 @@ export function calcSatellite(
     const structMass = (baseMass + shieldMass) * 0.1;
     const estDryMass = baseMass + shieldMass + structMass;
 
-    // Compute radiator budget (fusion radiators are separate, already sized)
-    // Budget for compute = total budget - fusion radiator mass
-    const totalRadBudget = Math.max(50, radMassFrac * estDryMass);
-    const computeRadBudget = Math.max(50, totalRadBudget - fusionRadMass);
+    // Compute radiator budget - FUSION RADIATORS ARE EXCLUDED
+    // Fusion radiators are part of the power system (like reactor shielding),
+    // not competing with compute thermal budget. The radMassFrac applies
+    // ONLY to compute radiators. This prevents fusion's massive 293K radiators
+    // from eating the compute thermal budget.
+    const computeRadBudget = Math.max(50, radMassFrac * estDryMass);
 
     // Derive max rejection from budget using areal density
     const maxArea = computeRadBudget / radKgPerM2;
