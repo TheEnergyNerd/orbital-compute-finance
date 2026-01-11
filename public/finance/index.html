@@ -1169,18 +1169,58 @@ var Model = (() => {
   function getBandwidth(year, params) {
     return params.bandwidth * Math.pow(1 + params.bwGrowth, year - 2026);
   }
+  function getLEOPower(year, params) {
+    const t = year - 2026;
+    const hasThermal = params.thermalOn && year >= params.thermalYear;
+    const hasFission = params.fissionOn && year >= params.fissionYear;
+    const hasFusion = params.fusionOn && year >= params.fusionYear;
+    const launchCost = getLaunchCost(year, params);
+    const isStarshipEra = launchCost < 200;
+
+    // Nuclear power: independent of solar
+    if (hasFission) {
+      const fissionMaturity = Math.min(1, (year - params.fissionYear) / 10);
+      const fissionPower = 10000 + fissionMaturity * 40000; // 10 MW → 50 MW
+      if (hasFusion) {
+        // Fusion: 100-500 MW for LEO platforms
+        const fusionMaturity = Math.min(1, (year - params.fusionYear) / 10);
+        const fusionPower = 100000 + fusionMaturity * 400000; // 100 MW → 500 MW
+        return Math.max(fusionPower, fissionPower);
+      }
+      return fissionPower;
+    }
+
+    // Solar power: limited by panel area/mass and thermal rejection
+    if (isStarshipEra && hasThermal) {
+      const thermalMaturity = Math.min(1, (year - 2030) / 10);
+      return 2000 + thermalMaturity * 18000; // 2 MW → 20 MW
+    } else if (isStarshipEra) {
+      const starshipMaturity = Math.min(1, (year - 2030) / 10);
+      return 1000 + starshipMaturity * 4000; // 1 MW → 5 MW
+    } else if (hasThermal) {
+      const thermalMaturity = Math.min(1, (year - params.thermalYear) / 6);
+      return 500 + thermalMaturity * 1500; // 500 kW → 2 MW
+    }
+    // Pre-Starship baseline
+    return Math.min(500, params.initPower + t * 15); // 120 kW → 500 kW
+  }
   function getCislunarPower(year, params) {
     const hasFission = params.fissionOn && year >= params.fissionYear;
     const hasFusion = params.fusionOn && year >= params.fusionYear;
     const hasThermal = params.thermalOn && year >= params.thermalYear;
     if (hasFusion) {
-      return 5e5 + Math.min(1, (year - params.fusionYear) / 10) * 5e5;
+      // Fusion: 1 GW → 10 GW cislunar stations (kW)
+      const fusionMaturity = Math.min(1, (year - params.fusionYear) / 10);
+      return 1000000 + fusionMaturity * 9000000;
     }
     if (hasFission) {
-      return 1e5 + Math.min(1, (year - params.fissionYear) / 12) * 4e5;
+      // Fission: 50 MW → 150 MW platforms (kW)
+      return 50000 + Math.min(1, (year - params.fissionYear) / 10) * 100000;
     }
     if (hasThermal && year - params.thermalYear >= 5) {
-      return Math.min(3e4, 5e3 + (year - params.thermalYear - 5) * 5e3);
+      // Thermal only: 1 MW → 2 MW (barely viable)
+      const maturity = Math.min(1, (year - params.thermalYear - 5) / 5);
+      return 1000 + maturity * 1000;
     }
     return 0;
   }
@@ -1434,8 +1474,19 @@ var Model = (() => {
     const batteryMassPerKwCompute = hasFission ? 0 : actualEclipseComputeFrac * eclipseDurationHrs * 1e3 / battDens;
     const totalMassPerKwCompute = powerMassPerKw / params.computeFrac + // Power system sized for total platform power
     radiatorMassPerKwCompute + computeMassPerKw + batteryMassPerKwCompute;
-    const computeKw = availableMass / totalMassPerKwCompute;
-    const powerKw = computeKw / params.computeFrac;
+
+    // Use tech-level power targets instead of mass-constrained calculation
+    // This matches physics.ts approach where power is set by tech, not mass
+    const targetPowerKw = (shell === "cislunar")
+      ? getCislunarPower(year, params)
+      : getLEOPower(year, params);
+
+    // Use the higher of mass-constrained or tech-target power
+    // Tech targets set the floor; abundant mass can go higher
+    const massConstrainedComputeKw = availableMass / totalMassPerKwCompute;
+    const massConstrainedPowerKw = massConstrainedComputeKw / params.computeFrac;
+    const powerKw = Math.max(targetPowerKw, massConstrainedPowerKw);
+    const computeKw = powerKw * params.computeFrac;
     const powerMass = powerKw * powerMassPerKw;
     const radiatorMass = computeKw * radiatorMassPerKwCompute;
     const computeMass = computeKw * computeMassPerKw;
@@ -1854,7 +1905,8 @@ var Model = (() => {
     const dynamicEligibleShare = Math.min(0.7, params.orbitalEligibleShare * eligibleMult);
     const maxOrbitalDemandGW = totalDemandGW * dynamicEligibleShare;
     const leoKw = sat.powerKw;
-    const geoKwCalc = hasFission ? sat.powerKw * 15 : hasThermal ? sat.powerKw * 8 : sat.powerKw * 4;
+    // GEO power multiplier: fusion 50x, fission 20x, thermal 10x, baseline 5x
+    const geoKwCalc = hasFusion ? sat.powerKw * 50 : hasFission ? sat.powerKw * 20 : hasThermal ? sat.powerKw * 10 : sat.powerKw * 5;
     const uncFleetGW = (leoPlatforms * leoKw + geoPlatforms * geoKwCalc + cisPlatforms * cislunarPowerKw + lunarPlatforms * lunarPowerKw) / 1e6;
     if (uncFleetGW > maxOrbitalDemandGW && maxOrbitalDemandGW > 0) {
       const demandScale = maxOrbitalDemandGW / uncFleetGW;
@@ -1886,7 +1938,8 @@ var Model = (() => {
       lunarPlatforms = Math.round(lunarPlatforms * launchScale);
     }
 
-    const geoPowerKw = hasFission ? sat.powerKw * 15 : hasThermal ? sat.powerKw * 8 : sat.powerKw * 4;
+    // GEO power multiplier: fusion 50x, fission 20x, thermal 10x, baseline 5x
+    const geoPowerKw = hasFusion ? sat.powerKw * 50 : hasFission ? sat.powerKw * 20 : hasThermal ? sat.powerKw * 10 : sat.powerKw * 5;
     const leoPowerTw = leoPlatforms * sat.powerKw / 1e9;
     const meoPowerTw = 0;
     const geoPowerTw = geoPlatforms * geoPowerKw / 1e9;
