@@ -1920,10 +1920,17 @@ var Model = (() => {
       }
     }
 
-    // Launch capacity constraint
-    // Maximum Starship launches per year (aggressive but plausible)
-    // SpaceX targets ~100 flights/year by 2026, scaling to ~1000+ by 2030s
-    const MAX_LAUNCHES_PER_YEAR = 2000;
+    // Launch capacity constraint - dynamic scaling matches fleet.ts
+    // Based on Elon's projections: 10k flights/year is reasonable by 2035
+    function getMaxLaunchesPerYear(y) {
+      if (y <= 2026) return 500;
+      if (y <= 2028) return Math.round(500 + ((y - 2026) / 2) * 1500); // 500 → 2000
+      if (y <= 2030) return Math.round(2000 + ((y - 2028) / 2) * 3000); // 2000 → 5000
+      if (y <= 2035) return Math.round(5000 + ((y - 2030) / 5) * 5000); // 5000 → 10000
+      if (y <= 2040) return Math.round(10000 + ((y - 2035) / 5) * 5000); // 10000 → 15000
+      return Math.round(15000 + Math.min(1, (y - 2040) / 10) * 5000); // 15000 → 20000
+    }
+    const MAX_LAUNCHES_PER_YEAR = getMaxLaunchesPerYear(year);
     const STARSHIP_PAYLOAD_KG = 150000;
     const totalPlatformsPreLaunch = leoPlatforms + geoPlatforms + cisPlatforms + lunarPlatforms;
     const annualMassKg = totalPlatformsPreLaunch * sat.dryMass * 0.15; // ~15% fleet replacement + new builds
