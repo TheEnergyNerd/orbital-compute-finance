@@ -978,7 +978,8 @@ var Model = (() => {
     getLaunchCost: () => getLaunchCost,
     getOrbitalEfficiency: () => getOrbitalEfficiency,
     getRadiatorMassPerMW: () => getRadiatorMassPerMW,
-    getShellRadiationEffects: () => getShellRadiationEffects
+    getShellRadiationEffects: () => getShellRadiationEffects,
+    resetFleetTracker: () => resetFleetTracker
   });
 
   // src/model/constants.ts
@@ -1812,6 +1813,21 @@ var Model = (() => {
 
   // src/model/fleet.ts
   var TOKENS_PER_GPU_HR = 3600 * 100;
+
+  // Track previous year's platforms for monotonic constraint
+  // Once platforms are built, they stay built (may be underutilized but don't disappear)
+  var prevLeoPlatforms = 0;
+  var prevGeoPlatforms = 0;
+  var prevCisPlatforms = 0;
+  var prevLunarPlatforms = 0;
+
+  function resetFleetTracker() {
+    prevLeoPlatforms = 0;
+    prevGeoPlatforms = 0;
+    prevCisPlatforms = 0;
+    prevLunarPlatforms = 0;
+  }
+
   function getLunarPowerKw(year, params) {
     const hasFission = params.fissionOn && year >= params.fissionYear;
     const hasFusion = params.fusionOn && year >= params.fusionYear;
@@ -1899,17 +1915,10 @@ var Model = (() => {
     // GEO power multiplier: fusion 50x, fission 20x, thermal 10x, baseline 5x (applied to LEO power)
     const geoKwCalc = hasFusion ? leoKw * 50 : hasFission ? leoKw * 20 : hasThermal ? leoKw * 10 : leoKw * 5;
     const uncFleetGW = (leoPlatforms * leoKw + geoPlatforms * geoKwCalc + cisPlatforms * cislunarPowerKw + lunarPlatforms * lunarPowerKw) / 1e6;
-    if (uncFleetGW > maxOrbitalDemandGW && maxOrbitalDemandGW > 0) {
-      const demandScale = maxOrbitalDemandGW / uncFleetGW;
-      if (demandScale < 0.5) {
-        cisPlatforms = Math.round(cisPlatforms * demandScale * 1.5);
-        lunarPlatforms = Math.round(lunarPlatforms * demandScale * 1.5);
-        geoPlatforms = Math.round(geoPlatforms * demandScale);
-      } else {
-        cisPlatforms = Math.round(cisPlatforms * demandScale);
-        lunarPlatforms = Math.round(lunarPlatforms * demandScale);
-      }
-    }
+
+    // NOTE: Demand constraint removed - platforms are monotonic (once built, stay built)
+    // When supply > demand, utilization drops (sellableUtil) but platforms don't disappear
+    // This is more realistic: you don't scrap satellites just because demand is soft
 
     // Launch capacity constraint - dynamic scaling matches fleet.ts
     // Based on Elon's projections: 10k flights/year is reasonable by 2035
@@ -1935,6 +1944,20 @@ var Model = (() => {
       cisPlatforms = Math.round(cisPlatforms * launchScale);
       lunarPlatforms = Math.round(lunarPlatforms * launchScale);
     }
+
+    // MONOTONIC CONSTRAINT: Platforms once built stay built
+    // Can't have fewer platforms than last year (satellites don't just disappear)
+    // Growth is limited by launch capacity, but existing fleet is preserved
+    leoPlatforms = Math.max(leoPlatforms, prevLeoPlatforms);
+    geoPlatforms = Math.max(geoPlatforms, prevGeoPlatforms);
+    cisPlatforms = Math.max(cisPlatforms, prevCisPlatforms);
+    lunarPlatforms = Math.max(lunarPlatforms, prevLunarPlatforms);
+
+    // Update trackers for next year
+    prevLeoPlatforms = leoPlatforms;
+    prevGeoPlatforms = geoPlatforms;
+    prevCisPlatforms = cisPlatforms;
+    prevLunarPlatforms = lunarPlatforms;
 
     // GEO power uses same multipliers as above (applied to physics-driven LEO power)
     const geoPowerKw = geoKwCalc;  // Already calculated above
@@ -2278,6 +2301,9 @@ function getScenarioParams(scenario) {
 function runScenario(scenario) {
   const params = getScenarioParams(scenario);
   const sats = YEARS.map(y => calcSatellite(y, params));
+
+  // Reset fleet tracker for preFleets calculation
+  Model.resetFleetTracker();
   const preFleets = YEARS.map(y => calcFleet(y, null, params));
   const preGnds = YEARS.map(y => calcGround(y, 0, params));
 
@@ -2309,7 +2335,9 @@ function runScenario(scenario) {
   // This gives a stable crossover point that matches what the chart shows
   const crossIdx = sats.findIndex((sat, i) => sat.lcoc < preGnds[i].base);
   const crossoverYear = crossIdx >= 0 ? YEARS[crossIdx] : null;
-  
+
+  // Reset fleet tracker for final fleets calculation (with crossover)
+  Model.resetFleetTracker();
   const fleets = YEARS.map(y => calcFleet(y, crossoverYear, params));
   const gnds = YEARS.map((y, i) => calcGround(y, fleets[i].totalPowerTw * 1000, params));
   
