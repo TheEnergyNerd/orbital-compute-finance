@@ -591,7 +591,7 @@ export function calcSatellite(
     thermalLimited,
     radCapacityKw,
     computeKw,
-    thermalMargin: radCapacityKw > 0 ? totalWasteKw / radCapacityKw : 1,
+    thermalMargin: radCapacityKw > 0 ? actualGpuWasteKw / radCapacityKw : 1,  // Only GPU waste vs GPU radiators (fusion has separate cooling)
     // Audit: binding constraint + margins
     limits,
     binding,

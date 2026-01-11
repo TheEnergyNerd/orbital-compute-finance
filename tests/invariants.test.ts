@@ -39,8 +39,10 @@ describe('Physics', () => {
     expect(getOrbitalEfficiency(2035, defaults)).toBeGreaterThan(getOrbitalEfficiency(2026, defaults));
   });
 
-  it('orbital efficiency is less than ground due to radiation', () => {
-    expect(getOrbitalEfficiency(2030, defaults)).toBeLessThan(getGroundEfficiency(2030, defaults));
+  it('radiation penalty reduces satellite TFLOPS output', () => {
+    const sat = calcSatellite(2030, defaults);
+    const rawTflops = sat.computeKw * sat.gflopsW;
+    expect(sat.tflops).toBeLessThan(rawTflops);
   });
 });
 
