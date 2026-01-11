@@ -1475,14 +1475,21 @@ var Model = (() => {
     const totalMassPerKwCompute = powerMassPerKw / params.computeFrac + // Power system sized for total platform power
     radiatorMassPerKwCompute + computeMassPerKw + batteryMassPerKwCompute;
 
-    // PHYSICS-FIRST APPROACH: Power is set by technology level, not mass budget
-    // This matches satellite.ts where getLEOPower/getCislunarPower define capability
-    const powerKw = (shell === "cislunar")
+    // HYBRID APPROACH: Use minimum of physics-driven and mass-constrained power
+    // Early years: mass-constrained (radiators too heavy without thermal)
+    // Later years: physics-driven (thermal/fission/fusion enable larger platforms)
+    const massConstrainedComputeKw = availableMass / totalMassPerKwCompute;
+    const massConstrainedPowerKw = massConstrainedComputeKw / params.computeFrac;
+    const physicsTargetPowerKw = (shell === "cislunar")
       ? getCislunarPower(year, params)
       : getLEOPower(year, params);
+
+    // Use the LOWER of physics target and mass constraint
+    // This ensures we don't create impossibly heavy satellites
+    const powerKw = Math.min(physicsTargetPowerKw, massConstrainedPowerKw);
     const computeKw = powerKw * params.computeFrac;
 
-    // Derive masses from power (not the other way around)
+    // Derive masses from actual power
     const powerMass = powerKw * powerMassPerKw;
     const radiatorMass = computeKw * radiatorMassPerKwCompute;
     const computeMass = computeKw * computeMassPerKw;
@@ -1490,8 +1497,8 @@ var Model = (() => {
     const structMass = targetMassKg * structureFrac;
     const otherMass = targetMassKg * otherSystemsFrac;
 
-    // dryMass is now the ACTUAL mass needed (may exceed targetMassKg for large platforms)
-    const dryMass = powerMass + radiatorMass + computeMass + battMass + structMass + otherMass + avionicsMassKg;
+    // dryMass stays at targetMassKg (launch vehicle limit) when mass-constrained
+    const dryMass = targetMassKg;
     const powerMassPerKwCompute = powerMassPerKw / params.computeFrac;
     const thermalMassPerKwCompute = radiatorMassPerKwCompute;
     let bindingConstraint;
@@ -2675,10 +2682,10 @@ function update() {
   // Core charts - LCOC with uncertainty
   // Use sat.lcoc (production cost) for cleaner curves that match crossover detection
   // Apply mid-timeline architectural uncertainty (bands re-widen 2035-2045)
-  // Clamp LCOC to displayable range for log chart (max $500/GPU-hr, min $0.001)
+  // Clamp LCOC to displayable range for log chart (max $1000/GPU-hr for display)
   const clampLcoc = (val) => {
-    if (!isFinite(val) || val <= 0) return 500;  // Infinity/NaN/0 → cap
-    return Math.min(500, Math.max(0.001, val));
+    if (!isFinite(val) || val <= 0) return 1000;  // Infinity/NaN/0 → cap at reasonable display max
+    return Math.min(1000, Math.max(0.001, val));
   };
   charts.lcoc.data.datasets[0].data = agg.sats.map((sat, i) => {
     const year = YEARS[i];
