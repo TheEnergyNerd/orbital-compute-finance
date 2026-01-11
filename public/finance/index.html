@@ -1740,7 +1740,8 @@ var Model = (() => {
     const demand = getDemand(year, params);
     const groundSupply = getGroundSupply(year, params);
     const totalSupply = groundSupply + orbitalSupplyGW;
-    const unmetRatio = (demand - totalSupply) / totalSupply;
+    // Guard against division by zero - if no supply, use high unmet ratio
+    const unmetRatio = totalSupply > 0 ? (demand - totalSupply) / totalSupply : 10;
 
     // SCARCITY PREMIUM - THE CORE THESIS
     // When demand >> supply, ground compute prices skyrocket due to scarcity
@@ -2657,10 +2658,11 @@ function update() {
   document.getElementById('d-demand35').textContent = gnds[i35].demand.toFixed(0);
   document.getElementById('d-supply35').textContent = gnds[i35].groundSupply.toFixed(0);
   
-  // Market KPIs
-  document.getElementById('kpi-peakPrem').textContent = Math.max(...gnds.map(g => g.premium)).toFixed(1) + '×';
-  document.getElementById('kpi-prem35').textContent = gnds[i35].premium.toFixed(1) + '×';
-  document.getElementById('kpi-unmet35').textContent = (gnds[i35].unmetRatio * 100).toFixed(0) + '%';
+  // Market KPIs - guard against NaN
+  const peakPrem = Math.max(...gnds.map(g => isFinite(g.premium) ? g.premium : 1));
+  document.getElementById('kpi-peakPrem').textContent = peakPrem.toFixed(1) + '×';
+  document.getElementById('kpi-prem35').textContent = (isFinite(gnds[i35].premium) ? gnds[i35].premium : 1).toFixed(1) + '×';
+  document.getElementById('kpi-unmet35').textContent = (isFinite(gnds[i35].unmetRatio) ? gnds[i35].unmetRatio * 100 : 0).toFixed(0) + '%';
   
   // Constraints KPIs
   document.getElementById('kpi-bwUtil').textContent = (fleetResults[i35].bwUtil * 100).toFixed(0) + '%';
