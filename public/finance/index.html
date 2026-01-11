@@ -1741,10 +1741,13 @@ var Model = (() => {
     const blendedEnergy = gridEnergy * (1 - yearBtmShare) + btmEnergy * yearBtmShare;
 
     const pue = Math.max(1.08, params.groundPue - t * 0.01);
-    const enCost = 700 * 8760 * SLA * blendedEnergy * pue / 1e3;
+    // Energy cost scales inversely with efficiency - more efficient chips use less energy per compute unit
+    // Base: 700W H100 at 2800 GFLOPS/W. If efficiency doubles, energy per compute halves.
+    const enCost = 700 * 8760 * SLA * blendedEnergy * pue / 1e3 * (2800 / gflopsW);
     // Overhead includes: cooling, staffing, land lease, insurance, network, security
-    // $0.50/GPU-hr is realistic for hyperscale operations
-    const overhead = 0.50 * 8760 * SLA;
+    // Scales partially with efficiency (some fixed costs, some per-compute costs)
+    const overheadBase = 0.50 * 8760 * SLA;
+    const overhead = overheadBase * Math.pow(2800 / gflopsW, 0.3);  // Partial scaling
     // Utilization factor: datacenters don't run at 100% - typical 60-80%
     const utilization = 0.70;
     const base = (hwCost + enCost + overhead) / (8760 * SLA * utilization);
