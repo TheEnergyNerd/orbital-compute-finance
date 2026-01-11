@@ -75,8 +75,8 @@ export const defaults: Params = {
   maintCost: 0.015,      // Annual maintenance as fraction of capex (1.5%)
 
   // Bandwidth - goodput model
-  bandwidth: 50,         // Total capacity in 2025 (Tbps)
-  bwGrowth: 0.30,        // Annual bandwidth growth rate (between historical 25% and aggressive 35%)
+  bandwidth: 20,         // Total capacity in 2026 (Tbps) - realistic for early space optical networks
+  bwGrowth: 0.25,        // Annual bandwidth growth rate (25% is aggressive but realistic for space laser links)
   bwCost: 50,            // Annual cost per Gbps ($k/Gbps/year) - ground station + spectrum
   gbpsPerTflop: 0.0001,  // DEPRECATED: Bandwidth per TFLOP (Gbps)
   terminalGoodputGbps: 20,   // Baseline per-platform terminal capacity (Gbps)

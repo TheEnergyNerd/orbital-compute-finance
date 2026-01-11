@@ -56,7 +56,8 @@ export function calcGround(
   const demand = getDemand(year, params);
   const groundSupply = getGroundSupply(year, params);
   const totalSupply = groundSupply + orbitalSupplyGW;
-  const unmetRatio = (demand - totalSupply) / totalSupply;
+  // Guard against division by zero - if no supply, use high unmet ratio
+  const unmetRatio = totalSupply > 0 ? (demand - totalSupply) / totalSupply : 10;
 
   // Revised scarcity premium with demand destruction and oversupply discount
   let premium: number;
