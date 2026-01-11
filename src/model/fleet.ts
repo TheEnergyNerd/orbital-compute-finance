@@ -216,15 +216,22 @@ export function calcFleet(
   // STEP 3c: Monotonic fleet constraint + Launch capacity
   // CRITICAL: Fleet can only GROW per shell - you can't un-launch satellites
   // Exception: replacement losses (satellites fail at replacementRate per year)
+  // Use per-shell replacement rates since radiation environment differs by shell
   const leoRadEffectsForCalc = getShellRadiationEffects('leo', year, params);
-  const replacementRateForCalc = leoRadEffectsForCalc.replacementRate;
-  const survivalRate = 1 - replacementRateForCalc;
+  const meoRadEffects = getShellRadiationEffects('meo', year, params);
+  const geoRadEffectsForCalc = getShellRadiationEffects('geo', year, params);
+  const cisRadEffectsForCalc = getShellRadiationEffects('cislunar', year, params);
 
-  // Minimum per-shell = previous minus natural attrition
-  const minLeo = Math.floor(prevLeoPlatforms * survivalRate);
-  const minMeo = Math.floor(prevMeoPlatforms * survivalRate);
-  const minGeo = Math.floor(prevGeoPlatforms * survivalRate);
-  const minCis = Math.floor(prevCisPlatforms * survivalRate);
+  const leoSurvival = 1 - leoRadEffectsForCalc.replacementRate;
+  const meoSurvival = 1 - meoRadEffects.replacementRate;
+  const geoSurvival = 1 - geoRadEffectsForCalc.replacementRate;
+  const cisSurvival = 1 - cisRadEffectsForCalc.replacementRate;
+
+  // Minimum per-shell = previous minus natural attrition (per-shell rates)
+  const minLeo = Math.floor(prevLeoPlatforms * leoSurvival);
+  const minMeo = Math.floor(prevMeoPlatforms * meoSurvival);
+  const minGeo = Math.floor(prevGeoPlatforms * geoSurvival);
+  const minCis = Math.floor(prevCisPlatforms * cisSurvival);
 
   // Apply per-shell monotonic constraint: each shell can't shrink below minimum
   leoPlatforms = Math.max(leoPlatforms, minLeo);
@@ -234,29 +241,47 @@ export function calcFleet(
 
   let totalPlatformsPreLaunch = leoPlatforms + meoPlatforms + geoPlatforms + cisPlatforms;
 
-  // Annual mass = new platforms + replacements
+  // Annual mass = new platforms + replacements (per-shell replacement rates)
   const newPlatformsPreLaunch = Math.max(0, totalPlatformsPreLaunch - prevTotalPlatforms);
-  const replacementMassPreLaunch = prevTotalPlatforms * replacementRateForCalc * sat.dryMass;
+  const leoReplacementMass = prevLeoPlatforms * leoRadEffectsForCalc.replacementRate * sat.dryMass;
+  const meoReplacementMass = prevMeoPlatforms * meoRadEffects.replacementRate * sat.dryMass;
+  const geoReplacementMass = prevGeoPlatforms * geoRadEffectsForCalc.replacementRate * sat.dryMass;
+  const cisReplacementMass = prevCisPlatforms * cisRadEffectsForCalc.replacementRate * sat.dryMass;
+  const replacementMassPreLaunch = leoReplacementMass + meoReplacementMass + geoReplacementMass + cisReplacementMass;
   const newDeploymentMassPreLaunch = newPlatformsPreLaunch * sat.dryMass;
   const annualMassPreLaunch = newDeploymentMassPreLaunch + replacementMassPreLaunch;
   const requiredFlights = annualMassPreLaunch / STARSHIP_PAYLOAD_KG;
 
   // Track if launch capacity is binding
   const maxLaunchesThisYear = getMaxLaunchesPerYear(year);
+  const maxLaunchMassKg = maxLaunchesThisYear * STARSHIP_PAYLOAD_KG;
   let launchConstrained = false;
+
   if (requiredFlights > maxLaunchesThisYear) {
     launchConstrained = true;
-    // Calculate how many NEW platforms we can actually deploy this year
-    // Available mass = max flights × payload - replacement mass
-    const availableMassForNew = Math.max(0,
-      maxLaunchesThisYear * STARSHIP_PAYLOAD_KG - replacementMassPreLaunch
-    );
-    const maxNewPlatforms = Math.floor(availableMassForNew / sat.dryMass);
 
-    // Limit growth to what we can actually launch
-    // New fleet = previous fleet + max new platforms (distributed by shell ratio)
+    // KEY FIX: Account for partial replacement when launch capacity is insufficient
+    // Surviving platforms = prev * survivalRate (these already exist, no launch needed)
+    // We need to LAUNCH replacements for the ones that failed
+    const survivingPlatforms = minLeo + minMeo + minGeo + minCis;  // = prev * survivalRate
+    const failedPlatforms = prevTotalPlatforms - survivingPlatforms;
+    const replacementMassNeeded = failedPlatforms * sat.dryMass;
+
+    // How many replacements can we actually launch?
+    const launchableReplacements = Math.min(
+      failedPlatforms,
+      Math.floor(maxLaunchMassKg / sat.dryMass)
+    );
+    const massUsedForReplacements = launchableReplacements * sat.dryMass;
+
+    // Remaining launch capacity for NEW growth (beyond maintaining current fleet)
+    const remainingMassForNew = Math.max(0, maxLaunchMassKg - replacementMassNeeded);
+    const maxNewPlatforms = Math.floor(remainingMassForNew / sat.dryMass);
     const totalNew = Math.min(newPlatformsPreLaunch, maxNewPlatforms);
-    const totalTarget = prevTotalPlatforms + totalNew;
+
+    // CORRECT totalTarget: surviving + launched replacements + new growth
+    // If we can't launch all replacements, fleet SHRINKS (this was the bug!)
+    const totalTarget = survivingPlatforms + launchableReplacements + totalNew;
 
     // Distribute across shells proportionally to their unconstrained targets
     // But NEVER scale below the monotonic minimum (can't un-launch satellites!)
