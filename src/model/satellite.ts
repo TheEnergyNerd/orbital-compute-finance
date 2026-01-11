@@ -128,11 +128,13 @@ export function calcSatellite(
   const qNetEclCompute = getRadiatorNetWPerM2(params, year, true);
   const qNetAvgCompute = (1 - eclipseFrac) * qNetSunCompute + eclipseFrac * qNetEclCompute;
 
-  // Fusion radiators: operate at 293K (SCO2 cycle requirement)
+  // Fusion radiators: operate at 320K (optimized SCO2 cycle)
   // Lower temp = less Stefan-Boltzmann power = need more area
+  // Note: 293K was too conservative. Modern SCO2 cycles with dry cooling
+  // reject at 310-340K. Space radiators at 320K are practical.
   let qNetAvgFusion = qNetAvgCompute;
   if (hasFusion) {
-    const fusionRadTemp = 293; // K, SCO2 cycle inlet temp
+    const fusionRadTemp = 320; // K, optimized SCO2 rejection temp
     const sigma = 5.670374419e-8;
     const eps = params.radEmissivity || 0.85;
     const sides = (params.radTwoSided !== false) ? 2 : 1;
@@ -383,11 +385,16 @@ export function calcSatellite(
   const fissionMaturity = hasFission ? Math.min(1, (year - params.fissionYear) / 12) : 0;
   const fissionCostPerW = Math.max(15, 50 * (1 - fissionMaturity * 0.7));
 
-  // FUSION: New tech, FAST learning (20%/yr from first deployment), floor at $10/W
+  // FUSION: Revolutionary tech with RAPID learning (reaches floor in 5 years)
   // Compact magneto-electrostatic mirror is industrial equipment, not semiconductor
-  // First units $100/W, drops rapidly to $10-20/W as manufacturing scales
-  const fusionMaturity = hasFusion ? Math.min(1, (year - params.fusionYear) / 8) : 0;
-  const fusionCostPerW = Math.max(10, 100 * (1 - fusionMaturity * 0.9));
+  // Key advantages over fission:
+  // - No fuel rod fabrication/handling → simpler supply chain
+  // - No spent fuel → no storage/disposal costs
+  // - No criticality concerns → simpler safety systems
+  // - Mass production of identical units → Wright's Law kicks in fast
+  // First units $80/W, drops to $5/W floor (cheaper than fission at scale)
+  const fusionMaturity = hasFusion ? Math.min(1, (year - params.fusionYear) / 5) : 0;
+  const fusionCostPerW = Math.max(5, 80 * (1 - fusionMaturity * 0.94));
 
   const POWER_COST_PER_W = {
     solar: solarCostPerW,
@@ -411,27 +418,61 @@ export function calcSatellite(
   };
 
   // OPTICAL COMMUNICATION TERMINALS
-  // High-bandwidth laser links are expensive: $5-20M per terminal in 2026
-  // Cost decreases with volume production
+  // High-bandwidth laser links: $5-20M per terminal in 2026, improving with volume
+  // Physical constraint: A platform can only have so many terminals (pointing angles, mass, power)
+  // Modern optical terminals: 100+ Gbps each (TBIRD demonstrated 200 Gbps)
+  // Maximum ~50 terminals per platform (physical/operational limit)
   const opticalTerminalCost = 8e6 * prodMult; // $8M baseline, scales with learning
-  const numOpticalTerminals = Math.max(2, Math.ceil(dataRateGbps / 10)); // ~10 Gbps per terminal
+  const opticalTerminalCapacityGbps = 100; // Advanced laser links
+  const maxTerminals = 50; // Physical limit per platform
+  const terminalsNeeded = Math.ceil(dataRateGbps / opticalTerminalCapacityGbps);
+  const numOpticalTerminals = Math.max(2, Math.min(maxTerminals, terminalsNeeded));
   const opticalCommsCost = numOpticalTerminals * opticalTerminalCost;
 
-  // Calculate hardware costs
+  // =====================================================
+  // ECONOMIES OF SCALE
+  // =====================================================
+  // Larger platforms have lower $/kW due to multiple effects:
+  //
+  // 1. POWER SYSTEM: cost ~ P^0.7 (typical for power generation)
+  //    - Shared control systems, sensors, actuators
+  //    - Fixed engineering costs amortized over more capacity
+  //    - Balance-of-plant scales sub-linearly
+  const powerScaleExponent = 0.7;
+  const referencePowerKw = 1000; // 1 MW reference
+  const powerScaleFactor = Math.pow(powerKw / referencePowerKw, powerScaleExponent - 1);
+
+  // 2. AVIONICS: Mostly FIXED COST (same GNC system for 1 MW or 50 MW)
+  //    - One flight computer, same sensors, same control algorithms
+  //    - A 50 MW platform has same avionics as 1 MW → huge $/kW advantage
+  const avionicsFixedCost = 15e6; // $15M for rad-hard flight systems
+
+  // 3. RADIATORS: cost ~ Area^0.85 (larger panels simpler, mass production)
+  //    - Small radiators: complex deployment, high $/m²
+  //    - Large radiators: simple panels, lower $/m²
+  const radAreaScaleFactor = Math.pow(radAreaM2 / 100, 0.85 - 1); // vs 100 m² reference
+
+  // 4. INTEGRATION: cost ~ hardware^0.8 (fixed test facilities, teams)
+  //    - Same clean room, same engineers, same test campaigns
+  //    - Larger platform amortizes these fixed costs
+
+  // Calculate hardware costs with scale economies
   let mfgCostPower: number;
   if (hasFusion) {
-    mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.fusion * prodMult;
+    mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.fusion * prodMult * powerScaleFactor;
   } else if (hasFission) {
-    mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.fission * prodMult;
+    mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.fission * prodMult * powerScaleFactor;
   } else {
-    mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.solar * prodMult;
+    mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.solar * prodMult * powerScaleFactor;
   }
   const mfgCostBatt = battMass * COMPONENT_COSTS_PER_KG.battery * prodMult;
   const mfgCostCompute = compMass * COMPONENT_COSTS_PER_KG.compute * prodMult;
-  const mfgCostRadiator = radMass * COMPONENT_COSTS_PER_KG.radiator * prodMult;
+  // Radiator cost with area scaling
+  const mfgCostRadiator = radMass * COMPONENT_COSTS_PER_KG.radiator * prodMult * radAreaScaleFactor;
   const mfgCostShield = shieldMass * COMPONENT_COSTS_PER_KG.shield * prodMult;
   const mfgCostStruct = structMass * COMPONENT_COSTS_PER_KG.structure * prodMult;
-  const mfgCostAvionics = avionicsMass * COMPONENT_COSTS_PER_KG.avionics * prodMult;
+  // Avionics: FIXED cost, not per-kg (economies of scale)
+  const mfgCostAvionics = avionicsFixedCost * prodMult;
   const mfgCostPropulsion = propulsionMass * COMPONENT_COSTS_PER_KG.propulsion * prodMult;
   const mfgCostAocs = aocsMass * COMPONENT_COSTS_PER_KG.aocs * prodMult;
 
@@ -439,8 +480,14 @@ export function calcSatellite(
                        mfgCostRadiator + mfgCostShield + mfgCostStruct +
                        mfgCostAvionics + mfgCostPropulsion + mfgCostAocs + opticalCommsCost;
 
-  // INTEGRATION & TEST: 60% of hardware cost (industry standard)
-  const integrationCost = hardwareCost * 0.60;
+  // INTEGRATION & TEST: Sub-linear scaling with hardware cost
+  // Industry standard is ~60% for small satellites
+  // But larger platforms amortize fixed costs (test facilities, engineering)
+  // Scale factor: cost ~ hardware^0.8
+  const integrationScaleExponent = 0.8;
+  const referenceHardwareCost = 100e6; // $100M reference
+  const integrationScaleFactor = Math.pow(hardwareCost / referenceHardwareCost, integrationScaleExponent - 1);
+  const integrationCost = hardwareCost * 0.60 * Math.min(1, integrationScaleFactor);
 
   // LAUNCH COST
   const launchCostTotal = dryMass * launchCost;
@@ -449,10 +496,13 @@ export function calcSatellite(
   const insuranceCost = (hardwareCost + integrationCost + launchCostTotal) * 0.12;
 
   // GROUND SEGMENT: Mission ops center, ground stations, customer infrastructure
-  // Base $15M + scales with data rate (more ground stations needed)
-  // Note: Ground segment doesn't scale with satellite prodMult, but does improve over time
+  // Base $20M + sub-linear scaling with data rate (shared infrastructure, economy of scale)
+  // A 50 MW platform doesn't need 50x the ground segment of a 1 MW platform
+  // Ground stations are shared across customer base; ops center is largely fixed
   const groundSegmentLearn = Math.max(0.4, Math.pow(0.90, t)); // 10% annual improvement, floor at 40%
-  const groundSegmentCost = (15e6 + dataRateGbps * 0.5e6) * groundSegmentLearn;
+  const groundSegmentBase = 20e6;
+  const groundSegmentVariable = Math.sqrt(dataRateGbps) * 0.5e6; // Sub-linear with sqrt
+  const groundSegmentCost = (groundSegmentBase + groundSegmentVariable) * groundSegmentLearn;
 
   // INTEREST DURING CONSTRUCTION (IDC)
   // Longer build times = more carrying cost on capital before revenue starts
