@@ -441,12 +441,12 @@
       <div class="section">
         <div class="section-title">Infrastructure</div>
         <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">Base BW</span><span class="slider-val"><span id="v-bandwidth">50</span><span class="unit">Tbps</span></span></div>
-          <input type="range" id="bandwidth" min="10" max="200" value="50">
+          <div class="slider-header"><span class="slider-lbl">Base BW</span><span class="slider-val"><span id="v-bandwidth">20</span><span class="unit">Tbps</span></span></div>
+          <input type="range" id="bandwidth" min="5" max="100" value="20">
         </div>
         <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">BW Growth</span><span class="slider-val"><span id="v-bwGrowth">35</span><span class="unit">%/yr</span></span></div>
-          <input type="range" id="bwGrowth" min="15" max="50" value="35">
+          <div class="slider-header"><span class="slider-lbl">BW Growth</span><span class="slider-val"><span id="v-bwGrowth">25</span><span class="unit">%/yr</span></span></div>
+          <input type="range" id="bwGrowth" min="10" max="40" value="25">
         </div>
         <div class="slider-row">
           <div class="slider-header"><span class="slider-lbl">BW $/Gbps</span><span class="slider-val">$<span id="v-bwCost">50</span><span class="unit">k</span></span></div>
@@ -2139,10 +2139,10 @@ var Model = (() => {
     maintCost: 0.015,
     // Annual maintenance as fraction of capex (1.5%)
     // Bandwidth
-    bandwidth: 50,
-    // Total capacity in 2025 (Tbps)
-    bwGrowth: 0.4,
-    // Annual bandwidth growth rate (laser links)
+    bandwidth: 20,
+    // Total capacity in 2026 (Tbps) - realistic for early space optical networks
+    bwGrowth: 0.25,
+    // Annual bandwidth growth rate (laser links) - 25% is aggressive but realistic
     gbpsPerTflop: 0.0001,
     // Bandwidth per TFLOP (Gbps) - 0.1 Mbps per TFLOP (batch inference)
     // Market
