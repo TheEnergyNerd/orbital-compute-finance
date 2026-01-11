@@ -1416,11 +1416,7 @@ var Model = (() => {
     const hasFusion = params.fusionOn && year >= params.fusionYear;
     const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
     const hasPhotonicCompute = params.photonicOn && year >= params.photonicYear;
-
-    // Determine power source FIRST to get correct platform mass
-    // Fission/fusion platforms are MUCH larger than solar platforms
-    const powerSourceForMass = hasFusion ? 'fusion' : hasFission ? 'fission' : null;
-    const targetMassKg = getPlatformMass(year, params, powerSourceForMass);
+    const targetMassKg = getPlatformMass(year, params);
     const structureFrac = hasFission ? 0.1 : 0.15;
     const otherSystemsFrac = hasFission ? 0.08 : Math.max(0.12, 0.18 - t * 6e-3);
     const avionicsMassKg = 50;
@@ -1478,30 +1474,14 @@ var Model = (() => {
     const batteryMassPerKwCompute = hasFission ? 0 : actualEclipseComputeFrac * eclipseDurationHrs * 1e3 / battDens;
     const totalMassPerKwCompute = powerMassPerKw / params.computeFrac + // Power system sized for total platform power
     radiatorMassPerKwCompute + computeMassPerKw + batteryMassPerKwCompute;
-
-    // HYBRID APPROACH: Use minimum of physics-driven and mass-constrained power
-    // Early years: mass-constrained (radiators too heavy without thermal)
-    // Later years: physics-driven (thermal/fission/fusion enable larger platforms)
-    const massConstrainedComputeKw = availableMass / totalMassPerKwCompute;
-    const massConstrainedPowerKw = massConstrainedComputeKw / params.computeFrac;
-    const physicsTargetPowerKw = (shell === "cislunar")
-      ? getCislunarPower(year, params)
-      : getLEOPower(year, params);
-
-    // Use the LOWER of physics target and mass constraint
-    // This ensures we don't create impossibly heavy satellites
-    const powerKw = Math.min(physicsTargetPowerKw, massConstrainedPowerKw);
-    const computeKw = powerKw * params.computeFrac;
-
-    // Derive masses from actual power
+    const computeKw = availableMass / totalMassPerKwCompute;
+    const powerKw = computeKw / params.computeFrac;
     const powerMass = powerKw * powerMassPerKw;
     const radiatorMass = computeKw * radiatorMassPerKwCompute;
     const computeMass = computeKw * computeMassPerKw;
     const battMass = computeKw * batteryMassPerKwCompute;
     const structMass = targetMassKg * structureFrac;
     const otherMass = targetMassKg * otherSystemsFrac;
-
-    // dryMass stays at targetMassKg (launch vehicle limit) when mass-constrained
     const dryMass = targetMassKg;
     const powerMassPerKwCompute = powerMassPerKw / params.computeFrac;
     const thermalMassPerKwCompute = radiatorMassPerKwCompute;
@@ -1752,13 +1732,10 @@ var Model = (() => {
     const blendedEnergy = gridEnergy * (1 - yearBtmShare) + btmEnergy * yearBtmShare;
 
     const pue = Math.max(1.08, params.groundPue - t * 0.01);
-    // Energy cost scales inversely with efficiency - more efficient chips use less energy per compute unit
-    // Base: 700W H100 at 2800 GFLOPS/W. If efficiency doubles, energy per compute halves.
-    const enCost = 700 * 8760 * SLA * blendedEnergy * pue / 1e3 * (2800 / gflopsW);
+    const enCost = 700 * 8760 * SLA * blendedEnergy * pue / 1e3;
     // Overhead includes: cooling, staffing, land lease, insurance, network, security
-    // Scales partially with efficiency (some fixed costs, some per-compute costs)
-    const overheadBase = 0.50 * 8760 * SLA;
-    const overhead = overheadBase * Math.pow(2800 / gflopsW, 0.3);  // Partial scaling
+    // $0.50/GPU-hr is realistic for hyperscale operations
+    const overhead = 0.50 * 8760 * SLA;
     // Utilization factor: datacenters don't run at 100% - typical 60-80%
     const utilization = 0.70;
     const base = (hwCost + enCost + overhead) / (8760 * SLA * utilization);
@@ -2686,10 +2663,10 @@ function update() {
   // Core charts - LCOC with uncertainty
   // Use sat.lcoc (production cost) for cleaner curves that match crossover detection
   // Apply mid-timeline architectural uncertainty (bands re-widen 2035-2045)
-  // Clamp LCOC to displayable range for log chart (max $1000/GPU-hr for display)
+  // Clamp LCOC to displayable range for log chart (max $500/GPU-hr, min $0.001)
   const clampLcoc = (val) => {
-    if (!isFinite(val) || val <= 0) return 1000;  // Infinity/NaN/0 → cap at reasonable display max
-    return Math.min(1000, Math.max(0.001, val));
+    if (!isFinite(val) || val <= 0) return 500;  // Infinity/NaN/0 → cap
+    return Math.min(500, Math.max(0.001, val));
   };
   charts.lcoc.data.datasets[0].data = agg.sats.map((sat, i) => {
     const year = YEARS[i];
