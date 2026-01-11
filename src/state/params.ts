@@ -38,10 +38,20 @@ export const defaults: Params = {
   photonicSpaceMult: 100,
   workloadProbabilistic: 0.15, // Fraction of workloads that are sampling-heavy
 
-  // Thermal
-  emissivity: 0.85,      // Radiator surface emissivity
-  opTemp: 365,           // Operating temperature (K)
+  // Thermal - first principles radiative balance
+  emissivity: 0.85,      // Radiator surface emissivity (deprecated, use radEmissivity)
+  opTemp: 365,           // Operating temperature (K) (deprecated, use radTempK)
   radLearn: 50,          // kg/MW/year improvement for conventional radiators
+  radTempK: 350,         // Radiator operating temperature (K)
+  radEmissivity: 0.85,   // Radiator surface emissivity (0-1)
+  radTwoSided: true,     // Radiator emits from both sides
+  radMassFrac: 0.15,     // Radiator mass as fraction of dry mass
+  radKgPerM2: 3.0,       // Radiator areal density (kg/m²) - conventional
+  wasteHeatFrac: 0.90,   // Fraction of compute power that becomes waste heat
+  qSolarAbsWPerM2: 200,  // Absorbed solar flux (W/m²)
+  qAlbedoAbsWPerM2: 50,  // Absorbed Earth albedo (W/m²)
+  qEarthIrAbsWPerM2: 150, // Absorbed Earth IR (W/m²)
+  eclipseFrac: 0.35,     // Fraction of orbit in eclipse (LEO default)
 
   // Power
   solarEff: 0.20,        // Silicon baseline (SpaceX/Starlink approach)
@@ -64,12 +74,20 @@ export const defaults: Params = {
 
   maintCost: 0.015,      // Annual maintenance as fraction of capex (1.5%)
 
-  // Bandwidth
+  // Bandwidth - goodput model
   bandwidth: 50,         // Total capacity in 2025 (Tbps)
   bwGrowth: 0.35,        // Annual bandwidth growth rate
   bwCost: 50,            // Annual cost per Gbps ($k/Gbps/year) - ground station + spectrum
-  gbpsPerTflop: 0.0001,  // Bandwidth per TFLOP (Gbps)
+  gbpsPerTflop: 0.0001,  // DEPRECATED: Bandwidth per TFLOP (Gbps)
+  terminalGoodputGbps: 20,   // Baseline per-platform terminal capacity (Gbps)
+  contactFraction: 0.25,     // Fraction of time in contact (0-1)
+  protocolOverhead: 0.15,    // Protocol/FEC overhead (0-1)
+  bytesPerFlop: 0.05,        // Bytes of IO per FLOP
   cislunarLocalRatio: 0.85,  // 85% of cislunar compute is local (no downlink needed)
+
+  // Tokens - FLOPs-based model
+  flopsPerToken: 140e9,      // FLOPs per token (Llama-70B class)
+  bytesPerToken: 4,          // Bytes of output per token
 
   // Market
   orbitalEligibleShare: 0.35,  // Fraction of demand that is latency-tolerant

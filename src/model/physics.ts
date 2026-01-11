@@ -7,6 +7,67 @@ import { getDemandPressure } from './market';
  * All calculations are derived from first principles.
  */
 
+// =====================================================
+// THERMAL: First-principles radiative balance
+// =====================================================
+
+/**
+ * Calculate net radiator heat rejection (W/m²) using Stefan-Boltzmann.
+ * q_net = q_emit - q_abs
+ *
+ * @param params - Model parameters
+ * @param year - Current year
+ * @param inEclipse - Whether satellite is in Earth's shadow
+ * @returns Net heat rejection in W/m² (clamped to minimum 1 W/m²)
+ */
+export function getRadiatorNetWPerM2(params: Params, year: number, inEclipse: boolean): number {
+  const sigma = 5.670374419e-8;  // Stefan-Boltzmann constant
+  const T = params.radTempK || 350;
+  const eps = params.radEmissivity || 0.85;
+  const sides = (params.radTwoSided !== false) ? 2 : 1;
+
+  // Emitted power: ε × σ × T⁴ × sides
+  const q_emit = sides * eps * sigma * Math.pow(T, 4);
+
+  // Absorbed heat depends on eclipse state
+  // During eclipse, solar + albedo → 0, Earth IR remains
+  const q_solar = inEclipse ? 0 : (params.qSolarAbsWPerM2 || 200);
+  const q_albedo = inEclipse ? 0 : (params.qAlbedoAbsWPerM2 || 50);
+  const q_earthIR = params.qEarthIrAbsWPerM2 || 150;
+
+  const q_abs = q_solar + q_albedo + q_earthIR;
+  const q_net = q_emit - q_abs;
+
+  // Guardrail: prevent negative/zero rejection (invalid design)
+  return Math.max(1, q_net);
+}
+
+/**
+ * Get eclipse fraction for a given orbital shell.
+ * Simple model: constant per shell, user-overridable.
+ *
+ * @param params - Model parameters
+ * @param year - Current year (for future time-varying effects)
+ * @param shell - Orbital shell name
+ * @returns Fraction of orbit in eclipse (0-1)
+ */
+export function getEclipseFraction(params: Params, year: number, shell = 'leo'): number {
+  // If user has set a global override, use it
+  if (params.eclipseFrac !== undefined && params.eclipseFrac > 0) {
+    return params.eclipseFrac;
+  }
+
+  // Default eclipse fractions by shell
+  const eclipseFractions: Record<string, number> = {
+    leo: 0.35,       // ~35% for 550km orbit
+    meo: 0.10,       // Much less eclipse at higher altitude
+    geo: 0.01,       // Rare eclipses at GEO
+    cislunar: 0.02   // Minimal eclipse in cislunar space
+  };
+
+  return eclipseFractions[shell] || 0.35;
+}
+
 /**
  * Calculate launch cost per kg for a given year and orbital shell.
  * Applies demand-coupled Wright's Law learning curve with floor constraint.
@@ -147,9 +208,8 @@ export function getBandwidth(year: number, params: Params): number {
 
 /**
  * Calculate effective bandwidth requirement per TFLOP.
- * With thermo/photonic computing, more on-board processing means less data
- * needs to be sent back to Earth (edge inference, only send results).
- * Uses smooth exponential decay to avoid oscillation.
+ * DEPRECATED: Use getCommsTflopsLimit for new code.
+ * Kept for backwards compatibility.
  */
 export function getEffectiveBwPerTflop(year: number, params: Params): number {
   const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
@@ -170,6 +230,92 @@ export function getEffectiveBwPerTflop(year: number, params: Params): number {
   }
 
   return bwPerTflop;
+}
+
+// =====================================================
+// BANDWIDTH: Goodput → bytes/FLOP → TFLOPs model
+// =====================================================
+
+/**
+ * Calculate platform goodput (effective data rate after losses).
+ * goodput = terminalGoodputGbps × contactFraction × (1 - protocolOverhead)
+ *
+ * @param params - Model parameters
+ * @param year - Current year (for future tech scaling)
+ * @returns Effective goodput in Gbps
+ */
+export function getPlatformGoodputGbps(params: Params, year: number): number {
+  const terminalGoodput = params.terminalGoodputGbps || 20;  // 20 Gbps baseline
+  const contactFrac = params.contactFraction || 0.25;        // 25% visibility
+  const overhead = params.protocolOverhead || 0.15;          // 15% overhead
+
+  let goodput = terminalGoodput * contactFrac * (1 - overhead);
+
+  // Tech improvements over time (laser links, more ground stations)
+  const t = year - 2026;
+  const techMult = 1 + t * 0.05;  // 5% annual improvement
+  goodput *= Math.min(10, techMult);  // Cap at 10x improvement
+
+  return goodput;
+}
+
+/**
+ * Calculate maximum TFLOPs deliverable given bandwidth constraint.
+ * Uses bytes/FLOP to convert goodput to compute capacity.
+ *
+ * @param params - Model parameters
+ * @param year - Current year
+ * @returns Maximum TFLOPs limited by bandwidth
+ */
+export function getCommsTflopsLimit(params: Params, year: number): number {
+  const goodputGbps = getPlatformGoodputGbps(params, year);
+  const goodputBytesPerSec = (goodputGbps * 1e9) / 8;
+
+  // bytes/FLOP determines how much compute per byte of IO
+  const bytesPerFlop = params.bytesPerFlop || 0.05;  // 0.05 bytes/FLOP default
+
+  // FLOPs/sec = (bytes/sec) / (bytes/FLOP)
+  const flopsPerSec = goodputBytesPerSec / bytesPerFlop;
+
+  // Convert to TFLOPs
+  return flopsPerSec / 1e12;
+}
+
+// =====================================================
+// TOKENS: FLOPs-based model
+// =====================================================
+
+/**
+ * Calculate tokens per second from TFLOPs.
+ * Uses flopsPerToken parameter instead of hardcoded constants.
+ *
+ * @param tflops - Compute capacity in TFLOPs
+ * @param params - Model parameters
+ * @returns Tokens per second
+ */
+export function getTokensPerSecond(tflops: number, params: Params): number {
+  // flopsPerToken: typical values:
+  //   - Llama-7B: ~14 GFLOPs/token
+  //   - Llama-70B: ~140 GFLOPs/token
+  //   - GPT-4 class: ~1800 GFLOPs/token (estimated)
+  const flopsPerToken = params.flopsPerToken || 140e9;  // Default: Llama-70B
+
+  const flopsPerSec = tflops * 1e12;
+  return flopsPerSec / flopsPerToken;
+}
+
+/**
+ * Calculate tokens per year from TFLOPs.
+ *
+ * @param tflops - Compute capacity in TFLOPs
+ * @param params - Model parameters
+ * @param availability - Fraction of time available (0-1)
+ * @returns Tokens per year
+ */
+export function getTokensPerYear(tflops: number, params: Params, availability = 0.99): number {
+  const tokensPerSec = getTokensPerSecond(tflops, params);
+  const secondsPerYear = 8760 * 3600;
+  return tokensPerSec * secondsPerYear * availability;
 }
 
 /**

@@ -20,10 +20,20 @@ export interface Params {
   photonicSpaceMult: number;
   workloadProbabilistic: number;
 
-  // Thermal
+  // Thermal - first principles radiative balance
   emissivity: number;
   opTemp: number;
   radLearn: number;
+  radTempK: number;           // Radiator operating temperature (K)
+  radEmissivity: number;      // Radiator surface emissivity (0-1)
+  radTwoSided: boolean;       // Whether radiator emits from both sides
+  radMassFrac: number;        // Radiator mass as fraction of dry mass
+  radKgPerM2: number;         // Radiator areal density (kg/m²)
+  wasteHeatFrac: number;      // Fraction of compute power that becomes waste heat
+  qSolarAbsWPerM2: number;    // Absorbed solar flux (W/m²)
+  qAlbedoAbsWPerM2: number;   // Absorbed Earth albedo (W/m²)
+  qEarthIrAbsWPerM2: number;  // Absorbed Earth IR (W/m²)
+  eclipseFrac: number;        // Fraction of orbit in eclipse (0-1)
 
   // Power
   solarEff: number;
@@ -47,13 +57,21 @@ export interface Params {
   waccOrbital: number;
   waccGround: number;
 
-  // Bandwidth
+  // Bandwidth - goodput model
   bandwidth: number;
   bwGrowth: number;
   bwCost: number;  // Annual cost per Gbps ($k/Gbps/year)
-  gbpsPerTflop: number;
+  gbpsPerTflop: number;  // DEPRECATED - kept for backwards compatibility
+  terminalGoodputGbps: number;  // Baseline per-platform terminal capacity
+  contactFraction: number;       // Fraction of time in contact (0-1)
+  protocolOverhead: number;      // Protocol/FEC overhead (0-1)
+  bytesPerFlop: number;          // Bytes of IO per FLOP
   orbitalEligibleShare: number;
   cislunarLocalRatio: number;  // Fraction of cislunar compute that doesn't need downlink (85%)
+
+  // Tokens - FLOPs-based model
+  flopsPerToken: number;         // FLOPs required per token (model-dependent)
+  bytesPerToken: number;         // Bytes of IO per token
 
   // Ground
   groundPue: number;
@@ -104,6 +122,20 @@ export interface MassBreakdown {
   other: number;  // avionics + propulsion + comms + aocs
 }
 
+// Constraint limits for audit output
+export interface ConstraintLimits {
+  powerKwLimit: number;         // Max compute from power budget
+  thermalKwLimit: number;       // Max compute from thermal capacity
+  commsTflopsLimit: number;     // Max TFLOPs from bandwidth
+}
+
+// Constraint margins for audit output
+export interface ConstraintMargins {
+  power: number;                // computeKw / powerKwLimit
+  thermal: number;              // computeKw / thermalKwLimit
+  comms: number;                // tflops / commsTflopsLimit
+}
+
 export interface SatelliteResult {
   year: number;
   powerKw: number;
@@ -133,6 +165,11 @@ export interface SatelliteResult {
   radCapacityKw: number;        // Radiator heat rejection capacity
   computeKw: number;            // Actual compute power (may be less than desired)
   thermalMargin: number;        // Fraction of thermal capacity used (0-1)
+  // Audit: binding constraint + margins
+  limits: ConstraintLimits;
+  binding: 'power' | 'thermal' | 'comms';
+  margins: ConstraintMargins;
+  invalidReason?: string;       // If design is physically impossible
 }
 
 export interface GroundResult {

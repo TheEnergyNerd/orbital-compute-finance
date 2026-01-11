@@ -1,6 +1,6 @@
 import { SHELLS, STARSHIP_PAYLOAD_KG } from './constants';
 import type { Params, FleetResult } from './types';
-import { getLEOPower, getCislunarPower, getBandwidth, getEffectiveBwPerTflop } from './physics';
+import { getLEOPower, getCislunarPower, getBandwidth, getEffectiveBwPerTflop, getTokensPerYear } from './physics';
 import { getDemand } from './market';
 import { getShellRadiationEffects } from './orbital';
 import { calcSatellite } from './satellite';
@@ -312,12 +312,10 @@ export function calcFleet(
   const leoRadEffects = getShellRadiationEffects('leo', year, params);
   const replacementRate = leoRadEffects.replacementRate;
 
-  // Calculate delivered compute metric (Llama-70B tokens/year)
-  // Llama-70B: ~0.05 tokens/sec per TFLOP (rough estimate)
-  const tokensPerTflopSec = 0.05;
-  const secondsPerYear = 8760 * 3600;
+  // Calculate delivered compute metric using FLOPs/token model
   const deliveredTflops = fleetTflops * bwSell;  // Only count sellable compute
-  const deliveredTokensPerYear = deliveredTflops * tokensPerTflopSec * secondsPerYear;
+  const availability = 0.99;  // 99% uptime target
+  const deliveredTokensPerYear = getTokensPerYear(deliveredTflops, params, availability);
 
   // === Fleet mass & Starship equivalency ===
   const totalPlatforms = leoPlatforms + meoPlatforms + geoPlatforms + cisPlatforms;

@@ -1,12 +1,15 @@
 import { SLA, SOLAR_CONSTANT, STEFAN_BOLTZMANN } from './constants';
-import type { Params, SatelliteResult } from './types';
+import type { Params, SatelliteResult, ConstraintLimits, ConstraintMargins } from './types';
 import {
   getLEOPower,
   getLaunchCost,
   getRadiatorMassPerMW,
   getRadiatorPower,
   getOrbitalEfficiency,
-  getEffectiveBwPerTflop
+  getEffectiveBwPerTflop,
+  getRadiatorNetWPerM2,
+  getEclipseFraction,
+  getCommsTflopsLimit
 } from './physics';
 import { getShellRadiationEffects } from './orbital';
 import { getCRF } from './finance';
@@ -96,139 +99,161 @@ export function calcSatellite(
   }
 
   // =====================================================
-  // THERMAL CONSTRAINT MODEL
+  // THERMAL CONSTRAINT MODEL - FIXED-POINT MASS CLOSURE
   // =====================================================
-  // Radiator capacity is a CONSTRAINT that limits compute power.
-  // Instead of sizing radiators to match waste heat (infinite scaling),
-  // we define a radiator budget and clip compute if it exceeds capacity.
+  // Radiator sizing is mass-closed via fixed-point iteration:
+  // - Total dry mass influences radiator budget
+  // - Radiator capacity then clips compute
+  // - Iterate until stable (<=1% change) or max 20 iterations
 
-  // Step 1: Define radiator mass budget based on platform class
-  // Radiators are typically 10-25% of spacecraft dry mass
-  // Larger platforms can afford more radiator mass
-  let radMassBudget: number;
-  let radTempK: number;
-  let radKgPerM2: number;
+  // Get eclipse-aware net flux for radiative balance
+  const eclipseFrac = getEclipseFraction(params, year, shell);
+  const qNetSun = getRadiatorNetWPerM2(params, year, false);
+  const qNetEcl = getRadiatorNetWPerM2(params, year, true);
+  const qNetAvg = (1 - eclipseFrac) * qNetSun + eclipseFrac * qNetEcl;
 
-  if (hasFusion) {
-    // Fusion: SCO2 cycle requires low-temp rejection (293K)
-    // Larger radiator budget due to combined GPU + SCO2 waste
-    radMassBudget = powerMass * 0.40; // 40% of power system mass for radiators
-    radTempK = 293; // 20°C for SCO2 compressor inlet
-    const maturity = Math.min(1, (year - params.fusionYear) / 8);
-    radKgPerM2 = 1.5 - maturity * 1.0; // 1.5 → 0.5 kg/m² over 8 years
-  } else if (hasFission) {
-    // Fission: can run at higher temps, more efficient radiators
-    radMassBudget = powerMass * 0.25; // 25% of power system mass
-    radTempK = params.opTemp; // Use operating temp parameter
-    radKgPerM2 = hasThermal ? 0.8 : 2.5; // Droplet vs conventional
-  } else {
-    // Solar: limited mass budget, conventional radiators
-    radMassBudget = (powerMass + battMass) * 0.20; // 20% of power+battery mass
-    radTempK = params.opTemp;
-    radKgPerM2 = hasThermal ? 1.0 : 3.0; // Droplet vs conventional
-  }
+  // Radiator areal density (kg/m²) - varies with tech
+  const radKgPerM2 = params.radKgPerM2 || (hasThermal ? 1.0 : 3.0);
+  const radMassFrac = params.radMassFrac || 0.15;  // 15% of dry mass default
 
-  // Apply minimum radiator mass (can't go below structural minimum)
-  radMassBudget = Math.max(50, radMassBudget);
-
-  // Step 2: Calculate radiator heat rejection capacity (Stefan-Boltzmann)
-  // P = εσT⁴ × Area, so Area = radMassBudget / radKgPerM2
-  // Capacity = ε × σ × T⁴ × Area
-  const radAreaM2 = radMassBudget / radKgPerM2;
-  const radCapacityW = params.emissivity * STEFAN_BOLTZMANN * Math.pow(radTempK, 4) * radAreaM2;
-  const radCapacityKw = radCapacityW / 1000;
-
-  // Step 3: Calculate maximum compute power based on thermal capacity
-  // GPU waste heat fraction (90% of compute power becomes heat)
-  const GPU_WASTE_FRACTION = 0.90;
-
-  // For fusion, must also account for SCO2 cycle waste heat
-  let thermalBudgetForCompute: number;
-  if (hasFusion) {
-    // Fusion waste = electrical output (50% thermal efficiency)
-    // Thermal budget for compute = total capacity - fusion waste
-    thermalBudgetForCompute = Math.max(0, radCapacityKw - fusionWasteKw);
-  } else {
-    thermalBudgetForCompute = radCapacityKw;
-  }
+  // Waste heat fraction
+  const baseWasteHeatFrac = params.wasteHeatFrac || 0.90;
 
   // Thermo/photonic computing reduces waste heat per compute
-  let wasteHeatMultiplier = GPU_WASTE_FRACTION;
+  let wasteHeatFrac = baseWasteHeatFrac;
   if (hasThermoCompute || hasPhotonicCompute) {
     const deterministicFrac = 1 - params.workloadProbabilistic;
     const probFrac = params.workloadProbabilistic;
     const photonicMult = hasPhotonicCompute ? params.photonicSpaceMult : 1;
     const thermoMult = hasThermoCompute ? params.thermoSpaceMult : 1;
     const avgMult = photonicMult * deterministicFrac + thermoMult * probFrac;
-    wasteHeatMultiplier = GPU_WASTE_FRACTION / avgMult;
+    wasteHeatFrac = baseWasteHeatFrac / avgMult;
   }
 
-  // Max compute before thermal limit: thermalBudget = computeKw × wasteHeatMultiplier
-  const maxComputeKwThermal = thermalBudgetForCompute / wasteHeatMultiplier;
+  // Calculate data rate early (needed for comms mass estimation)
+  const effectiveBwPerTflop = getEffectiveBwPerTflop(year, params);
 
-  // Step 4: Compute is limited by BOTH power availability AND thermal capacity
-  const desiredComputeKw = powerKw * params.computeFrac;
-  const computeKw = Math.min(desiredComputeKw, maxComputeKwThermal);
-  const thermalLimited = computeKw < desiredComputeKw * 0.99; // Flag if thermally constrained
+  // Fixed subsystem masses (independent of iteration)
+  const avionicsMassBase = 50 + powerKw * 0.02;
+  const propulsionMassBase = 30;
+  const aocsMassBase = 15 + powerKw * 0.01;
 
-  // Step 5: Calculate actual waste heat and verify constraint
-  const actualGpuWasteKw = computeKw * wasteHeatMultiplier;
+  // =====================================================
+  // FIXED-POINT ITERATION FOR MASS CLOSURE
+  // =====================================================
+  let computeKw = powerKw * params.computeFrac;
+  let radMass = 50;  // Initial guess
+  let radAreaM2 = 0;
+  let totalDryMass = 0;
+  let thermalLimited = false;
+  let radCapacityKw = 0;
+  let invalidReason: string | undefined;
+  let compMass = 0;
+  let commsMass = 0;
+
+  const MAX_ITERATIONS = 20;
+  const CONVERGENCE_THRESHOLD = 0.01;
+
+  for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+    const wasteKw = computeKw * wasteHeatFrac;
+
+    // Compute mass scales with power
+    compMass = Math.max(3, computeKw * 5);
+
+    // Estimate TFLOPS for comms sizing (rough, refined after convergence)
+    const estTflops = computeKw * gflopsW;
+    const estDataRateGbps = estTflops * effectiveBwPerTflop;
+    commsMass = 20 + estDataRateGbps * 0.5;
+
+    // Propulsion scales with payload
+    const propulsionMass = propulsionMassBase + (powerMass + battMass + compMass) * 0.03;
+    const otherMass = avionicsMassBase + propulsionMass + commsMass + aocsMassBase;
+
+    // Estimate dry mass with current radiator mass
+    const baseMass = powerMass + battMass + compMass + radMass + otherMass;
+    const shieldMass = shell === 'leo' ? baseMass * 0.02 : baseMass * 0.15;
+    const structMass = (baseMass + shieldMass) * 0.1;
+    const estDryMass = baseMass + shieldMass + structMass;
+
+    // Radiator mass budget is fraction of total dry mass
+    const radBudget = Math.max(50, radMassFrac * estDryMass);
+
+    // Derive max rejection from budget using areal density
+    const maxArea = radBudget / radKgPerM2;
+    const maxRejectW = qNetAvg * maxArea;
+    const maxRejectKw = maxRejectW / 1000;
+
+    // For fusion, account for SCO2 cycle waste
+    let thermalBudgetForCompute = maxRejectKw;
+    if (hasFusion) {
+      thermalBudgetForCompute = Math.max(0, maxRejectKw - fusionWasteKw);
+    }
+
+    // Thermal limit on compute
+    const thermalLimitKw = thermalBudgetForCompute / wasteHeatFrac;
+    const powerLimitKw = powerKw * params.computeFrac;
+    const newComputeKw = Math.min(powerLimitKw, thermalLimitKw);
+
+    // Update radiator sizing based on required rejection
+    const reqRejectW = (newComputeKw * wasteHeatFrac + (hasFusion ? fusionWasteKw : 0)) * 1000;
+    const reqArea = reqRejectW / qNetAvg;
+    radAreaM2 = Math.min(reqArea, maxArea);
+    const newRadMass = radAreaM2 * radKgPerM2;
+
+    // Track radiator capacity
+    radCapacityKw = (qNetAvg * radAreaM2) / 1000;
+
+    // Check convergence
+    const computeChange = Math.abs(newComputeKw - computeKw) / Math.max(1, computeKw);
+    const massChange = Math.abs(newRadMass - radMass) / Math.max(1, radMass);
+
+    computeKw = newComputeKw;
+    radMass = newRadMass;
+    totalDryMass = estDryMass;
+    thermalLimited = computeKw < powerLimitKw * 0.99;
+
+    if (computeChange < CONVERGENCE_THRESHOLD && massChange < CONVERGENCE_THRESHOLD) {
+      break;
+    }
+  }
+
+  // Check if design is valid
+  if (thermalLimited && computeKw < 1) {
+    invalidReason = 'Thermal limit too restrictive: cannot achieve minimum compute';
+  }
+
+  // Calculate total waste heat
+  const actualGpuWasteKw = computeKw * wasteHeatFrac;
   const totalWasteKw = actualGpuWasteKw + (hasFusion ? fusionWasteKw : 0);
 
-  // Sanity check: waste heat must not exceed radiator capacity
-  if (totalWasteKw > radCapacityKw * 1.01) {
-    console.warn(`Thermal violation: ${totalWasteKw.toFixed(0)} kW waste > ${radCapacityKw.toFixed(0)} kW capacity`);
-  }
-
-  // Step 6: Calculate actual radiator mass used (may be less than budget if not needed)
-  const actualRadAreaM2 = (totalWasteKw * 1000) / (params.emissivity * STEFAN_BOLTZMANN * Math.pow(radTempK, 4));
-  const radMass = Math.min(radMassBudget, actualRadAreaM2 * radKgPerM2);
-
   // Now calculate compute output from constrained compute power
-  // TFLOPS = computeKw × gflopsW (since kW × GFLOPS/W = GFLOPS, then /1000 for TFLOPS... but actually kW×1000×GFLOPS/W/1000 = kW×GFLOPS/W)
+  // TFLOPS = computeKw × gflopsW (since kW × GFLOPS/W = GFLOPS = TFLOPS for our units)
   const rawTflops = computeKw * gflopsW;
   const tflops = rawTflops * radEffects.availabilityFactor;
   const gpuEq = tflops / 1979; // H100 equivalents
 
-  // Compute hardware mass scales with power input: ~5 kg per kW of compute power
-  const compMass = Math.max(3, computeKw * 5);
-
-  // Calculate data rate early (needed for comms mass estimation)
-  const effectiveBwPerTflop = getEffectiveBwPerTflop(year, params);
+  // Final data rate calculation
   const dataRateGbps = tflops * effectiveBwPerTflop;
 
-  // Fixed subsystems (from first principles):
-  // - Avionics: flight computer, sensors, GNC - 50kg baseline, scales slightly with power
-  // - Propulsion: thrusters, tanks, fuel - scales with platform mass
-  // - Communications: antennas, transponders - scales with data rate
-  // - AOCS: reaction wheels, magnetorquers - scales with platform size
-  const avionicsMass = 50 + powerKw * 0.02; // 50kg base + 20g per kW
-  const propulsionMass = 30 + (powerMass + battMass + compMass) * 0.03; // 30kg base + 3% of payload
-  const commsMass = 20 + dataRateGbps * 0.5; // 20kg base + 0.5kg per Gbps
-  const aocsMass = 15 + powerKw * 0.01; // 15kg base + 10g per kW
+  // Final mass breakdown (using values from iteration)
+  const avionicsMass = avionicsMassBase;
+  const propulsionMass = propulsionMassBase + (powerMass + battMass + compMass) * 0.03;
+  const aocsMass = aocsMassBase;
   const otherSystemsMass = avionicsMass + propulsionMass + commsMass + aocsMass;
-
-  // Calculate temporary mass to estimate volume/surface area for shielding
   const baseMass = powerMass + battMass + compMass + radMass + otherSystemsMass;
 
   // Radiation shielding mass
-  // Currently, radiation limits lifetime but adds zero mass cost. This fixes that.
   let shieldMass = 0;
   if (shell === 'leo') {
-    // LEO: Minimal shielding (mostly thermal/micrometeoroid)
     shieldMass = baseMass * 0.02;
   } else {
-    // MEO/Cislunar: Van Allen belts require heavy shielding for COTS silicon
-    // Approximation: 50kg/m² (5g/cm²) shielding on the surface area
-    // Estimate surface area assuming density of ~100kg/m³
     const structureArea = Math.pow(baseMass / 100, 0.66) * 6;
-    const shieldThicknessKgM2 = 50;
-    shieldMass = structureArea * shieldThicknessKgM2;
+    shieldMass = structureArea * 50;
   }
 
-  // Total mass (including shielding)
+  // Final dry mass
   const subsystems = baseMass + shieldMass;
-  const structMass = subsystems * 0.1; // 10% structural margin
+  const structMass = subsystems * 0.1;
   const dryMass = subsystems + structMass;
 
   // Specific power
@@ -238,6 +263,35 @@ export function calcSatellite(
     hasFission || hasFusion
       ? 0
       : (powerKw * 1000) / (solarEff * SOLAR_CONSTANT);
+
+  // =====================================================
+  // AUDIT: Constraint limits and margins
+  // =====================================================
+  const powerKwLimit = powerKw * params.computeFrac;
+  const thermalKwLimit = radCapacityKw / wasteHeatFrac;
+  const commsTflopsLimit = getCommsTflopsLimit(params, year);
+
+  const limits: ConstraintLimits = {
+    powerKwLimit,
+    thermalKwLimit,
+    commsTflopsLimit
+  };
+
+  // Determine binding constraint
+  let binding: 'power' | 'thermal' | 'comms';
+  if (thermalLimited) {
+    binding = 'thermal';
+  } else if (tflops >= commsTflopsLimit * 0.99) {
+    binding = 'comms';
+  } else {
+    binding = 'power';
+  }
+
+  const margins: ConstraintMargins = {
+    power: powerKwLimit > 0 ? computeKw / powerKwLimit : 0,
+    thermal: thermalKwLimit > 0 ? computeKw / thermalKwLimit : 0,
+    comms: commsTflopsLimit > 0 ? tflops / commsTflopsLimit : 0
+  };
 
   // =====================================================
   // LCOC (Levelized Cost of Compute) - REALISTIC COSTING
@@ -397,6 +451,11 @@ export function calcSatellite(
     thermalLimited,
     radCapacityKw,
     computeKw,
-    thermalMargin: totalWasteKw / radCapacityKw
+    thermalMargin: radCapacityKw > 0 ? totalWasteKw / radCapacityKw : 1,
+    // Audit: binding constraint + margins
+    limits,
+    binding,
+    margins,
+    invalidReason
   };
 }

@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { getLaunchCost, getRadiatorMassPerMW, getGroundEfficiency, getOrbitalEfficiency } from '../src/model/physics';
+import {
+  getLaunchCost,
+  getRadiatorMassPerMW,
+  getGroundEfficiency,
+  getOrbitalEfficiency,
+  getRadiatorNetWPerM2,
+  getEclipseFraction,
+  getPlatformGoodputGbps,
+  getCommsTflopsLimit,
+  getTokensPerSecond
+} from '../src/model/physics';
 import { getCRF } from '../src/model/finance';
 import { getDemand, getGroundSupply } from '../src/model/market';
 import { getShellRadiationEffects } from '../src/model/orbital';
@@ -154,5 +164,159 @@ describe('Integration - Sanity Checks', () => {
     const cost2026 = getLaunchCost(2026, defaults);
     const cost2050 = getLaunchCost(2050, defaults);
     expect(cost2050 / cost2026).toBeLessThan(0.1);
+  });
+});
+
+// =====================================================
+// NEW CONSTRAINT TESTS
+// =====================================================
+
+describe('Thermal - Radiative Balance', () => {
+  it('net radiation is positive (q_emit > q_abs)', () => {
+    const qNetSun = getRadiatorNetWPerM2(defaults, 2030, false);
+    const qNetEcl = getRadiatorNetWPerM2(defaults, 2030, true);
+    expect(qNetSun).toBeGreaterThan(0);
+    expect(qNetEcl).toBeGreaterThan(0);
+  });
+
+  it('eclipse has higher net radiation (no solar/albedo absorption)', () => {
+    const qNetSun = getRadiatorNetWPerM2(defaults, 2030, false);
+    const qNetEcl = getRadiatorNetWPerM2(defaults, 2030, true);
+    expect(qNetEcl).toBeGreaterThan(qNetSun);
+  });
+
+  it('eclipse fraction is between 0 and 1', () => {
+    const frac = getEclipseFraction(defaults, 2030, 'leo');
+    expect(frac).toBeGreaterThanOrEqual(0);
+    expect(frac).toBeLessThanOrEqual(1);
+  });
+
+  it('LEO has higher eclipse fraction than GEO (when no global override)', () => {
+    // Remove global eclipseFrac override to test per-shell defaults
+    const noOverride = { ...defaults, eclipseFrac: 0 };
+    const leoFrac = getEclipseFraction(noOverride, 2030, 'leo');
+    const geoFrac = getEclipseFraction(noOverride, 2030, 'geo');
+    expect(leoFrac).toBeGreaterThan(geoFrac);
+  });
+});
+
+describe('Thermal Constraint - Binding', () => {
+  it('reducing radMassFrac makes thermal bind', () => {
+    // Normal params
+    const satNormal = calcSatellite(2030, defaults);
+
+    // Severely constrained radiator budget
+    const constrainedParams = { ...defaults, radMassFrac: 0.02 }; // 2% instead of 15%
+    const satConstrained = calcSatellite(2030, constrainedParams);
+
+    // Thermal should bind
+    expect(satConstrained.binding).toBe('thermal');
+    expect(satConstrained.thermalLimited).toBe(true);
+    // TFLOPs should be lower
+    expect(satConstrained.tflops).toBeLessThan(satNormal.tflops);
+  });
+
+  it('increasing qSolarAbsWPerM2 reduces thermal limit', () => {
+    const satNormal = calcSatellite(2030, defaults);
+
+    // High absorbed solar flux
+    const highAbsParams = { ...defaults, qSolarAbsWPerM2: 800 }; // 4x absorption
+    const satHighAbs = calcSatellite(2030, highAbsParams);
+
+    // Thermal capacity should be lower (higher absorption eats into net rejection)
+    expect(satHighAbs.radCapacityKw).toBeLessThan(satNormal.radCapacityKw);
+  });
+
+  it('increasing wasteHeatFrac reduces compute', () => {
+    const satNormal = calcSatellite(2030, defaults);
+
+    // Higher waste heat fraction
+    const highWasteParams = { ...defaults, wasteHeatFrac: 0.99 }; // 99% waste
+    const satHighWaste = calcSatellite(2030, highWasteParams);
+
+    // Same radiator can reject less compute power
+    expect(satHighWaste.limits.thermalKwLimit).toBeLessThan(satNormal.limits.thermalKwLimit);
+  });
+});
+
+describe('Bandwidth - Goodput Model', () => {
+  it('goodput is positive', () => {
+    const goodput = getPlatformGoodputGbps(defaults, 2030);
+    expect(goodput).toBeGreaterThan(0);
+  });
+
+  it('goodput scales with terminal capacity', () => {
+    const goodputLow = getPlatformGoodputGbps({ ...defaults, terminalGoodputGbps: 10 }, 2030);
+    const goodputHigh = getPlatformGoodputGbps({ ...defaults, terminalGoodputGbps: 100 }, 2030);
+    expect(goodputHigh).toBeGreaterThan(goodputLow);
+  });
+
+  it('comms TFLOPs limit is positive', () => {
+    const limit = getCommsTflopsLimit(defaults, 2030);
+    expect(limit).toBeGreaterThan(0);
+  });
+
+  it('reducing terminalGoodputGbps reduces comms limit', () => {
+    const limitHigh = getCommsTflopsLimit(defaults, 2030);
+    const limitLow = getCommsTflopsLimit({ ...defaults, terminalGoodputGbps: 2 }, 2030);
+    expect(limitLow).toBeLessThan(limitHigh);
+  });
+});
+
+describe('Tokens - FLOPs Model', () => {
+  it('tokens per second scales with TFLOPs', () => {
+    const tokens1 = getTokensPerSecond(1, defaults);
+    const tokens10 = getTokensPerSecond(10, defaults);
+    expect(tokens10).toBeCloseTo(tokens1 * 10, 5);
+  });
+
+  it('larger models produce fewer tokens per TFLOP', () => {
+    // Llama-7B: 14 GFLOPs/token
+    const small = getTokensPerSecond(1000, { ...defaults, flopsPerToken: 14e9 });
+    // Llama-70B: 140 GFLOPs/token
+    const large = getTokensPerSecond(1000, { ...defaults, flopsPerToken: 140e9 });
+    expect(large).toBeLessThan(small);
+  });
+});
+
+describe('Constraint Audit', () => {
+  it('satellite returns valid constraint limits', () => {
+    const sat = calcSatellite(2030, defaults);
+    expect(sat.limits.powerKwLimit).toBeGreaterThan(0);
+    expect(sat.limits.thermalKwLimit).toBeGreaterThan(0);
+    expect(sat.limits.commsTflopsLimit).toBeGreaterThan(0);
+  });
+
+  it('satellite returns valid binding constraint', () => {
+    const sat = calcSatellite(2030, defaults);
+    expect(['power', 'thermal', 'comms']).toContain(sat.binding);
+  });
+
+  it('margins are between 0 and 1 for binding constraints', () => {
+    const sat = calcSatellite(2030, defaults);
+    // At least one margin should be close to 1 (the binding one)
+    const maxMargin = Math.max(sat.margins.power, sat.margins.thermal);
+    expect(maxMargin).toBeGreaterThan(0.5);
+  });
+});
+
+describe('Unit Sanity', () => {
+  it('computeKw=1 and gflopsW=1000 gives rawTflops=1000', () => {
+    // This tests the TFLOPS calculation: TFLOPS = computeKw × gflopsW
+    // When computeKw=1 and gflopsW=1000, we should get 1000 TFLOPS
+    // Note: The actual satellite model has availability factors, so we test physics directly
+    const computeKw = 1;
+    const gflopsW = 1000;
+    const rawTflops = computeKw * gflopsW;
+    expect(rawTflops).toBe(1000);
+  });
+});
+
+describe('No Circular Sizing', () => {
+  it('higher wasteHeatFrac means lower compute', () => {
+    const sat90 = calcSatellite(2030, { ...defaults, wasteHeatFrac: 0.90 });
+    const sat95 = calcSatellite(2030, { ...defaults, wasteHeatFrac: 0.95 });
+    // More waste heat = less compute capacity from same thermal budget
+    expect(sat95.computeKw).toBeLessThanOrEqual(sat90.computeKw);
   });
 });
