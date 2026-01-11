@@ -1893,9 +1893,11 @@ var Model = (() => {
     const eligibleMult = costRatio < 1 ? Math.min(2, 1 / costRatio) : 1;
     const dynamicEligibleShare = Math.min(0.7, params.orbitalEligibleShare * eligibleMult);
     const maxOrbitalDemandGW = totalDemandGW * dynamicEligibleShare;
-    const leoKw = sat.powerKw;
-    // GEO power multiplier: fusion 50x, fission 20x, thermal 10x, baseline 5x
-    const geoKwCalc = hasFusion ? sat.powerKw * 50 : hasFission ? sat.powerKw * 20 : hasThermal ? sat.powerKw * 10 : sat.powerKw * 5;
+    // Use physics-driven power (getLEOPower) for fleet calculations
+    // This gives MW-class platforms with thermal/fission/fusion
+    const leoKw = getLEOPower(year, params);
+    // GEO power multiplier: fusion 50x, fission 20x, thermal 10x, baseline 5x (applied to LEO power)
+    const geoKwCalc = hasFusion ? leoKw * 50 : hasFission ? leoKw * 20 : hasThermal ? leoKw * 10 : leoKw * 5;
     const uncFleetGW = (leoPlatforms * leoKw + geoPlatforms * geoKwCalc + cisPlatforms * cislunarPowerKw + lunarPlatforms * lunarPowerKw) / 1e6;
     if (uncFleetGW > maxOrbitalDemandGW && maxOrbitalDemandGW > 0) {
       const demandScale = maxOrbitalDemandGW / uncFleetGW;
@@ -1934,21 +1936,23 @@ var Model = (() => {
       lunarPlatforms = Math.round(lunarPlatforms * launchScale);
     }
 
-    // GEO power multiplier: fusion 50x, fission 20x, thermal 10x, baseline 5x
-    const geoPowerKw = hasFusion ? sat.powerKw * 50 : hasFission ? sat.powerKw * 20 : hasThermal ? sat.powerKw * 10 : sat.powerKw * 5;
-    const leoPowerTw = leoPlatforms * sat.powerKw / 1e9;
+    // GEO power uses same multipliers as above (applied to physics-driven LEO power)
+    const geoPowerKw = geoKwCalc;  // Already calculated above
+    const leoPowerTw = leoPlatforms * leoKw / 1e9;
     const meoPowerTw = 0;
     const geoPowerTw = geoPlatforms * geoPowerKw / 1e9;
     const cisPowerTw = cisPlatforms * cislunarPowerKw / 1e9;
     const lunarPowerTw = lunarPlatforms * lunarPowerKw / 1e9;
     const totalPowerTw = leoPowerTw + geoPowerTw + cisPowerTw + lunarPowerTw;
+    // TFLOPS per platform based on physics-driven power
+    const leoTflopsPerPlatform = leoKw * params.computeFrac * sat.gflopsW;
     const geoTflopsPerPlatform = geoPowerKw * params.computeFrac * sat.gflopsW;
     const cisTflopsPerPlatform = cislunarPowerKw * params.computeFrac * sat.gflopsW;
     const lunarTflopsPerPlatform = lunarPowerKw * params.computeFrac * sat.gflopsW;
-    const fleetTflopsRaw = leoPlatforms * sat.tflops + geoPlatforms * geoTflopsPerPlatform + cisPlatforms * cisTflopsPerPlatform + lunarPlatforms * lunarTflopsPerPlatform;
+    const fleetTflopsRaw = leoPlatforms * leoTflopsPerPlatform + geoPlatforms * geoTflopsPerPlatform + cisPlatforms * cisTflopsPerPlatform + lunarPlatforms * lunarTflopsPerPlatform;
     const cislunarLocalRatio = 0.97;
     const lunarLocalRatio = 0.99;
-    const bwNeededLeo = leoPlatforms * sat.tflops * params.gbpsPerTflop;
+    const bwNeededLeo = leoPlatforms * leoTflopsPerPlatform * params.gbpsPerTflop;
     const bwNeededGeo = geoPlatforms * geoTflopsPerPlatform * params.gbpsPerTflop;
     const bwNeededCis = cisPlatforms * cisTflopsPerPlatform * params.gbpsPerTflop * (1 - cislunarLocalRatio);
     const bwNeededLunar = lunarPlatforms * lunarTflopsPerPlatform * params.gbpsPerTflop * (1 - lunarLocalRatio);
