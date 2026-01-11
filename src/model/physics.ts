@@ -164,9 +164,9 @@ export function getOrbitalEfficiency(year: number, params: Params): number {
     baseEff *= (1 + baseLearn * groundLearningMult);
   }
 
-  // Apply radiation penalty to base silicon efficiency
-  const penalty = params.radPen * Math.pow(0.82, year - 2026);
-  baseEff *= (1 - Math.max(0.02, penalty));
+  // NOTE: Radiation penalty is now applied in satellite.ts via radDirectPenalty
+  // The penalty used to decay over time here, but now it's a direct constant penalty
+  // to make the radPen slider behave more predictably for users
 
   const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
   const hasPhotonic = params.photonicOn && year >= params.photonicYear;
@@ -189,17 +189,31 @@ export function getBandwidth(year: number, params: Params): number {
 
   let bw = params.bandwidth * Math.pow(1 + params.bwGrowth, year - 2026);
 
+  // STARSHIP ERA: Bandwidth infrastructure scales with cheap launch
+  // - More relay satellite constellations
+  // - Denser ground station networks
+  // - Free-space optical links between compute platforms
+  // Conservative 3× multiplier (not 10×) - bandwidth infrastructure
+  // takes longer to build than satellites, ground stations are the bottleneck
+  const launchCost = getLaunchCost(year, params);
+  if (launchCost < 200) {
+    const starshipMaturity = Math.min(1, (200 - launchCost) / 185); // 0→1 as cost drops
+    const starshipBwMult = 1 + starshipMaturity * 2; // 1x → 3x (conservative)
+    bw *= starshipBwMult;
+  }
+
   // Thermo/photonic breakthroughs drive bandwidth infrastructure investment
   // (laser links, more ground stations, better spectrum utilization)
-  // Smooth exponential growth to avoid oscillation with fleet scaling
+  // Conservative 2× multiplier over time - these techs reduce compute I/O needs
+  // but don't directly scale bandwidth infrastructure
   if (hasThermoCompute || hasPhotonic) {
     const techYear = Math.min(
       hasThermoCompute ? params.thermoYear : Infinity,
       hasPhotonic ? params.photonicYear : Infinity
     );
     const yearsPost = year - techYear;
-    // Smooth asymptotic growth: starts at 1x, grows to 10x over ~15 years
-    const bwBoost = 1 + 9 * (1 - Math.exp(-yearsPost / 5));
+    // Smooth asymptotic growth: starts at 1x, grows to 2x over ~10 years
+    const bwBoost = 1 + 1 * (1 - Math.exp(-yearsPost / 5));
     bw *= bwBoost;
   }
 
@@ -208,23 +222,44 @@ export function getBandwidth(year: number, params: Params): number {
 
 /**
  * Calculate effective bandwidth requirement per TFLOP.
- * DEPRECATED: Use getCommsTflopsLimit for new code.
- * Kept for backwards compatibility.
+ * Uses token-based model for realistic network I/O requirements.
+ *
+ * Derivation from first principles:
+ * - Llama-70B: 140 GFLOPs per token
+ * - Average response: 4 bytes per token (output)
+ * - Average request: ~16 bytes per token (input context)
+ * - Total I/O: ~20 bytes per token round-trip
+ *
+ * For 1 TFLOP (1e12 FLOPs):
+ * - Tokens = 1e12 / 140e9 = 7.14 tokens
+ * - Bytes = 7.14 × 20 = 143 bytes
+ * - Gbps = 143 × 8 / 1e9 = 1.14e-6 Gbps/TFLOP
+ *
+ * This replaces the deprecated gbpsPerTflop = 0.0001 which was 100× too high.
  */
 export function getEffectiveBwPerTflop(year: number, params: Params): number {
   const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
   const hasPhotonic = params.photonicOn && year >= params.photonicYear;
 
-  let bwPerTflop = params.gbpsPerTflop;
+  // Token-based bandwidth calculation
+  const flopsPerToken = params.flopsPerToken || 140e9;
+  const bytesPerToken = params.bytesPerToken || 4;
+  // Include input context (roughly 4× output tokens for typical inference)
+  const totalBytesPerToken = bytesPerToken * 5;  // input + output
 
+  // Gbps per TFLOP = (tokens/TFLOP) × (bytes/token) × 8 bits/byte / 1e9
+  // tokens/TFLOP = 1e12 FLOPs / flopsPerToken
+  const tokensPerTflop = 1e12 / flopsPerToken;
+  let bwPerTflop = (tokensPerTflop * totalBytesPerToken * 8) / 1e9;
+
+  // Thermo/photonic computing reduces I/O (more computation per token)
   if (hasThermoCompute || hasPhotonic) {
     const techYear = Math.min(
       hasThermoCompute ? params.thermoYear : Infinity,
       hasPhotonic ? params.photonicYear : Infinity
     );
     const yearsPost = year - techYear;
-    // Smooth exponential decay: starts at 1x, asymptotes to 0.05x (20x reduction)
-    // Half-life of ~5 years for gradual transition
+    // Advanced paradigms reduce bandwidth needs by up to 20x
     const reductionFactor = 0.05 + 0.95 * Math.exp(-yearsPost / 5);
     bwPerTflop *= reductionFactor;
   }
@@ -340,36 +375,68 @@ export function getLEOPower(year: number, params: Params): number {
   // Compact fusion enables 5-50 MWe in LEO
   // Nuclear has strong economies of scale - a 50 MW plant has much better $/W than 5 MW
   // This also makes thermal a binding constraint, so radiator sliders work
-  if (hasFusion) {
-    // Fusion: 5-50 MWe platforms, scaling with maturity
-    // Start at 5 MWe, grow to 50 MWe over 10 years as tech matures
-    const maturity = Math.min(1, (year - params.fusionYear) / 10);
-    return 5000 + maturity * 45000; // 5 MW → 50 MW
-  }
+
+  // NUCLEAR POWER: Independent of solar - doesn't need panels!
+  // Fission reactors: Kilopower (1-10 kW), KRUSTY heritage → scaled to MW class
+  // Mature fission: 5-50 MW per platform (limited by radiator mass)
   if (hasFission) {
-    // Fission: 5-20 MW platforms (optimal for LEO latency-sensitive workloads)
-    return 5000 + Math.min(1, (year - params.fissionYear) / 10) * 15000;
+    const fissionMaturity = Math.min(1, (year - params.fissionYear) / 10);
+    // Fission: 10 MW starting, scales to 50 MW with maturity
+    // Much higher than solar because reactor mass << solar array mass for same power
+    const fissionPower = 10000 + fissionMaturity * 40000; // 10 MW → 50 MW
+
+    if (hasFusion) {
+      // Fusion: 50-200 MW for LEO (limited by radiator, not reactor)
+      const fusionMaturity = Math.min(1, (year - params.fusionYear) / 10);
+      const fusionPower = 50000 + fusionMaturity * 150000; // 50 MW → 200 MW
+      return Math.max(fusionPower, fissionPower);
+    }
+    return fissionPower;
   }
 
-  // STARSHIP ERA: "Brute force" approach with massive solar arrays
-  // When mass is cheap, build bigger satellites (Starlink V2 is 4x heavier than V1)
-  // Economic optimization: spend $ on hardware, not launch
+  // SOLAR POWER: Limited by panel area/mass and thermal rejection
+  let solarThermalPower = 0;
+  if (isStarshipEra && hasThermal) {
+    const thermalMaturity = Math.min(1, (year - 2030) / 10);
+    solarThermalPower = 2000 + thermalMaturity * 18000; // 2 MW → 20 MW
+  } else if (isStarshipEra) {
+    const starshipMaturity = Math.min(1, (year - 2030) / 10);
+    solarThermalPower = 1000 + starshipMaturity * 4000; // 1 MW → 5 MW
+  } else if (hasThermal) {
+    const thermalMaturity = Math.min(1, (year - params.thermalYear) / 6);
+    solarThermalPower = 500 + thermalMaturity * 1500; // 500 kW → 2 MW
+  }
+
+  if (solarThermalPower > 0) {
+    return solarThermalPower;
+  }
+
+  // STARSHIP ERA: First-principles solar power limits
+  // - Solar irradiance: 1361 W/m² at 1 AU
+  // - Advanced triple-junction efficiency: 28% by 2030s → 381 W/m²
+  // - Lightweight ROSA arrays: 2.5 kg/m²
+  // - Starship payload: 150,000 kg
+  // - With 50% mass for solar: 75,000 kg → 30,000 m² → 11.4 MW
+  // - With in-orbit assembly (2-3 Starships): 20-30 MW achievable
   if (isStarshipEra) {
-    const maturity = Math.min(1, (year - 2030) / 8);
+    const maturity = Math.min(1, (year - 2030) / 10);
     if (hasThermal) {
-      // With thermal breakthrough + Starship: 1 MW → 4 MW
-      return 1000 + maturity * 3000;
+      // Thermal breakthrough + Starship: radiators no longer limit power
+      // Single Starship: 2 MW (conservative)
+      // Multi-Starship assembly matures: 2 MW → 20 MW over 10 years
+      return 2000 + maturity * 18000;
     }
-    // With Starship but no thermal: 500 kW → 2 MW (still thermal-limited but bigger)
-    return 500 + maturity * 1500;
+    // Without thermal: radiator mass limits power (can't dump all the heat)
+    // Even with big arrays, thermal becomes binding ~4-5 MW
+    // Single Starship: 1 MW, scales to 5 MW with larger radiators
+    return 1000 + maturity * 4000;
   }
 
   if (hasThermal) {
-    // Thermal breakthrough (droplet radiators) removes heat rejection as bottleneck
-    // BUT without Starship, still mass-constrained
-    // Practical limit ~500 kW - 1 MW even with perfect heat rejection
+    // Thermal breakthrough but no Starship: mass-constrained launches
+    // Can build 500 kW - 2 MW platforms (conventional rockets)
     const maturity = Math.min(1, (year - params.thermalYear) / 6);
-    return 500 + maturity * 500; // 500 kW → 1 MW (mass-limited)
+    return 500 + maturity * 1500; // 500 kW → 2 MW
   }
 
   // Conventional (no Starship, no thermal): mass AND thermal limited

@@ -1931,16 +1931,17 @@ var Model = (() => {
     if (preThermalBreakthrough) {
       // Before 2030 (thermal breakthrough): thermal rejection is the binding constraint
       bottleneck = "thermal";
-    } else if (launchConstrained) {
-      // Launch capacity is limiting fleet growth
-      bottleneck = "launch_capacity";
     } else if (!crossoverYear || year < crossoverYear) {
       // Post-breakthrough but pre-crossover: use satellite's binding constraint
       bottleneck = sat.bindingConstraint || "power";
     } else {
-      // Post-crossover: check economic/capacity constraints in order
-      if (bwSell < demandSell && bwSell < 0.9) {
+      // Post-crossover: check constraints
+      // BANDWIDTH check comes FIRST - it directly affects delivered tokens (revenue)
+      if (bwSell < 0.95) {
         bottleneck = "bandwidth";
+      } else if (launchConstrained) {
+        // Launch capacity is limiting fleet growth (but not revenue from existing fleet)
+        bottleneck = "launch_capacity";
       } else if (demandSell < 0.9) {
         bottleneck = "demand";
       } else if (leoUtil > 0.95 && geoUtil > 0.9) {

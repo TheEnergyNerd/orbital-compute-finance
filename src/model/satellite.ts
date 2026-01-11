@@ -292,7 +292,14 @@ export function calcSatellite(
   // Now calculate compute output from constrained compute power
   // TFLOPS = computeKw × gflopsW (since kW × GFLOPS/W = GFLOPS = TFLOPS for our units)
   const rawTflops = computeKw * gflopsW;
-  const tflops = rawTflops * radEffects.availabilityFactor;
+
+  // Apply radiation penalty as DIRECT efficiency loss
+  // radPen = 0.30 means 30% of compute goes to ECC, TMR, redundancy, etc.
+  // This is SEPARATE from SEU-driven availability (which is shell-dependent)
+  // Higher radPen = more radiation hardening overhead = less usable compute
+  const radDirectPenalty = 1 - params.radPen;  // e.g., 0.70 for radPen=0.30
+
+  const tflops = rawTflops * radEffects.availabilityFactor * radDirectPenalty;
   const gpuEq = tflops / 1979; // H100 equivalents
 
   // Final data rate calculation

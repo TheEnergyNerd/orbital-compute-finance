@@ -40,11 +40,14 @@ export function getShellRadiationEffects(
   const effectiveLife = params.satLife / tidFactor;
 
   // SEU effect: reliability overhead (redundancy, ECC, spares)
-  // seuMult of 1.0 = no overhead, 2.0 = 2× compute needed
+  // seuMult of 1.0 = baseline (LEO), higher = worse (MEO, Cislunar)
   // Improves over time with rad-hard tech
+  // Note: GEO has seuMult=0.8 (less than LEO) but we clamp penalty >= 1.0
   const radHardBase = 0.82 + params.radPen * 0.1;
   const radHardImprovement = Math.pow(radHardBase, t);
-  let seuPenalty = 1 + (shellData.seuMult - 1) * radHardImprovement;
+  // Clamp seuMult to 1.0 minimum - can't have better-than-baseline availability
+  const effectiveSeuMult = Math.max(1.0, shellData.seuMult);
+  let seuPenalty = 1 + (effectiveSeuMult - 1) * radHardImprovement;
   if (hasPhotonic) {
     // Photonic reduces SEU penalty by 70% (e.g., 5.4x becomes ~2.3x)
     seuPenalty = 1 + (seuPenalty - 1) * (1 - photonicMitigation);

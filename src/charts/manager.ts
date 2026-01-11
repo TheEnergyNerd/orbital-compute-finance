@@ -248,11 +248,12 @@ export function initCharts(): void {
       data: {
         labels: YEARS,
         datasets: [
-          { data: [], backgroundColor: COLORS.orangeFill },
-          { data: [], backgroundColor: 'rgba(212,154,34,0.7)' },
-          { data: [], backgroundColor: 'rgba(58,122,184,0.7)' },
-          { data: [], backgroundColor: 'rgba(122,75,168,0.7)' },
-          { data: [], backgroundColor: 'rgba(26,138,106,0.7)' }
+          { data: [], backgroundColor: COLORS.orangeFill },         // thermal
+          { data: [], backgroundColor: 'rgba(212,154,34,0.7)' },    // power
+          { data: [], backgroundColor: 'rgba(58,122,184,0.7)' },    // bandwidth
+          { data: [], backgroundColor: 'rgba(122,75,168,0.7)' },    // slots
+          { data: [], backgroundColor: 'rgba(26,138,106,0.7)' },    // demand
+          { data: [], backgroundColor: 'rgba(180,80,80,0.7)' }      // launch_capacity
         ]
       },
       options: stackOpts('Constraint')
@@ -553,6 +554,7 @@ export function updateCharts(
     charts.bottleneck.data.datasets[2].data = fleets.map((f) => (f.bottleneck === 'bandwidth' ? 1 : 0));
     charts.bottleneck.data.datasets[3].data = fleets.map((f) => (f.bottleneck === 'slots' ? 1 : 0));
     charts.bottleneck.data.datasets[4].data = fleets.map((f) => (f.bottleneck === 'demand' ? 1 : 0));
+    charts.bottleneck.data.datasets[5].data = fleets.map((f) => (f.bottleneck === 'launch_capacity' ? 1 : 0));
     charts.bottleneck.update('none');
   }
 

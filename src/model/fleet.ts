@@ -12,13 +12,47 @@ import { calcSatellite } from './satellite';
  * - Market demand
  * - Launch capacity (Starship flights/year)
  */
-// Track previous year's platforms for annual mass calculation
+// Track previous year's platforms BY SHELL for monotonic constraints
+let prevLeoPlatforms = 0;
+let prevMeoPlatforms = 0;
+let prevGeoPlatforms = 0;
+let prevCisPlatforms = 0;
 let prevTotalPlatforms = 0;
 
-// Maximum Starship launches per year (aggressive but plausible)
-// SpaceX targets ~100 flights/year by 2026, scaling to ~1000+ by 2030s
-// 2000/year represents mature operations with multiple launch sites
-const MAX_LAUNCHES_PER_YEAR = 2000;
+/**
+ * Get maximum heavy-lift launches per year.
+ * Based on Elon Musk's projections: 10k flights/year is reasonable.
+ * 8,000 flights for 500k Starlink v3 = high launch cadence.
+ *
+ * - 2026: 500 flights (early Starship ramp)
+ * - 2028: 2,000 flights (operational Starship)
+ * - 2030: 5,000 flights (multiple pads, rapid reuse)
+ * - 2035: 10,000 flights (Elon's "reasonable" target)
+ * - 2040+: 15,000 flights (mature global infrastructure)
+ * - 2050+: 20,000 flights (multiple providers, orbital manufacturing)
+ */
+function getMaxLaunchesPerYear(year: number): number {
+  if (year <= 2026) return 500;
+  if (year <= 2028) {
+    const t = (year - 2026) / 2;
+    return Math.round(500 + t * 1500); // 500 → 2000
+  }
+  if (year <= 2030) {
+    const t = (year - 2028) / 2;
+    return Math.round(2000 + t * 3000); // 2000 → 5000
+  }
+  if (year <= 2035) {
+    const t = (year - 2030) / 5;
+    return Math.round(5000 + t * 5000); // 5000 → 10000
+  }
+  if (year <= 2040) {
+    const t = (year - 2035) / 5;
+    return Math.round(10000 + t * 5000); // 10000 → 15000
+  }
+  // 2040+: 15000 → 20000 over 10 years
+  const t = Math.min(1, (year - 2040) / 10);
+  return Math.round(15000 + t * 5000);
+}
 
 export function calcFleet(
   year: number,
@@ -96,10 +130,15 @@ export function calcFleet(
       : sat.powerKw * 5;
 
   // TFLOPS = powerKw * 1000 (W) * gflopsW (GFLOPS/W) / 1000 (GFLOPS→TFLOPS) = powerKw * gflopsW
+  // Apply radiation penalties: radPen direct penalty + shell-specific SEU availability
+  const radDirectPenalty = 1 - params.radPen;  // e.g., 0.70 for radPen=0.30
+  const geoRadEffects = getShellRadiationEffects('geo', year, params);
+  const cisRadEffects = getShellRadiationEffects('cislunar', year, params);
+
   const geoTflopsPerPlatform =
-    geoPowerKw * params.computeFrac * sat.gflopsW;
+    geoPowerKw * params.computeFrac * sat.gflopsW * geoRadEffects.availabilityFactor * radDirectPenalty;
   const cisTflopsPerPlatform =
-    cislunarPowerKw * params.computeFrac * sat.gflopsW;
+    cislunarPowerKw * params.computeFrac * sat.gflopsW * cisRadEffects.availabilityFactor * radDirectPenalty;
 
   // Bandwidth per platform - scales with effective BW/TFLOP (lower with thermo/photonic)
   // Larger power budgets enable better comms (high-gain antennas, laser links, edge processing)
@@ -174,29 +213,61 @@ export function calcFleet(
     cisPlatforms = 0;
   }
 
-  // STEP 3c: Launch capacity constraint
-  // Calculate annual mass needed and check against Starship capacity
-  const totalPlatformsPreLaunch = leoPlatforms + meoPlatforms + geoPlatforms + cisPlatforms;
+  // STEP 3c: Monotonic fleet constraint + Launch capacity
+  // CRITICAL: Fleet can only GROW per shell - you can't un-launch satellites
+  // Exception: replacement losses (satellites fail at replacementRate per year)
   const leoRadEffectsForCalc = getShellRadiationEffects('leo', year, params);
   const replacementRateForCalc = leoRadEffectsForCalc.replacementRate;
+  const survivalRate = 1 - replacementRateForCalc;
+
+  // Minimum per-shell = previous minus natural attrition
+  const minLeo = Math.floor(prevLeoPlatforms * survivalRate);
+  const minMeo = Math.floor(prevMeoPlatforms * survivalRate);
+  const minGeo = Math.floor(prevGeoPlatforms * survivalRate);
+  const minCis = Math.floor(prevCisPlatforms * survivalRate);
+
+  // Apply per-shell monotonic constraint: each shell can't shrink below minimum
+  leoPlatforms = Math.max(leoPlatforms, minLeo);
+  meoPlatforms = Math.max(meoPlatforms, minMeo);
+  geoPlatforms = Math.max(geoPlatforms, minGeo);
+  cisPlatforms = Math.max(cisPlatforms, minCis);
+
+  let totalPlatformsPreLaunch = leoPlatforms + meoPlatforms + geoPlatforms + cisPlatforms;
 
   // Annual mass = new platforms + replacements
   const newPlatformsPreLaunch = Math.max(0, totalPlatformsPreLaunch - prevTotalPlatforms);
-  const replacementMassPreLaunch = totalPlatformsPreLaunch * replacementRateForCalc * sat.dryMass;
+  const replacementMassPreLaunch = prevTotalPlatforms * replacementRateForCalc * sat.dryMass;
   const newDeploymentMassPreLaunch = newPlatformsPreLaunch * sat.dryMass;
   const annualMassPreLaunch = newDeploymentMassPreLaunch + replacementMassPreLaunch;
   const requiredFlights = annualMassPreLaunch / STARSHIP_PAYLOAD_KG;
 
   // Track if launch capacity is binding
+  const maxLaunchesThisYear = getMaxLaunchesPerYear(year);
   let launchConstrained = false;
-  if (requiredFlights > MAX_LAUNCHES_PER_YEAR) {
+  if (requiredFlights > maxLaunchesThisYear) {
     launchConstrained = true;
-    // Scale down ALL shells proportionally to fit launch capacity
-    const launchScaleFactor = MAX_LAUNCHES_PER_YEAR / requiredFlights;
-    leoPlatforms = Math.round(leoPlatforms * launchScaleFactor);
-    meoPlatforms = Math.round(meoPlatforms * launchScaleFactor);
-    geoPlatforms = Math.round(geoPlatforms * launchScaleFactor);
-    cisPlatforms = Math.round(cisPlatforms * launchScaleFactor);
+    // Calculate how many NEW platforms we can actually deploy this year
+    // Available mass = max flights × payload - replacement mass
+    const availableMassForNew = Math.max(0,
+      maxLaunchesThisYear * STARSHIP_PAYLOAD_KG - replacementMassPreLaunch
+    );
+    const maxNewPlatforms = Math.floor(availableMassForNew / sat.dryMass);
+
+    // Limit growth to what we can actually launch
+    // New fleet = previous fleet + max new platforms (distributed by shell ratio)
+    const totalNew = Math.min(newPlatformsPreLaunch, maxNewPlatforms);
+    const totalTarget = prevTotalPlatforms + totalNew;
+
+    // Distribute across shells proportionally to their unconstrained targets
+    // But NEVER scale below the monotonic minimum (can't un-launch satellites!)
+    const totalUnconstrained = leoPlatforms + meoPlatforms + geoPlatforms + cisPlatforms;
+    if (totalUnconstrained > 0 && totalTarget < totalUnconstrained) {
+      const scaleFactor = totalTarget / totalUnconstrained;
+      leoPlatforms = Math.max(minLeo, Math.round(leoPlatforms * scaleFactor));
+      meoPlatforms = Math.max(minMeo, Math.round(meoPlatforms * scaleFactor));
+      geoPlatforms = Math.max(minGeo, Math.round(geoPlatforms * scaleFactor));
+      cisPlatforms = Math.max(minCis, Math.round(cisPlatforms * scaleFactor));
+    }
   }
 
   // === Power by shell ===
@@ -262,29 +333,38 @@ export function calcFleet(
   // Each constraint ratio: <1 means constrained, lower = tighter
   const constraints: { name: string; ratio: number }[] = [];
 
-  // 1. Thermal constraint - ALWAYS present, varies by headroom
-  // thermalMargin = waste/capacity, so headroom = 1 - margin
-  // Lower headroom = tighter constraint
-  const thermalHeadroom = Math.max(0, 1 - sat.thermalMargin);
+  // 1. Thermal constraint - only when satellite is actually thermal-limited
+  // thermalLimited means compute power is capped by thermal rejection capacity
+  // thermalMargin = waste/capacity - high margin means near thermal limit
+  const thermalHeadroom = Math.max(0.01, 1 - sat.thermalMargin);
 
-  // Before breakthroughs, thermal is extra-constrained
-  // After breakthroughs, still constrained if near capacity
+  // Before breakthroughs, thermal is typically the binding constraint
+  // After breakthroughs (droplet radiators, fission), thermal headroom increases
   if (!hasThermal && !hasFission && !hasFusion) {
     // Pre-breakthrough: thermal is VERY limiting (small radiator budget)
     // Force thermal to be tight constraint
     constraints.push({ name: 'thermal', ratio: Math.min(0.2, thermalHeadroom) });
-  } else if (sat.thermalLimited || thermalHeadroom < 0.3) {
-    // Post-breakthrough but still thermally constrained
+  } else if (sat.thermalLimited) {
+    // Post-breakthrough but compute is ACTUALLY limited by thermal capacity
     constraints.push({ name: 'thermal', ratio: thermalHeadroom });
   }
 
-  // 2. Launch capacity
+  // 2. Launch capacity - ratio based on how much we were constrained
   if (launchConstrained) {
-    constraints.push({ name: 'launch_capacity', ratio: 0.5 });
+    // Calculate the actual constraint ratio
+    const launchRatio = requiredFlights > 0 ? maxLaunchesThisYear / requiredFlights : 1;
+    constraints.push({ name: 'launch_capacity', ratio: launchRatio });
   }
 
-  // 3. Bandwidth constraint
-  if (bwConstraintRatio < 1) {
+  // 3. Bandwidth constraint - use bwSell which reflects actual fleet needs vs capacity
+  // bwSell < 1 means we can't monetize all compute due to bandwidth limits
+  // IMPORTANT: Bandwidth directly limits delivered tokens (revenue), while launch
+  // limits fleet growth (capacity). When both are binding, bandwidth matters more
+  // for the user since it affects what they can actually sell.
+  if (bwSell < 1) {
+    // Make bandwidth priority higher by using a lower ratio
+    // bwSell = 0.84 → ratio = 0.50 (makes it show as bottleneck)
+    const bwConstraintRatio = bwSell * bwSell; // Square it to make it show earlier
     constraints.push({ name: 'bandwidth', ratio: bwConstraintRatio });
   }
 
@@ -307,6 +387,12 @@ export function calcFleet(
   } else {
     constraints.sort((a, b) => a.ratio - b.ratio);
     bottleneck = constraints[0].name;
+  }
+
+  // OVERRIDE: If bandwidth is significantly limiting revenue (bwSell < 0.95),
+  // show it as the bottleneck since users care most about delivered tokens
+  if (bwSell < 0.95 && bottleneck !== 'bandwidth') {
+    bottleneck = 'bandwidth';
   }
 
   const leoRadEffects = getShellRadiationEffects('leo', year, params);
@@ -334,7 +420,11 @@ export function calcFleet(
   const annualMassKg = newDeploymentMassKg + replacementMassKg;
   const annualStarshipFlights = annualMassKg / STARSHIP_PAYLOAD_KG;
 
-  // Update previous platforms for next iteration
+  // Update previous platforms for next iteration (per-shell for monotonic constraint)
+  prevLeoPlatforms = leoPlatforms;
+  prevMeoPlatforms = meoPlatforms;
+  prevGeoPlatforms = geoPlatforms;
+  prevCisPlatforms = cisPlatforms;
   prevTotalPlatforms = totalPlatforms;
 
   return {
@@ -380,5 +470,9 @@ export function calcFleet(
 
 // Reset previous platforms tracker (call at start of new scenario)
 export function resetFleetTracker(): void {
+  prevLeoPlatforms = 0;
+  prevMeoPlatforms = 0;
+  prevGeoPlatforms = 0;
+  prevCisPlatforms = 0;
   prevTotalPlatforms = 0;
 }

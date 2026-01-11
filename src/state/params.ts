@@ -76,7 +76,7 @@ export const defaults: Params = {
 
   // Bandwidth - goodput model
   bandwidth: 50,         // Total capacity in 2025 (Tbps)
-  bwGrowth: 0.35,        // Annual bandwidth growth rate
+  bwGrowth: 0.30,        // Annual bandwidth growth rate (between historical 25% and aggressive 35%)
   bwCost: 50,            // Annual cost per Gbps ($k/Gbps/year) - ground station + spectrum
   gbpsPerTflop: 0.0001,  // DEPRECATED: Bandwidth per TFLOP (Gbps)
   terminalGoodputGbps: 20,   // Baseline per-platform terminal capacity (Gbps)
