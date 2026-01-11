@@ -123,11 +123,15 @@ export function calcFleet(
   const bwAvailTbps = getBandwidth(year, params);
   const bwAvailGbps = bwAvailTbps * 1000;
 
-  const geoPowerKw = hasFission
-    ? sat.powerKw * 20
-    : hasThermal
-      ? sat.powerKw * 10
-      : sat.powerKw * 5;
+  // GEO power multiplier: larger platforms viable at GEO distance
+  // Fusion enables 50x power (vs fission 20x) due to higher energy density
+  const geoPowerKw = hasFusion
+    ? sat.powerKw * 50  // Fusion: 50x (GW-class platforms)
+    : hasFission
+      ? sat.powerKw * 20  // Fission: 20x (100s MW)
+      : hasThermal
+        ? sat.powerKw * 10  // Thermal: 10x (10s MW)
+        : sat.powerKw * 5;  // Baseline: 5x
 
   // TFLOPS = powerKw * 1000 (W) * gflopsW (GFLOPS/W) / 1000 (GFLOPS→TFLOPS) = powerKw * gflopsW
   // Apply radiation penalties: radPen direct penalty + shell-specific SEU availability

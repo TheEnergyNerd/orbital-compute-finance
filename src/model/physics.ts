@@ -386,9 +386,11 @@ export function getLEOPower(year: number, params: Params): number {
     const fissionPower = 10000 + fissionMaturity * 40000; // 10 MW → 50 MW
 
     if (hasFusion) {
-      // Fusion: 50-200 MW for LEO (limited by radiator, not reactor)
+      // Fusion: 100-500 MW for LEO platforms
+      // Compact tokamak/stellarator designs scale well once achieved
+      // Limited by radiator mass, not reactor - but fusion radiators more efficient
       const fusionMaturity = Math.min(1, (year - params.fusionYear) / 10);
-      const fusionPower = 50000 + fusionMaturity * 150000; // 50 MW → 200 MW
+      const fusionPower = 100000 + fusionMaturity * 400000; // 100 MW → 500 MW
       return Math.max(fusionPower, fissionPower);
     }
     return fissionPower;
@@ -454,8 +456,11 @@ export function getCislunarPower(year: number, params: Params): number {
   const hasThermal = params.thermalOn && year >= params.thermalYear;
 
   if (hasFusion) {
-    // Fusion: 500 MW - 2 GW stations
-    return 500000 + Math.min(1, (year - params.fusionYear) / 10) * 1500000;
+    // Fusion: 1 GW - 10 GW cislunar stations
+    // No orbital debris concerns, unlimited space, can build truly massive platforms
+    // Heat rejection easier in deep space (no Earth albedo/IR loading)
+    const fusionMaturity = Math.min(1, (year - params.fusionYear) / 10);
+    return 1000000 + fusionMaturity * 9000000; // 1 GW → 10 GW
   }
   if (hasFission) {
     // Fission: 50-150 MW platforms
