@@ -2593,8 +2593,9 @@ function initCharts() {
 }
 
 function update() {
-  // DEBUG: Log key params at update time
-  console.log('=== UPDATE CALLED ===');
+  try {
+    // DEBUG: Log key params at update time
+    console.log('=== UPDATE CALLED ===');
   console.log('Key slider params:', {
     radLearn: P.radLearn,
     solarEff: P.solarEff,
@@ -2872,6 +2873,10 @@ function update() {
     return baseEff + (s.gflopsW - baseEff) * factor;
   });
   charts.effScenarios.update();
+    console.log('=== UPDATE COMPLETE ===');
+  } catch (e) {
+    console.error('UPDATE ERROR:', e);
+  }
 }
 
 // ============================================
@@ -3033,6 +3038,12 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       tab.classList.add('active');
       document.querySelector(`.tab-panel[data-tab="${tab.dataset.tab}"]`).classList.add('active');
+      // Re-render charts in the newly visible tab (Chart.js needs this for hidden canvases)
+      setTimeout(() => {
+        Object.values(charts).forEach(chart => {
+          if (chart && chart.resize) chart.resize();
+        });
+      }, 10);
     });
   });
 
