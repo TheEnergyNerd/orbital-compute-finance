@@ -1474,15 +1474,24 @@ var Model = (() => {
     const batteryMassPerKwCompute = hasFission ? 0 : actualEclipseComputeFrac * eclipseDurationHrs * 1e3 / battDens;
     const totalMassPerKwCompute = powerMassPerKw / params.computeFrac + // Power system sized for total platform power
     radiatorMassPerKwCompute + computeMassPerKw + batteryMassPerKwCompute;
-    const computeKw = availableMass / totalMassPerKwCompute;
-    const powerKw = computeKw / params.computeFrac;
+
+    // PHYSICS-FIRST APPROACH: Power is set by technology level, not mass budget
+    // This matches satellite.ts where getLEOPower/getCislunarPower define capability
+    const powerKw = (shell === "cislunar")
+      ? getCislunarPower(year, params)
+      : getLEOPower(year, params);
+    const computeKw = powerKw * params.computeFrac;
+
+    // Derive masses from power (not the other way around)
     const powerMass = powerKw * powerMassPerKw;
     const radiatorMass = computeKw * radiatorMassPerKwCompute;
     const computeMass = computeKw * computeMassPerKw;
     const battMass = computeKw * batteryMassPerKwCompute;
     const structMass = targetMassKg * structureFrac;
     const otherMass = targetMassKg * otherSystemsFrac;
-    const dryMass = targetMassKg;
+
+    // dryMass is now the ACTUAL mass needed (may exceed targetMassKg for large platforms)
+    const dryMass = powerMass + radiatorMass + computeMass + battMass + structMass + otherMass + avionicsMassKg;
     const powerMassPerKwCompute = powerMassPerKw / params.computeFrac;
     const thermalMassPerKwCompute = radiatorMassPerKwCompute;
     let bindingConstraint;
