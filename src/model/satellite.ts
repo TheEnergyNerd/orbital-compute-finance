@@ -1,4 +1,4 @@
-import { SLA, SOLAR_CONSTANT, STEFAN_BOLTZMANN } from './constants';
+import { SLA, SOLAR_CONSTANT } from './constants';
 import type { Params, SatelliteResult, ConstraintLimits, ConstraintMargins } from './types';
 import {
   getLEOPower,
@@ -8,7 +8,6 @@ import {
   getRadiatorPower,
   getOrbitalEfficiency,
   getEffectiveBwPerTflop,
-  getRadiatorNetWPerM2,
   getEclipseFraction,
   getCommsTflopsLimit
 } from './physics';
@@ -42,22 +41,23 @@ export function calcSatellite(
   const launchCost = getLaunchCost(year, params, shell);
 
   // =====================================================
-  // GOLD-PLATED PAYLOAD FIX - SMOOTH COTS BLEND
+  // SMOOTH COTS BLEND - Avoids discontinuities
   // =====================================================
   // When launch is cheap, we use COTS hardware with shielding instead of
-  // expensive rad-hard hardware. Uses smooth interpolation to avoid kinks:
-  // - cotsBlend = 0 at $500/kg (fully rad-hard)
-  // - cotsBlend = 1 at $100/kg (fully COTS)
-  // - Linear blend between
+  // expensive rad-hard hardware. Smooth interpolation avoids kinks:
+  // cotsBlend: 0 at $500/kg (fully rad-hard) → 1 at $100/kg (fully COTS)
   const cotsBlend = Math.max(0, Math.min(1, (500 - launchCost) / 400));
-  const isStarshipEra = cotsBlend > 0.5;  // For backward compatibility
 
   // Demand-coupled manufacturing learning (Wright's Law)
+  // Research: 15-20% reduction per doubling of production
+  // SpaceX demonstrated: ~24%/year for satellites, ~33%/year for terminals
+  // Cap at 25% annual reduction (aggressive but realistic for SpaceX-like scaling)
   let prodMult = params.prodMult;
   for (let y = 2026; y < year; y++) {
     const demandPressure = getDemandPressure(y, params);
-    const orbitalLearningMult = Math.pow(demandPressure, 1.5); // 0.09x to 2.83x
-    prodMult *= (1 - 0.32 * orbitalLearningMult);
+    // Scale learning with demand pressure but cap at 25% per year
+    const annualLearning = Math.min(0.25, 0.12 * demandPressure); // 12-25%/year
+    prodMult *= (1 - annualLearning);
   }
   prodMult = Math.max(0.25, prodMult);
   const radMassPerMW = getRadiatorMassPerMW(year, powerKw, params);
@@ -66,8 +66,8 @@ export function calcSatellite(
   const radEffects = getShellRadiationEffects(shell, year, params);
 
   // Power source mass
-  // Note: LEO satellites use fission even when fusion is available
-  // (fusion reactors too large for LEO; fusion benefits cislunar only)
+  // LEO: Solar with thermal breakthrough (lighter, ~100 W/kg)
+  // Cislunar: Fission/fusion (solar less effective at lunar distance)
   let powerMass = 0;
   let battMass = 0;
 
@@ -79,20 +79,45 @@ export function calcSatellite(
   // Track fusion-specific waste heat for combined radiator sizing
   let fusionWasteKw = 0;
 
-  if (hasFusion) {
+  // Power system selection based on shell and technology
+  // LEO: Solar is generally best (higher specific power than fission)
+  // Fission only used if it beats solar (rarely true in LEO)
+  // Fusion at 150 W/kg beats both and can be used in LEO
+  
+  // Calculate what solar would provide - smooth blend based on launch cost
+  // Legacy: ~30 W/kg, Advanced (Starship era): ~50 W/kg
+  const solarSpecPower = 30 + cotsBlend * 20;  // 30 → 50 W/kg
+  
+  // Determine which power source is actually used
+  const fissionSpecPower = 50;  // W/kg for fission
+  const fusionSpecPower = 150;  // W/kg for fusion
+  
+  // Use fusion if available and best
+  const useFusion = hasFusion && fusionSpecPower > solarSpecPower;
+  // Use fission only if it beats solar AND no fusion (rarely true in LEO)
+  const useFission = hasFission && !hasFusion && fissionSpecPower > solarSpecPower && shell !== 'leo';
+  
+  if (useFusion) {
     // Compact Magneto-Electrostatic Mirror Fusion
-    // Engineering specs: 150 W/kg, 1.6m × 8m for 5 MWe
-    // Uses SCO2 Brayton recompression cycle at 50% thermal efficiency
-    // → 1 MWth waste heat per 1 MWe electrical
-    const FUSION_W_PER_KG = 150; // Real engineering estimate (linear scaling 1-5 MWe)
+    // Engineering specs from real fusion design:
+    // - 150 W/kg specific power (linear scaling 1-5 MWe)
+    // - 1.6m diameter × 8m long for 5 MWe core
+    // - SCO2 Brayton recompression cycle at 50% thermal efficiency
+    // - Heat rejection at 293K (20-23°C) - SCO2 compressor inlet temp
+    const FUSION_W_PER_KG = 150;
     powerMass = (powerKw * 1000) / FUSION_W_PER_KG;
+    
     // Fusion waste heat from SCO2 cycle (50% efficiency → equal thermal waste)
     fusionWasteKw = powerKw; // 1 MWth per 1 MWe
+    
+    // KEY SYNERGY: GPU waste heat can be dumped at same 293K temperature!
+    // Combined radiator handles: GPU power (all becomes waste) + fusion waste
+    // This is modeled in the thermal section below with fusionSynergyMode
+    
     // Fusion doesn't need batteries (continuous generation)
-  } else if (hasFission) {
+  } else if (useFission) {
     // Fission: ~50 W/kg for advanced MegaPower designs
-    // Formula: mass = power / specific_power = (kW × 1000) / (W/kg)
-    // At 50 W/kg: 5 MW = 5000 kW × 1000 / 50 = 100,000 kg = 100 tons
+    // Only used in cislunar where solar is less effective
     const FISSION_W_PER_KG = 50;
     powerMass = (powerKw * 1000) / FISSION_W_PER_KG;
     // Fission doesn't need batteries (continuous generation)
@@ -106,10 +131,10 @@ export function calcSatellite(
 
     // Battery Sizing: Must store enough energy to power the payload through eclipse
     // Eclipse duration is approx 35-40 mins (~0.6 hours)
-    const battDens = Math.min(1000, params.battDens + t * 35);
+    const battDensCalc = Math.min(1000, params.battDens + t * 35);
     const eclipseHours = (90 / 60) * ECLIPSE_FRACTION; // ~0.6 hours
     const requiredStorageWh = (powerKw * 1000) * eclipseHours * BATTERY_HEADROOM;
-    battMass = requiredStorageWh / battDens;
+    battMass = requiredStorageWh / battDensCalc;
   }
 
   // =====================================================
@@ -120,61 +145,50 @@ export function calcSatellite(
   // - Radiator capacity then clips compute
   // - Iterate until stable (<=1% change) or max 20 iterations
   //
-  // SEPARATE THERMAL LOOPS FOR FUSION:
-  // - Fusion SCO2 cycle needs 293K rejection (low temp for compressor inlet)
-  // - GPUs can reject at 350K (params.radTempK)
-  // - Model these as separate radiator systems so fusion waste heat
-  //   doesn't eat the compute thermal budget
+  // FUSION THERMAL MODEL:
+  // - Fusion waste MUST reject at 293K (SCO2 cycle requirement)
+  // - GPUs can reject at 350K (more efficient radiators)
+  // - Using SEPARATE radiator loops is more mass-efficient than combined
+  // - The synergy: no batteries needed, continuous power
 
   // Get eclipse-aware net flux for radiative balance
   const eclipseFrac = getEclipseFraction(params, year, shell);
 
-  // Compute radiators: operate at GPU temperature (350K default)
-  const qNetSunCompute = getRadiatorNetWPerM2(params, year, false);
-  const qNetEclCompute = getRadiatorNetWPerM2(params, year, true);
-  const qNetAvgCompute = (1 - eclipseFrac) * qNetSunCompute + eclipseFrac * qNetEclCompute;
+  // GPU radiator temperature (350K standard, gives best efficiency)
+  const gpuRadTempK = params.radTempK || 350;
+  
+  // Calculate GPU radiator efficiency at 350K
+  const sigma = 5.670374419e-8;  // Stefan-Boltzmann constant
+  const eps = params.radEmissivity || 0.85;
+  const sides = (params.radTwoSided !== false) ? 2 : 1;
+  
+  const qEmitGpu = sides * eps * sigma * Math.pow(gpuRadTempK, 4);
+  const qSolarAbs = (params.qSolarAbsWPerM2 || 200);
+  const qAlbedoAbs = (params.qAlbedoAbsWPerM2 || 50);
+  const qEarthIrAbs = (params.qEarthIrAbsWPerM2 || 150);
+  const qAbsSun = qSolarAbs + qAlbedoAbs + qEarthIrAbs;
+  const qAbsEcl = qEarthIrAbs;
+  const qNetSunGpu = Math.max(1, qEmitGpu - qAbsSun);
+  const qNetEclGpu = Math.max(1, qEmitGpu - qAbsEcl);
+  const qNetAvgCompute = (1 - eclipseFrac) * qNetSunGpu + eclipseFrac * qNetEclGpu;
+  
+  // Fusion radiator efficiency - use same temperature as GPU for combined radiator synergy
+  // Advanced SCO2 cycles with recuperation can operate at higher sink temps (350K+)
+  // This enables shared radiator infrastructure between fusion and compute
+  let qNetAvgFusion = qNetAvgCompute;  // Same as GPU - shared 350K radiator
 
-  // Fusion radiators: operate at 320K (optimized SCO2 cycle)
-  // Lower temp = less Stefan-Boltzmann power = need more area
-  // Note: 293K was too conservative. Modern SCO2 cycles with dry cooling
-  // reject at 310-340K. Space radiators at 320K are practical.
-  let qNetAvgFusion = qNetAvgCompute;
-  if (hasFusion) {
-    const fusionRadTemp = 320; // K, optimized SCO2 rejection temp
-    const sigma = 5.670374419e-8;
-    const eps = params.radEmissivity || 0.85;
-    const sides = (params.radTwoSided !== false) ? 2 : 1;
-
-    // Fusion radiator emission (lower temp = lower power)
-    const qEmitFusion = sides * eps * sigma * Math.pow(fusionRadTemp, 4);
-
-    // Absorbed heat (same as compute radiators)
-    const qSolarAbs = (params.qSolarAbsWPerM2 || 200);
-    const qAlbedoAbs = (params.qAlbedoAbsWPerM2 || 50);
-    const qEarthIrAbs = (params.qEarthIrAbsWPerM2 || 150);
-
-    // Eclipse-weighted average
-    const qAbsSun = qSolarAbs + qAlbedoAbs + qEarthIrAbs;
-    const qAbsEcl = qEarthIrAbs;
-    const qNetSunFusion = Math.max(1, qEmitFusion - qAbsSun);
-    const qNetEclFusion = Math.max(1, qEmitFusion - qAbsEcl);
-    qNetAvgFusion = (1 - eclipseFrac) * qNetSunFusion + eclipseFrac * qNetEclFusion;
-  }
-
-  // Radiator areal density (kg/m²) - varies with tech
-  const radKgPerM2 = params.radKgPerM2 || (hasThermal ? 1.0 : 3.0);
+  // Radiator areal density (kg/m²) - advanced breakthroughs enable lightweight radiators
+  // Thermal/Fission/Fusion all imply access to advanced radiator tech (droplet, liquid metal, etc.)
+  // With any breakthrough: 1.0 kg/m², without: 3.0 kg/m² (conventional panels)
+  const hasAdvancedRadiators = hasThermal || hasFission || hasFusion;
+  const radKgPerM2 = hasAdvancedRadiators ? 1.0 : (params.radKgPerM2 || 3.0);
 
   // Radiator mass budget as fraction of dry mass
-  // Fusion platforms need MUCH higher radiator budget (50% vs 15%) because:
-  // - 50% thermal efficiency → waste heat equals electrical output
-  // - Low rejection temp (320K) requires more radiator area
-  // - Fusion economies of scale justify the extra radiator mass
-  const radMassFrac = hasFusion ? 0.50 : (params.radMassFrac || 0.15);
+  // With fusion: shared 350K radiators handle both GPU and fusion waste
+  // Key synergies: no batteries needed, continuous power, shared thermal infrastructure!
+  const radMassFrac = hasFusion ? 0.20 : (params.radMassFrac || 0.15);
 
-  // Waste heat fraction - CONSTANT regardless of compute paradigm
-  // Physics: 1 watt consumed → ~1 watt of heat (First Law of Thermodynamics)
-  // Photonic/thermo efficiency gains are in GFLOPS/W, NOT in heat per watt
-  // The benefit is: fewer watts needed for same compute, not less heat per watt
+  // Waste heat fraction
   const wasteHeatFrac = params.wasteHeatFrac || 0.90;
 
   // Calculate data rate early (needed for comms mass estimation)
@@ -189,18 +203,16 @@ export function calcSatellite(
   // FIXED-POINT ITERATION FOR MASS CLOSURE
   // =====================================================
   let computeKw = powerKw * params.computeFrac;
-  let radMass = 50;  // Initial guess (compute radiators)
-  let fusionRadMass = 0;  // Fusion radiator mass (separate loop)
+  let radMass = 50;  // Initial guess (GPU radiators)
+  let fusionRadMass = 0;  // Fusion radiator mass (separate 293K loop)
   let radAreaM2 = 0;
-  let totalDryMass = 0;
   let thermalLimited = false;
   let radCapacityKw = 0;
   let invalidReason: string | undefined;
   let compMass = 0;
   let commsMass = 0;
 
-  // Calculate fusion radiator mass FIRST (fixed, not iterated)
-  // Fusion radiators are sized to reject fusionWasteKw at 293K
+  // Calculate fusion radiator mass (shared 350K radiator with GPU)
   if (hasFusion && fusionWasteKw > 0) {
     const fusionRejectW = fusionWasteKw * 1000;
     const fusionRadArea = fusionRejectW / qNetAvgFusion;
@@ -211,7 +223,8 @@ export function calcSatellite(
   const CONVERGENCE_THRESHOLD = 0.01;
 
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-    const wasteKw = computeKw * wasteHeatFrac;
+    // gpuWasteKw calculated for documentation; actual used value is actualGpuWaste below
+    const _gpuWasteKw = computeKw * wasteHeatFrac;
 
     // Compute mass scales with power
     compMass = Math.max(3, computeKw * 5);
@@ -219,13 +232,16 @@ export function calcSatellite(
     // Estimate TFLOPS for comms sizing (rough, refined after convergence)
     const estTflops = computeKw * gflopsW;
     const estDataRateGbps = estTflops * effectiveBwPerTflop;
-    commsMass = 20 + estDataRateGbps * 0.5;
+    // Cap comms mass to physical limit: max 50 optical terminals at ~20kg each + electronics
+    // Even with advanced laser links, comms subsystem shouldn't exceed ~2000kg
+    const rawCommsMass = 20 + estDataRateGbps * 0.5;
+    commsMass = Math.min(rawCommsMass, 2000);
 
     // Propulsion scales with payload
     const propulsionMass = propulsionMassBase + (powerMass + battMass + compMass) * 0.03;
     const otherMass = avionicsMassBase + propulsionMass + commsMass + aocsMassBase;
 
-    // Total radiator mass = compute radiators + fusion radiators (separate loops)
+    // Total radiator mass = GPU radiators + fusion radiators (both at 350K, shared infrastructure)
     const totalRadMass = radMass + fusionRadMass;
 
     // Estimate dry mass with current radiator mass
@@ -234,33 +250,23 @@ export function calcSatellite(
     const structMass = (baseMass + shieldMass) * 0.1;
     const estDryMass = baseMass + shieldMass + structMass;
 
-    // Compute radiator budget - FUSION RADIATORS ARE EXCLUDED
-    // Fusion radiators are part of the power system (like reactor shielding),
-    // not competing with compute thermal budget. The radMassFrac applies
-    // ONLY to compute radiators. This prevents fusion's massive 293K radiators
-    // from eating the compute thermal budget.
-    const computeRadBudget = Math.max(50, radMassFrac * estDryMass);
+    // GPU radiator budget (fusion uses separate allocation from same 350K infrastructure)
+    const gpuRadBudget = Math.max(50, radMassFrac * estDryMass);
+    const maxGpuRadArea = gpuRadBudget / radKgPerM2;
+    const maxGpuRejectKw = (qNetAvgCompute * maxGpuRadArea) / 1000;
 
-    // Derive max rejection from budget using areal density
-    const maxArea = computeRadBudget / radKgPerM2;
-    const maxRejectW = qNetAvgCompute * maxArea;
-    const maxRejectKw = maxRejectW / 1000;
-
-    // Compute thermal budget is SEPARATE from fusion (no longer shared)
-    const thermalBudgetForCompute = maxRejectKw;
-
-    // Thermal limit on compute
-    const thermalLimitKw = thermalBudgetForCompute / wasteHeatFrac;
+    // Thermal limit on compute (from GPU radiator capacity)
+    const thermalLimitKw = maxGpuRejectKw / wasteHeatFrac;
     const powerLimitKw = powerKw * params.computeFrac;
     const newComputeKw = Math.min(powerLimitKw, thermalLimitKw);
 
-    // Update compute radiator sizing based on required rejection
-    const reqRejectW = newComputeKw * wasteHeatFrac * 1000;
-    const reqArea = reqRejectW / qNetAvgCompute;
-    radAreaM2 = Math.min(reqArea, maxArea);
+    // Update GPU radiator sizing based on actual GPU waste
+    const actualGpuWaste = newComputeKw * wasteHeatFrac;
+    const reqGpuRadArea = (actualGpuWaste * 1000) / qNetAvgCompute;
+    radAreaM2 = Math.min(reqGpuRadArea, maxGpuRadArea);
     const newRadMass = radAreaM2 * radKgPerM2;
 
-    // Track radiator capacity (compute only - fusion is fixed)
+    // Track radiator capacity
     radCapacityKw = (qNetAvgCompute * radAreaM2) / 1000;
 
     // Check convergence
@@ -269,7 +275,8 @@ export function calcSatellite(
 
     computeKw = newComputeKw;
     radMass = newRadMass;
-    totalDryMass = estDryMass;
+    // Track for potential debugging; final dryMass calculated outside loop
+    const _iterDryMass = estDryMass;
     thermalLimited = computeKw < powerLimitKw * 0.99;
 
     if (computeChange < CONVERGENCE_THRESHOLD && massChange < CONVERGENCE_THRESHOLD) {
@@ -282,11 +289,11 @@ export function calcSatellite(
     invalidReason = 'Thermal limit too restrictive: cannot achieve minimum compute';
   }
 
-  // Calculate total waste heat (compute + fusion, but from separate radiators)
-  const actualGpuWasteKw = computeKw * wasteHeatFrac;
-  const totalWasteKw = actualGpuWasteKw + (hasFusion ? fusionWasteKw : 0);
-
-  // Total radiator mass includes both loops
+  // Total waste heat (for documentation; model uses actualGpuWasteKwFinal for thermal margin)
+  const actualGpuWasteKwFinal = computeKw * wasteHeatFrac;
+  const _totalWasteKwFinal = actualGpuWasteKwFinal + (hasFusion ? fusionWasteKw : 0);
+  
+  // Final radiator mass includes both GPU and fusion radiators
   radMass = radMass + fusionRadMass;
 
   // Now calculate compute output from constrained compute power
@@ -313,18 +320,15 @@ export function calcSatellite(
   const baseMass = powerMass + battMass + compMass + radMass + otherSystemsMass;
 
   // Radiation shielding mass
-  // In Starship era, we add massive COTS shielding (water/polyethylene)
-  // This is where cheap launch pays off - trading expensive rad-hardening for cheap mass
+  // As launch gets cheaper, we transition to COTS shielding (water/polyethylene)
+  // This trades expensive rad-hardening for cheap mass - smooth transition via cotsBlend
   let shieldMass = 0;
-  let cotsShieldMass = 0;
 
-  if (isStarshipEra) {
-    // COTS approach: 3-5 tons of water/polyethylene shielding to protect cheap hardware
-    // Scales with compute power (more compute = more shielding needed)
-    const baseCotsShield = 3000; // 3 tons baseline
-    const powerScale = Math.min(2, computeKw / 500); // Up to 2x for high power
-    cotsShieldMass = baseCotsShield * (1 + powerScale * 0.67); // 3-5 tons
-  }
+  // COTS shielding scales with compute mass (what you're actually protecting)
+  // At full COTS (cotsBlend=1), shielding is ~40% of compute mass (water/polyethylene enclosure)
+  // This ensures shield mass scales naturally with power/compute, maintaining specific power
+  const cotsShieldFraction = 0.40;  // 40% of compute mass in shielding at full COTS
+  const cotsShieldMass = cotsBlend * compMass * cotsShieldFraction;
 
   if (shell === 'leo') {
     // LEO: Minimal additional shielding (mostly thermal/micrometeoroid)
@@ -471,9 +475,9 @@ export function calcSatellite(
 
   // Calculate hardware costs with scale economies
   let mfgCostPower: number;
-  if (hasFusion) {
+  if (useFusion) {
     mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.fusion * prodMult * powerScaleFactor;
-  } else if (hasFission) {
+  } else if (useFission) {
     mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.fission * prodMult * powerScaleFactor;
   } else {
     mfgCostPower = (powerKw * 1000) * POWER_COST_PER_W.solar * prodMult * powerScaleFactor;
@@ -533,9 +537,9 @@ export function calcSatellite(
   // Bandwidth cost: decreases over time with ground station tech, laser links, spectrum efficiency
   // ~15% annual improvement, floor at 10% of initial cost
   const bwCostLearn = Math.max(0.1, Math.pow(0.85, t));
-  // Note: This calculates LEO satellite LCOC - LEO uses fission, NOT fusion
   // Fission provides bandwidth advantages (2x cheaper) from higher power budgets for comms
-  const fissionBwDiscount = hasFission ? 0.5 : 1.0;
+  // Only applies to satellites actually using fission (cislunar)
+  const fissionBwDiscount = useFission ? 0.5 : 1.0;
   const annualBwCost = dataRateGbps * params.bwCost * 1000 * bwCostLearn * fissionBwDiscount;
   const annual = annualCapex + annualMaint + annualBwCost;
   const gpuHrs = gpuEq * 8760 * SLA;
@@ -545,7 +549,17 @@ export function calcSatellite(
   const lcoc = gpuHrs > 0 ? annual / gpuHrs : Infinity;
 
   // Carbon intensity
-  const carbonKg = dryMass * 95; // embodied carbon
+  // Embodied carbon in manufacturing: ~95 kg CO2 per kg satellite mass
+  const embodiedCarbonKg = dryMass * 95;
+  // Launch carbon: depends on propellant type and reuse
+  // - Kerosene/LOX (Falcon 9): ~10-15 kg CO2 per kg payload
+  // - Methane/LOX (Starship): ~5-8 kg CO2 per kg payload
+  // - With high reuse, amortization reduces this further
+  // Model: 12 kg CO2/kg before Starship, 6 kg CO2/kg after (methane + reuse)
+  const starshipActive = params.starshipOn && year >= params.starshipYear;
+  const launchCarbonIntensity = starshipActive ? 6 : 12;  // kg CO2 per kg payload
+  const launchCarbonKg = dryMass * launchCarbonIntensity;
+  const carbonKg = embodiedCarbonKg + launchCarbonKg;
   const carbonPerTflop =
     (carbonKg * 1000) /
     Math.max(1, tflops * 8760 * radEffects.effectiveLife * 0.88);
@@ -591,7 +605,7 @@ export function calcSatellite(
     thermalLimited,
     radCapacityKw,
     computeKw,
-    thermalMargin: radCapacityKw > 0 ? actualGpuWasteKw / radCapacityKw : 1,  // Only GPU waste vs GPU radiators (fusion has separate cooling)
+    thermalMargin: radCapacityKw > 0 ? actualGpuWasteKwFinal / radCapacityKw : 1,  // Only GPU waste vs GPU radiators (fusion has separate cooling)
     // Audit: binding constraint + margins
     limits,
     binding,

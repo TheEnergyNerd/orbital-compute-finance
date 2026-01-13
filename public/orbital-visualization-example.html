@@ -23,12 +23,6 @@
       align-items: flex-end;
       gap: 8px;
     }
-    #baselineText {
-      color: rgba(255, 255, 255, 0.8);
-      font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
-      font-size: 12px;
-      text-align: right;
-    }
     #deployButton {
       background: #2d5a4f; /* Dark teal/green like the image */
       color: white;
@@ -194,18 +188,19 @@
           // Load simple OrbitControls implementation
           loadSimpleOrbitControls();
           
-          if (typeof initVisualization === 'function') {
-            initVisualization();
-          } else {
-            // Wait a bit if function not ready
-            setTimeout(function() {
-              if (typeof initVisualization === 'function') {
-                initVisualization();
-              } else {
-                console.error('initVisualization function not found');
-              }
-            }, 100);
+          // Wait for initVisualization to be defined (it's in a script tag below)
+          // Use a more robust waiting mechanism
+          function tryInit() {
+            if (typeof window.initVisualization === 'function') {
+              window.initVisualization();
+            } else {
+              // Keep trying until the function is available
+              setTimeout(tryInit, 50);
+            }
           }
+          
+          // Start trying after a short delay to let other scripts load
+          setTimeout(tryInit, 100);
         };
         script.onerror = function() {
           console.error('Failed to load orbital-visualization.js');
@@ -245,7 +240,6 @@
   <div id="container"></div>
   <div id="controls">
     <button id="deployButton">Deploy 2026</button>
-    <div id="baselineText">Baseline Only</div>
   </div>
   <div id="scale-info">
     <div class="scale-title">Scale Reference</div>
@@ -254,10 +248,7 @@
       <span class="scale-value" id="scale-year">2026</span>
     </div>
     <div class="scale-note">
-      <strong>Each dot represents multiple platforms.</strong><br>
-      Distribution is representative, not exact positions.<br>
-      <strong>Representative visualization, not true to scale.</strong><br>
-      Orbits shown for visual variety and clarity.
+      <strong>Representative visualization, not true to scale.</strong>
     </div>
   </div>
 
@@ -346,6 +337,7 @@
       // ============================================================================
       
       let earthMesh;
+      let moonMesh = null; // Moon mesh for visualization
       // Create stylized Pokemon HeartGold/SoulSilver-style globe
       createStylizedGlobe(scene).then(mesh => {
         earthMesh = mesh;
@@ -353,6 +345,13 @@
         // This is critical for correct terminator and SSO alignment
         earthMesh.rotation.x = 23.44 * (Math.PI / 180);
         console.log('Stylized globe created with axial tilt');
+        
+        // Create Moon after Earth is ready (returns a Promise)
+        createMoon(scene).then(moon => {
+          moonMesh = moon;
+        }).catch(err => {
+          console.error('Failed to create moon:', err);
+        });
       }).catch(err => {
         console.error('Failed to create globe:', err);
       });
@@ -506,6 +505,82 @@
         });
       }
 
+      // Create visible Moon for visualization with real moon texture
+      // Moon is dramatically scaled up and positioned for visibility
+      function createMoon(scene) {
+        const EARTH_RADIUS_KM = 6371;
+        const MOON_DISTANCE_KM = 384400;
+        const MOON_RADIUS_KM = 1737;
+        
+        // Scale up Moon for dramatic visibility (much larger than real scale)
+        // Real Moon is ~0.27x Earth radius, but we'll make it much more visible
+        const moonScale = 0.5; // 50% of Earth size (much larger for dramatic visibility)
+        // Bring Moon much closer for dramatic effect (15% of real distance)
+        const moonDistance = 1.0 + (MOON_DISTANCE_KM / EARTH_RADIUS_KM) * 0.15;
+        
+        // Create Moon geometry with good detail
+        const moonGeometry = new THREE.SphereGeometry(moonScale, 64, 64);
+        
+        // Load real Moon texture
+        const textureLoader = new THREE.TextureLoader();
+        // Using NASA LROC (Lunar Reconnaissance Orbiter Camera) moon texture
+        // High-quality moon surface texture showing craters and surface features
+        const moonTextureUrl = 'https://raw.githubusercontent.com/turban/webgl-earth/master/images/moon_1024.jpg';
+        
+        return new Promise((resolve, reject) => {
+          textureLoader.load(
+            moonTextureUrl,
+            function(texture) {
+              texture.flipY = false; // Moon textures typically don't need flipping
+              
+              // Create Moon material with real texture
+              const moonMaterial = new THREE.MeshPhongMaterial({
+                map: texture,
+                emissive: 0x111111, // Subtle glow
+                shininess: 5,
+                specular: 0x333333
+              });
+              
+              // Create Moon mesh
+              const moon = new THREE.Mesh(moonGeometry, moonMaterial);
+              
+              // Position Moon initially (will be animated)
+              moon.position.set(moonDistance, 0, 0);
+              moon.name = 'Moon';
+              
+              // Add subtle rotation to show it's a 3D object
+              moon.rotation.x = 0.1; // Slight tilt for visual interest
+              
+              // Add to scene
+              scene.add(moon);
+              
+              console.log('Moon created with real texture and added to scene - scale:', moonScale, 'distance:', moonDistance);
+              
+              resolve(moon);
+            },
+            undefined,
+            function(error) {
+              console.warn('Failed to load moon texture, using fallback material:', error);
+              // Fallback to simple material if texture fails
+              const moonMaterial = new THREE.MeshPhongMaterial({
+                color: 0xaaaaaa,
+                emissive: 0x222222,
+                shininess: 5,
+                specular: 0x333333
+              });
+              
+              const moon = new THREE.Mesh(moonGeometry, moonMaterial);
+              moon.position.set(moonDistance, 0, 0);
+              moon.name = 'Moon';
+              moon.rotation.x = 0.1;
+              scene.add(moon);
+              
+              resolve(moon);
+            }
+          );
+        });
+      }
+
       // ============================================================================
       // SATELLITE DATA (from your physics model)
       // ============================================================================
@@ -607,38 +682,65 @@
       
       let deploymentCount = 0;
       let currentYear = 2026; // Start in 2026
-      let crossoverYear = 2030; // Default crossover year (can be updated from physics model)
+      let crossoverYear = 2032; // Default crossover year - LEO starts (can be updated from physics model)
       let fissionEnabled = false; // Track when fission becomes available
       
+      // Animation state variables (declared early for access by all functions)
+      let satelliteMeshes = [];
+      let ssoMeshes = []; // Track SSO meshes separately for animations
+      let cislunarMeshes = []; // Track cislunar meshes separately for orbital animation
+      let cislunarSatellites = []; // Store original cislunar satellite data for animation
+      let lunarMeshes = []; // Track lunar meshes separately for orbital animation
+      
       // Scale data - actual vs rendered satellite counts (exponential growth)
-      // Based on baseline scenario: thermal 2030, fission 2035, fusion off
+      // Based on baseline scenario: droplet 2030, fission 2035, fusion off
       // Significantly increased rendered counts for better visibility and variety
       const SCALE_DATA = {
         2026: { actual: 0, rendered: 0 },
-        2027: { actual: 200, rendered: 60 },       // Increased for better visibility
-        2028: { actual: 500, rendered: 100 },       // Increased for better visibility
-        2029: { actual: 1000, rendered: 140 },      // Increased for better visibility
-        2030: { actual: 2000, rendered: 180 },      // Increased (Droplet enables MW-class)
+        2027: { actual: 200, rendered: 60 },
+        2028: { actual: 500, rendered: 100 },
+        2029: { actual: 1000, rendered: 140 },
+        2030: { actual: 2000, rendered: 180 },
         2031: { actual: 8000, rendered: 220 },
-        2032: { actual: 20000, rendered: 260 },
+        2032: { actual: 20000, rendered: 260 },    // LEO starts - Crossover year
         2033: { actual: 40000, rendered: 300 },
         2034: { actual: 60000, rendered: 340 },
-        2035: { actual: 75000, rendered: 380 },    // Fission unlocks cislunar
+        2035: { actual: 75000, rendered: 380 },    // Cislunar starts - Fission enables
         2036: { actual: 100000, rendered: 420 },
         2037: { actual: 130000, rendered: 460 },
         2038: { actual: 160000, rendered: 500 },
         2039: { actual: 190000, rendered: 540 },
-        2040: { actual: 220000, rendered: 580 },
+        2040: { actual: 220000, rendered: 580 },    // GEO starts - 8 years post-crossover
         2041: { actual: 245000, rendered: 620 },
         2042: { actual: 265000, rendered: 660 },
         2043: { actual: 285000, rendered: 700 },
         2044: { actual: 300000, rendered: 740 },
-        2045: { actual: 315000, rendered: 780 },   // LEO approaching capacity
+        2045: { actual: 315000, rendered: 780 },
         2046: { actual: 325000, rendered: 820 },
         2047: { actual: 335000, rendered: 860 },
         2048: { actual: 342000, rendered: 900 },
         2049: { actual: 348000, rendered: 940 },
-        2050: { actual: 353000, rendered: 980 }    // ~7.6 TW total
+        2050: { actual: 353000, rendered: 980 },
+        2051: { actual: 360000, rendered: 1020 },
+        2052: { actual: 365000, rendered: 1060 },
+        2053: { actual: 370000, rendered: 1100 },
+        2054: { actual: 375000, rendered: 1140 },
+        2055: { actual: 380000, rendered: 1180 },   // Lunar ISRU starts
+        2056: { actual: 385000, rendered: 1220 },
+        2057: { actual: 390000, rendered: 1260 },
+        2058: { actual: 395000, rendered: 1300 },
+        2059: { actual: 400000, rendered: 1340 },
+        2060: { actual: 405000, rendered: 1380 },
+        2061: { actual: 410000, rendered: 1420 },
+        2062: { actual: 415000, rendered: 1460 },
+        2063: { actual: 420000, rendered: 1500 },
+        2064: { actual: 425000, rendered: 1540 },
+        2065: { actual: 430000, rendered: 1580 },
+        2066: { actual: 435000, rendered: 1620 },
+        2067: { actual: 440000, rendered: 1660 },
+        2068: { actual: 445000, rendered: 1700 },
+        2069: { actual: 450000, rendered: 1740 },
+        2070: { actual: 455000, rendered: 1780 }
       };
       
       // Update scale info display
@@ -695,6 +797,11 @@
       });
       
       function generateSatellites(addToExisting = false) {
+        // Constants used throughout this function
+        const EARTH_RADIUS_KM = 6371;
+        const MOON_DISTANCE_KM = 384400;
+        const MOON_RADIUS_KM = 1737;
+        
         // If not adding to existing, start fresh
         if (!addToExisting) {
           satellites = [];
@@ -712,29 +819,34 @@
         // Check if fission is enabled (typically around 2035)
         fissionEnabled = currentYear >= 2035;
         
-        // Calculate unlock years based on crossover - matching physics model reference
-        // LEO unlocks early (2026) to allow satellites in early years
-        // Crossover year (2030) marks when orbital compute becomes economically viable
-        const leoUnlockYear = 2026; // Always available from start
-        const meoUnlockYear = crossoverYear + 2; // Crossover + 2 years (2032)
-        const geoUnlockYear = crossoverYear + 3; // Crossover + 3 years (2033)
-        const cislunarUnlockYear = 2038; // Based on physics model: L4 shell starts at 2038
+        // Calculate unlock years based on timeline:
+        // - LEO starts: 2027 (when satellites first appear in SCALE_DATA)
+        // - Cislunar starts: 2035 (Fission power enables deep space ops)
+        // - GEO starts: 2040 (8 years post-crossover, industry matured)
+        // - Lunar starts: 2055 (Lunar ISRU - in-situ resource utilization)
+        // Note: Crossover year is 2032, but satellites start appearing in 2027 for visualization
+        const leoUnlockYear = 2027; // When satellites first appear (2027 has rendered: 60)
+        const meoUnlockYear = crossoverYear + 2; // Crossover + 2 years (2034)
+        const geoUnlockYear = 2040; // 8 years post-crossover
+        const cislunarUnlockYear = 2035; // Fission enables cislunar
+        const lunarUnlockYear = 2055; // Lunar ISRU enables lunar operations
         
         // Get target rendered count from scale data (exponential growth)
         const scaleData = SCALE_DATA[currentYear] || { actual: 0, rendered: 0 };
         const targetRendered = scaleData.rendered || 0;
         
         // Calculate distribution percentages - adjusted for better visualization variety
-        // Increased MEO, GEO, and cislunar percentages so they're more visible
-        // LEO: 300,000 / 353,400 = 84.9% (reduced to make room for others)
-        // MEO: 50,000 / 353,400 = 14.1% (increased for visibility)
+        // No MEO satellites (removed per user request)
+        // LEO: 300,000 / 353,400 = 84.9% (increased since MEO removed)
         // GEO: 1,800 / 353,400 = 0.5% (increased for visibility)
         // Cislunar: 1,600 / 353,400 = 0.5% (increased for visibility)
+        // Lunar: Added for ISRU era (2055+)
         // SSO is part of LEO, so we'll allocate 15% of LEO to SSO
-        const leoPercent = 0.70;   // Reduced from 84.9% to make room for other orbits
-        const meoPercent = 0.20;   // Increased from 14.1% for better visibility
+        const leoPercent = 0.83;   // Increased since MEO removed
+        const meoPercent = 0.0;    // No MEO satellites
         const geoPercent = 0.05;   // Increased from 0.5% (minimum 3-5 for visibility)
         const cislunarPercent = 0.05;  // Increased from 0.5% (minimum 3-5 for visibility)
+        const lunarPercent = 0.07;  // Lunar satellites (2055+)
         
         // Use golden angle for better distribution (137.508° in degrees, ~2.4 radians)
         const goldenAngle = 2.399963229728653; // Golden angle in radians for optimal spacing
@@ -825,27 +937,8 @@
           }
         }
         
-        // MEO (Medium Earth Orbit) - 10000-20000km, 55° inclination
-        // Unlocked: 2028 (earlier for visibility)
-        // MEO gets 20% of total (increased for better visibility)
-        const meoUnlocked = currentYear >= meoUnlockYear;
-        const meoCount = meoUnlocked ? Math.round(targetRendered * meoPercent) : 0;
-        const meoAltitude = 20000;
-        for (let i = 0; i < meoCount; i++) {
-          // Evenly space satellites in orbit
-          const trueAnomaly = (i / meoCount) * Math.PI * 2;
-          // Use golden angle for ascending nodes to distribute orbits evenly
-          const ascendingNode = (i * goldenAngle * 180 / Math.PI) % 360;
-          const pos = generateOrbitalPosition(meoAltitude, 55, trueAnomaly, ascendingNode);
-          satellites.push({
-            id: `meo_${deploymentCount}_${i}`,
-            x: pos.x,
-            y: pos.y,
-            z: pos.z,
-            altitudeKm: meoAltitude,
-            shape: 'sphere'
-          });
-        }
+        // MEO (Medium Earth Orbit) - REMOVED per user request
+        // No MEO satellites in visualization
         
         // GEO (Geosynchronous) - 35786km, equatorial (0° inclination)
         // Unlocked: 2029 (earlier for visibility)
@@ -854,7 +947,7 @@
         const geoUnlocked = currentYear >= geoUnlockYear;
         const geoCount = geoUnlocked ? Math.max(3, Math.round(targetRendered * geoPercent)) : 0;
         const geoAltitude = 35786;
-        const geoRadius = 1.0 + (geoAltitude / 6371); // Using Earth radius constant
+        const geoRadius = 1.0 + (geoAltitude / EARTH_RADIUS_KM); // Using Earth radius constant
         
         for (let i = 0; i < geoCount; i++) {
           // Space evenly around the equator by longitude (not by true anomaly in one orbit)
@@ -881,15 +974,16 @@
         }
         
         // Cislunar - Earth-Moon Lagrange points (L4/L5) and lunar orbits
-        // Unlocked: 2038 (based on physics model: L4 shell starts at 2038)
+        // Unlocked: 2035 (Fission power enables deep space ops)
         // Cislunar satellites are at L4/L5 Lagrange points (60° ahead/behind Moon) at ~384,400km
         // For visualization: position satellites near L4/L5 points in Earth-Moon orbital plane
         // Cislunar gets 5% of total, but minimum 3-5 for visibility
+        // IMPORTANT: Adjusted to match the closer moon scale (0.15x real distance for visibility)
         const cislunarUnlocked = currentYear >= cislunarUnlockYear;
         const cislunarCount = cislunarUnlocked ? Math.max(3, Math.round(targetRendered * cislunarPercent)) : 0;
         const cislunarAltitude = 384400; // Earth-Moon distance (L4/L5 are at this distance)
-        const EARTH_RADIUS_KM = 6371;
-        const cislunarRadius = 1.0 + (cislunarAltitude / EARTH_RADIUS_KM);
+        // Use same scale factor as moon (0.15x) for consistency with closer moon visualization
+        const cislunarRadius = 1.0 + (cislunarAltitude / EARTH_RADIUS_KM) * 0.15;
         
         // Simplified Moon position (for L4/L5 reference)
         // Moon orbits in ecliptic plane, roughly along +X axis in our coordinate system
@@ -901,27 +995,26 @@
         const l5Count = cislunarCount - l4Count;
         
         // L4: 60° ahead of Moon
+        // Real Lagrange point missions use halo/Lissajous orbits around the points
+        // Distribute satellites in halo orbits (rings) around L4/L5 for visual cohesion with SSO rings
         const l4BaseAngle = (moonAngle + 60) * (Math.PI / 180);
-        // Scale cloud radius with number of satellites to prevent overlap
-        // Base radius of 0.15, scales up to 0.4 for large counts
-        const l4CloudRadius = Math.min(0.4, 0.15 + (l4Count / 100) * 0.25);
+        // Halo orbit radius around L4 point (larger for visible rings like SSO)
+        const l4HaloRadius = Math.min(0.8, 0.4 + (l4Count / 50) * 0.4);
         for (let i = 0; i < l4Count; i++) {
-          // Distribute satellites around L4 point in a cloud
-          // Use golden angle spacing for better distribution
-          const goldenAngle = 2.399963229728653; // Golden angle in radians
-          const cloudAngle = (i * goldenAngle) % (Math.PI * 2); // Golden angle distribution
+          // Distribute satellites evenly around halo orbit (forms visible ring like SSO)
+          const haloAngle = (i / l4Count) * Math.PI * 2;
           
-          // Offset from L4 center position - vary distance for 3D cloud effect
-          const offsetRadius = l4CloudRadius * (0.4 + (i % 4) * 0.15); // Vary distance in layers
-          const offsetX = offsetRadius * Math.cos(cloudAngle);
-          const offsetZ = offsetRadius * Math.sin(cloudAngle);
-          const offsetY = l4CloudRadius * 0.5 * Math.sin(i * 1.3); // Vertical spread
+          // Position in halo orbit around L4 point (circular orbit around the Lagrange point)
+          // Make it more planar (like SSO ring) for visual cohesion
+          const offsetX = l4HaloRadius * Math.cos(haloAngle);
+          const offsetZ = l4HaloRadius * Math.sin(haloAngle);
+          const offsetY = 0; // Keep planar for clear ring visibility (like SSO)
           
           // Rotate offset to align with L4 position in Earth-Moon plane
           const rotatedOffsetX = offsetX * Math.cos(l4BaseAngle) - offsetZ * Math.sin(l4BaseAngle);
           const rotatedOffsetZ = offsetX * Math.sin(l4BaseAngle) + offsetZ * Math.cos(l4BaseAngle);
           
-          // Final position
+          // Final position: L4 center + halo orbit offset
           const x = cislunarRadius * Math.cos(l4BaseAngle) + rotatedOffsetX;
           const y = offsetY;
           const z = cislunarRadius * Math.sin(l4BaseAngle) + rotatedOffsetZ;
@@ -936,28 +1029,25 @@
           });
         }
         
-        // L5: 60° behind Moon
+        // L5: 60° behind Moon - same halo orbit distribution
         const l5BaseAngle = (moonAngle - 60) * (Math.PI / 180);
-        // Scale cloud radius with number of satellites to prevent overlap
-        // Base radius of 0.15, scales up to 0.4 for large counts
-        const l5CloudRadius = Math.min(0.4, 0.15 + (l5Count / 100) * 0.25);
+        // Halo orbit radius around L5 point (larger for visible rings like SSO)
+        const l5HaloRadius = Math.min(0.8, 0.4 + (l5Count / 50) * 0.4);
         for (let i = 0; i < l5Count; i++) {
-          // Distribute satellites around L5 point in a cloud
-          // Use golden angle spacing for better distribution
-          const goldenAngle = 2.399963229728653; // Golden angle in radians
-          const cloudAngle = (i * goldenAngle) % (Math.PI * 2); // Golden angle distribution
+          // Distribute satellites evenly around halo orbit (forms visible ring like SSO)
+          const haloAngle = (i / l5Count) * Math.PI * 2;
           
-          // Offset from L5 center position - vary distance for 3D cloud effect
-          const offsetRadius = l5CloudRadius * (0.4 + (i % 4) * 0.15); // Vary distance in layers
-          const offsetX = offsetRadius * Math.cos(cloudAngle);
-          const offsetZ = offsetRadius * Math.sin(cloudAngle);
-          const offsetY = l5CloudRadius * 0.5 * Math.sin(i * 1.3); // Vertical spread
+          // Position in halo orbit around L5 point
+          // Make it more planar (like SSO ring) for visual cohesion
+          const offsetX = l5HaloRadius * Math.cos(haloAngle);
+          const offsetZ = l5HaloRadius * Math.sin(haloAngle);
+          const offsetY = 0; // Keep planar for clear ring visibility (like SSO)
           
           // Rotate offset to align with L5 position in Earth-Moon plane
           const rotatedOffsetX = offsetX * Math.cos(l5BaseAngle) - offsetZ * Math.sin(l5BaseAngle);
           const rotatedOffsetZ = offsetX * Math.sin(l5BaseAngle) + offsetZ * Math.cos(l5BaseAngle);
           
-          // Final position
+          // Final position: L5 center + halo orbit offset
           const x = cislunarRadius * Math.cos(l5BaseAngle) + rotatedOffsetX;
           const y = offsetY;
           const z = cislunarRadius * Math.sin(l5BaseAngle) + rotatedOffsetZ;
@@ -971,6 +1061,82 @@
             shape: 'sphere'
           });
         }
+        
+        // Lunar - Low Lunar Orbit around the Moon
+        // Unlocked: 2055 (Lunar ISRU enables lunar operations)
+        // Lunar satellites orbit around the Moon at ~100km altitude
+        // Lunar gets 7% of total, but minimum 3-5 for visibility
+        const lunarUnlocked = currentYear >= lunarUnlockYear;
+        const lunarCount = lunarUnlocked ? Math.max(5, Math.round(targetRendered * lunarPercent)) : 0; // Minimum 5 for visibility
+        console.log('Lunar satellites - unlocked:', lunarUnlocked, 'count:', lunarCount, 'year:', currentYear, 'targetRendered:', targetRendered);
+        // lunarAltitude is stored for reference, but actual orbit radius is calculated below
+        const lunarAltitude = 300; // 300km above Moon surface (for altitudeKm field)
+        
+        // Lunar - Low Lunar Orbit around the Moon
+        // Unlocked: 2055 (Lunar ISRU enables lunar operations)
+        // Form circular orbital rings around the Moon, like LEO around Earth
+        // Moon radius: 1,737 km = 0.27× Earth radius
+        // Lunar orbit: 100-500 km altitude above Moon surface
+        // Ring radius: Increased for visibility (scaled up from 0.32 to 0.5 for clearer visualization)
+        const MOON_RADIUS_KM_FOR_ORBIT = 1737;
+        const lunarOrbitAltitudeKm = 300; // 300km average altitude above Moon surface (100-500 km range)
+        // Calculate ring radius in Earth-radius units, scaled up for visibility
+        // Real radius would be: (Moon radius + altitude) / Earth radius ≈ 0.32
+        // Scale up to 0.65 for better visibility while maintaining relative proportions
+        const lunarOrbitRadiusLocal = 0.65; // Increased from 0.5 for more distance from Moon
+        
+        // Use same inclination distribution as LEO
+        const lunarConfigs = [
+          { alt: lunarOrbitAltitudeKm, inc: 51.6 }, // ISS-like (same as LEO)
+          { alt: lunarOrbitAltitudeKm, inc: 28.5 }, // Lower inclination (same as LEO)
+          { alt: lunarOrbitAltitudeKm, inc: 97.8 }  // Polar-like (same as LEO)
+        ];
+        
+        // Distribute lunar satellites evenly across configs and orbits
+        const lunarSatellitesPerConfig = Math.floor(lunarCount / lunarConfigs.length);
+        const lunarExtraSatellites = lunarCount % lunarConfigs.length;
+        
+        // Moon's position in Earth frame (simplified - at 0° for initial positioning)
+        const moonX = cislunarRadius * Math.cos(moonAngle);
+        const moonZ = cislunarRadius * Math.sin(moonAngle);
+        const moonY = 0;
+        
+        let lunarSatelliteIndex = 0;
+        for (let configIdx = 0; configIdx < lunarConfigs.length; configIdx++) {
+          const config = lunarConfigs[configIdx];
+          const countForThisConfig = lunarSatellitesPerConfig + (configIdx < lunarExtraSatellites ? 1 : 0);
+          
+          for (let j = 0; j < countForThisConfig; j++) {
+            // Evenly space within each config's orbit (same as LEO)
+            const trueAnomaly = (j / countForThisConfig) * Math.PI * 2;
+            // Use golden angle spacing for ascending nodes to distribute orbits evenly
+            const ascendingNode = (lunarSatelliteIndex * goldenAngle * 180 / Math.PI) % 360;
+            
+            // Use generateOrbitalPosition to get 3D distribution pattern, then scale to lunar orbit radius
+            // Use a reference altitude (like LEO) to get the distribution, then scale the vector
+            const refAltitudeKm = 550; // Use LEO altitude as reference for distribution pattern
+            const pos = generateOrbitalPosition(refAltitudeKm, config.inc, trueAnomaly, ascendingNode);
+            
+            // Scale position vector to lunar orbit radius
+            // generateOrbitalPosition returns position at radius = 1.0 + altitude/EARTH_RADIUS_KM
+            const refRadius = 1.0 + (refAltitudeKm / EARTH_RADIUS_KM);
+            const scale = lunarOrbitRadiusLocal / refRadius;
+            
+            // Store offset relative to Moon (not absolute position) so satellites can follow Moon movement
+            const lunarSat = {
+              id: `lunar_${deploymentCount}_${lunarSatelliteIndex}`,
+              x: pos.x * scale,  // Scaled offset relative to Moon center
+              y: pos.y * scale,
+              z: pos.z * scale,
+              altitudeKm: lunarAltitude,
+              shape: 'sphere',
+              isLunar: true
+            };
+            satellites.push(lunarSat);
+            lunarSatelliteIndex++;
+          }
+        }
+        console.log('Total lunar satellites pushed:', lunarSatelliteIndex, 'satellites array length:', satellites.length);
         
         deploymentCount++;
         // Note: Year advancement happens in button click handler, not here
@@ -1003,24 +1169,34 @@
           console.warn('Satellite count mismatch! Generated:', satellites.length, 'Expected:', targetRendered);
         }
         
+        // Debug: Check for lunar satellites
+        const lunarSatsInArray = satellites.filter(sat => sat.isLunar);
+        console.log('Lunar satellites in satellites array:', lunarSatsInArray.length, 'Sample:', lunarSatsInArray[0]);
+        
         // Separate SSO satellites from others for special rendering
         const ssoSatellites = satellites.filter(sat => sat.isSSO);
         const otherSatellites = satellites.filter(sat => !sat.isSSO);
         
         console.log('SSO satellites:', ssoSatellites.length, 'Other satellites:', otherSatellites.length);
         
-        // Group other satellites by shape, but separate cislunar (very high altitude) from regular spheres
+        // Group other satellites by shape, but separate cislunar and lunar from regular spheres
         const satellitesByShape = {
           'octahedron': [],
           'sphere': [],
           'box': [],
-          'sphere_cislunar': [] // Separate cislunar spheres (very far away)
+          'sphere_cislunar': [], // Separate cislunar spheres (very far away)
+          'sphere_lunar': [] // Separate lunar spheres (orbit Moon)
         };
         
         otherSatellites.forEach(sat => {
           const shape = sat.shape || 'octahedron';
+          // Separate lunar satellites (isLunar flag)
+          if (sat.isLunar) {
+            satellitesByShape['sphere_lunar'].push(sat);
+            console.log('Lunar satellite detected:', sat.id, 'altitude:', sat.altitudeKm);
+          }
           // Separate cislunar satellites (altitude > 100000km) from regular spheres
-          if (shape === 'sphere' && sat.altitudeKm > 100000) {
+          else if (shape === 'sphere' && sat.altitudeKm > 100000) {
             satellitesByShape['sphere_cislunar'].push(sat);
             console.log('Cislunar satellite detected:', sat.id, 'altitude:', sat.altitudeKm);
           } else if (satellitesByShape[shape]) {
@@ -1029,6 +1205,7 @@
         });
         
         console.log('Cislunar count:', satellitesByShape['sphere_cislunar'].length);
+        console.log('Lunar count:', satellitesByShape['sphere_lunar'].length);
         
         // Remove old meshes
         if (satelliteMeshes && satelliteMeshes.length > 0) {
@@ -1056,6 +1233,7 @@
         satelliteMeshes = [];
         ssoMeshes = []; // Reset SSO mesh tracking
         cislunarMeshes = []; // Reset cislunar mesh tracking
+        lunarMeshes = []; // Reset lunar mesh tracking
         if (ssoSatellites.length > 0) {
           console.log('Creating SSO mesh with', ssoSatellites.length, 'satellites');
           const ssoMesh = createSSOMesh(scene, ssoSatellites);
@@ -1070,13 +1248,19 @@
         Object.keys(satellitesByShape).forEach(shape => {
           const sats = satellitesByShape[shape];
           if (sats.length > 0) {
-            console.log('Creating', sats.length, shape, 'satellites', shape === 'sphere_cislunar' ? '(CISLUNAR - purple, large)' : '');
-            // Create geometry first - make cislunar larger
-            const baseSize = (shape === 'sphere_cislunar') ? 0.04 : 0.02; // Larger for cislunar
+            console.log('Creating', sats.length, shape, 'satellites', 
+              shape === 'sphere_cislunar' ? '(CISLUNAR - purple, large)' : 
+              shape === 'sphere_lunar' ? '(LUNAR - orange, large)' : '');
+            if (shape === 'sphere_lunar' && sats.length > 0) {
+              console.log('Lunar satellite positions sample:', sats[0].x, sats[0].y, sats[0].z);
+            }
+            // Create geometry first - make cislunar and lunar larger
+            const baseSize = (shape === 'sphere_cislunar' || shape === 'sphere_lunar') ? 0.04 : 0.02;
             let geo;
             switch (shape) {
               case 'sphere':
               case 'sphere_cislunar':
+              case 'sphere_lunar':
                 geo = new THREE.SphereGeometry(baseSize, 8, 8);
                 break;
               case 'box':
@@ -1092,6 +1276,7 @@
             const pokemonColors = {
               'sphere': 0x4a90e2,        // Warm blue (LEO)
               'sphere_cislunar': 0x9b59b6, // Purple (Cislunar - very far)
+              'sphere_lunar': 0xff8c42,  // Orange (Lunar - orbit Moon)
               'box': 0xd4a574,           // Warm tan (GEO)
               'octahedron': 0x5ba85f     // Forest green (MEO)
             };
@@ -1111,7 +1296,8 @@
               
               let scale = 1.0;
               if (sat.altitudeKm !== undefined) {
-                if (sat.altitudeKm >= 100000) scale = 6.0; // Cislunar - much larger since they're far away (6x for visibility)
+                if (sat.isLunar) scale = 0.75; // Lunar - slightly smaller (0.75x)
+                else if (sat.altitudeKm >= 100000) scale = 2.0; // Cislunar - reduced from 6.0 to 2.0 (much smaller)
                 else if (sat.altitudeKm >= 35786) scale = 2.0; // GEO
                 else if (sat.altitudeKm >= 10000) scale = 1.5; // MEO
               }
@@ -1126,9 +1312,16 @@
             scene.add(instancedMesh);
             satelliteMeshes.push(instancedMesh);
             
-            // Track cislunar meshes separately for orbital animation
+            // Track cislunar and lunar meshes separately for orbital animation
             if (shape === 'sphere_cislunar') {
               cislunarMeshes.push({
+                mesh: instancedMesh,
+                satellites: sats // Store original satellite data for animation
+              });
+            }
+            if (shape === 'sphere_lunar') {
+              if (!lunarMeshes) lunarMeshes = [];
+              lunarMeshes.push({
                 mesh: instancedMesh,
                 satellites: sats // Store original satellite data for animation
               });
@@ -1276,17 +1469,23 @@
         const ssoSatellites = satellites.filter(sat => sat.isSSO);
         const otherSatellites = satellites.filter(sat => !sat.isSSO);
         
-        // Group other satellites by shape, but separate cislunar (very high altitude) from regular spheres
+        // Group other satellites by shape, but separate cislunar and lunar from regular spheres
         const satellitesByShape = {
           'octahedron': [],
           'sphere': [],
           'box': [],
-          'sphere_cislunar': [] // Separate cislunar spheres (very far away)
+          'sphere_cislunar': [], // Separate cislunar spheres (very far away)
+          'sphere_lunar': [] // Separate lunar spheres (orbit Moon)
         };
         otherSatellites.forEach(sat => {
           const shape = sat.shape || 'octahedron';
+          // Separate lunar satellites (isLunar flag)
+          if (sat.isLunar) {
+            satellitesByShape['sphere_lunar'].push(sat);
+            console.log('Lunar satellite detected:', sat.id, 'altitude:', sat.altitudeKm);
+          }
           // Separate cislunar satellites (altitude > 100000km) from regular spheres
-          if (shape === 'sphere' && sat.altitudeKm > 100000) {
+          else if (shape === 'sphere' && sat.altitudeKm > 100000) {
             satellitesByShape['sphere_cislunar'].push(sat);
             console.log('Cislunar satellite detected:', sat.id, 'altitude:', sat.altitudeKm);
           } else if (satellitesByShape[shape]) {
@@ -1295,6 +1494,7 @@
         });
         
         console.log('Cislunar count:', satellitesByShape['sphere_cislunar'].length);
+        console.log('Lunar count:', satellitesByShape['sphere_lunar'].length);
         
         satelliteMeshes = [];
         // Create SSO mesh first (white glowing diamonds)
@@ -1309,12 +1509,13 @@
         Object.keys(satellitesByShape).forEach(shape => {
           const sats = satellitesByShape[shape];
           if (sats.length > 0) {
-            // Create geometry first - make cislunar larger
-            const baseSize = (shape === 'sphere_cislunar') ? 0.04 : 0.02; // Larger for cislunar
+            // Create geometry first - make cislunar and lunar larger
+            const baseSize = (shape === 'sphere_cislunar' || shape === 'sphere_lunar') ? 0.04 : 0.02;
             let geo;
             switch (shape) {
               case 'sphere':
               case 'sphere_cislunar':
+              case 'sphere_lunar':
                 geo = new THREE.SphereGeometry(baseSize, 8, 8);
                 break;
               case 'box':
@@ -1330,6 +1531,7 @@
             const pokemonColors = {
               'sphere': 0x4a90e2,        // Warm blue (LEO)
               'sphere_cislunar': 0x9b59b6, // Purple (Cislunar - very far)
+              'sphere_lunar': 0xff8c42,  // Orange (Lunar - orbit Moon)
               'box': 0xd4a574,           // Warm tan (GEO)
               'octahedron': 0x5ba85f     // Forest green (MEO)
             };
@@ -1349,7 +1551,8 @@
               
               let scale = 1.0;
               if (sat.altitudeKm !== undefined) {
-                if (sat.altitudeKm >= 100000) scale = 6.0; // Cislunar - much larger since they're far away (6x for visibility)
+                if (sat.isLunar) scale = 0.75; // Lunar - slightly smaller (0.75x)
+                else if (sat.altitudeKm >= 100000) scale = 2.0; // Cislunar - reduced from 6.0 to 2.0 (much smaller)
                 else if (sat.altitudeKm >= 35786) scale = 2.0; // GEO
                 else if (sat.altitudeKm >= 10000) scale = 1.5; // MEO
               }
@@ -1364,9 +1567,16 @@
             scene.add(instancedMesh);
             satelliteMeshes.push(instancedMesh);
             
-            // Track cislunar meshes separately for orbital animation
+            // Track cislunar and lunar meshes separately for orbital animation
             if (shape === 'sphere_cislunar') {
               cislunarMeshes.push({
+                mesh: instancedMesh,
+                satellites: sats // Store original satellite data for animation
+              });
+            }
+            if (shape === 'sphere_lunar') {
+              if (!lunarMeshes) lunarMeshes = [];
+              lunarMeshes.push({
                 mesh: instancedMesh,
                 satellites: sats // Store original satellite data for animation
               });
@@ -1393,14 +1603,10 @@
       // ANIMATION LOOP
       // ============================================================================
       
-      let satelliteMeshes = [];
       let lastTime = performance.now();
       
       // Animation state
       let animationTime = 0;
-      let ssoMeshes = []; // Track SSO meshes separately for animations
-      let cislunarMeshes = []; // Track cislunar meshes separately for orbital animation
-      let cislunarSatellites = []; // Store original cislunar satellite data for animation
       
       function animate() {
         requestAnimationFrame(animate);
@@ -1422,6 +1628,25 @@
         // 1. Slow Earth rotation (very lightweight - just rotate the globe)
         if (earthMesh) {
           earthMesh.rotation.y += deltaTime * 0.05; // Slow rotation
+        }
+        
+        // 1.5. Moon orbital animation - orbit around Earth
+        // Moon's orbital period: ~27.3 days = 2,358,720 seconds
+        // Speed up for visibility: 0.005 radians per second
+        if (moonMesh) {
+          const EARTH_RADIUS_KM = 6371;
+          const MOON_DISTANCE_KM = 384400;
+          const moonOrbitalSpeed = 0.005; // radians per second (sped up for visibility)
+          const moonDistance = 1.0 + (MOON_DISTANCE_KM / EARTH_RADIUS_KM) * 0.15; // Closer for dramatic visibility
+          
+          // Calculate Moon position in orbit around Earth
+          const moonAngle = animationTime * moonOrbitalSpeed;
+          moonMesh.position.x = moonDistance * Math.cos(moonAngle);
+          moonMesh.position.z = moonDistance * Math.sin(moonAngle);
+          moonMesh.position.y = 0; // Keep in ecliptic plane
+          
+          // Rotate Moon slowly (tidally locked, but show rotation for effect)
+          moonMesh.rotation.y += deltaTime * 0.01;
         }
         
         // 2. Satellite animations (Pokemon-style)
@@ -1480,51 +1705,137 @@
           });
         }
         
-        // 4. Cislunar orbital animation - co-orbit with Moon
-        // L4/L5 Lagrange points co-orbit with the Moon (27.3 day period)
-        // For visualization, rotate cislunar satellites around Earth's Y-axis
+        // 4. Cislunar orbital animation - halo orbits around L4/L5 + co-orbit with Moon
+        // Satellites orbit in halo orbits around L4/L5 points, while the whole system co-orbits with Moon
         // Moon's orbital period: ~27.3 days = 2,358,720 seconds
-        // Angular velocity: 2π / 2,358,720 ≈ 2.66e-6 rad/s (very slow)
-        // Speed up for visibility: use 0.005 rad/s (sped up but still slow enough to see structure)
-        const moonOrbitalSpeed = 0.005; // radians per second (sped up for visibility)
+        // Halo orbit period: much faster (days to weeks), simplified here
+        const moonOrbitalSpeed = 0.005; // radians per second - co-orbit with Moon (sped up for visibility)
+        const haloOrbitalSpeed = 0.02; // radians per second - orbit around L4/L5 (faster than Moon orbit)
+        const EARTH_RADIUS_KM = 6371;
+        // Use same scale factor as moon (0.15x) for consistency with closer moon visualization
+        const cislunarRadius = 1.0 + (384400 / EARTH_RADIUS_KM) * 0.15;
+        const moonAngle = 0; // Simplified Moon position reference
+        
         cislunarMeshes.forEach(({mesh, satellites}) => {
           if (mesh && satellites) {
             const dummy = new THREE.Object3D();
             
-            for (let i = 0; i < satellites.length && i < mesh.count; i++) {
-              const sat = satellites[i];
-              if (!sat) continue;
+            // Separate L4 and L5 satellites
+            const l4Sats = satellites.filter(sat => sat.id && sat.id.includes('L4'));
+            const l5Sats = satellites.filter(sat => sat.id && sat.id.includes('L5'));
+            
+            // Calculate current L4/L5 positions (co-orbiting with Moon)
+            const l4BaseAngle = (moonAngle + 60) * (Math.PI / 180) + animationTime * moonOrbitalSpeed;
+            const l5BaseAngle = (moonAngle - 60) * (Math.PI / 180) + animationTime * moonOrbitalSpeed;
+            
+            // L4 satellites - orbit around L4 point
+            l4Sats.forEach((sat, idx) => {
+              const i = idx; // Index in the L4 array
+              const haloRadius = Math.min(0.8, 0.4 + (l4Sats.length / 50) * 0.4);
               
-              // Get original position
-              const originalX = sat.x || 0;
-              const originalZ = sat.z || 0;
-              const originalY = sat.y || 0;
+              // Halo orbit angle around L4 point
+              const haloAngle = (i / l4Sats.length) * Math.PI * 2 + animationTime * haloOrbitalSpeed;
               
-              // Calculate original angle and distance in X-Z plane
-              const originalAngle = Math.atan2(originalZ, originalX);
-              const distance = Math.sqrt(originalX * originalX + originalZ * originalZ);
+              // Position in halo orbit around L4 (planar ring like SSO)
+              const offsetX = haloRadius * Math.cos(haloAngle);
+              const offsetZ = haloRadius * Math.sin(haloAngle);
+              const offsetY = 0; // Keep planar for clear ring visibility
               
-              // Rotate around Earth's Y-axis at Moon's orbital rate
-              // This makes the L4/L5 clouds co-orbit with the Moon
-              const currentAngle = originalAngle + animationTime * moonOrbitalSpeed;
+              // Rotate offset to align with current L4 position
+              const rotatedOffsetX = offsetX * Math.cos(l4BaseAngle) - offsetZ * Math.sin(l4BaseAngle);
+              const rotatedOffsetZ = offsetX * Math.sin(l4BaseAngle) + offsetZ * Math.cos(l4BaseAngle);
               
-              // Calculate new position preserving distance and Y offset
-              const x = distance * Math.cos(currentAngle);
-              const z = distance * Math.sin(currentAngle);
-              const y = originalY; // Keep original Y (vertical offset from cloud distribution)
+              // Final position: current L4 center + halo orbit offset
+              const x = cislunarRadius * Math.cos(l4BaseAngle) + rotatedOffsetX;
+              const y = offsetY;
+              const z = cislunarRadius * Math.sin(l4BaseAngle) + rotatedOffsetZ;
               
-              // Get scale (cislunar satellites are 6x larger)
-              let scale = 6.0;
+              // Find corresponding mesh index
+              const meshIndex = satellites.indexOf(sat);
+              if (meshIndex >= 0 && meshIndex < mesh.count) {
+                dummy.position.set(x, y, z);
+                dummy.scale.set(2.0, 2.0, 2.0); // Reduced from 6.0 to 2.0 for cislunar
+                dummy.updateMatrix();
+                mesh.setMatrixAt(meshIndex, dummy.matrix);
+              }
+            });
+            
+            // L5 satellites - orbit around L5 point
+            l5Sats.forEach((sat, idx) => {
+              const i = idx; // Index in the L5 array
+              const haloRadius = Math.min(0.8, 0.4 + (l5Sats.length / 50) * 0.4);
               
-              dummy.position.set(x, y, z);
-              dummy.scale.set(scale, scale, scale);
-              dummy.rotation.set(0, 0, 0); // No rotation
-              dummy.updateMatrix();
-              mesh.setMatrixAt(i, dummy.matrix);
-            }
+              // Halo orbit angle around L5 point
+              const haloAngle = (i / l5Sats.length) * Math.PI * 2 + animationTime * haloOrbitalSpeed;
+              
+              // Position in halo orbit around L5 (planar ring like SSO)
+              const offsetX = haloRadius * Math.cos(haloAngle);
+              const offsetZ = haloRadius * Math.sin(haloAngle);
+              const offsetY = 0; // Keep planar for clear ring
+              
+              // Rotate offset to align with current L5 position
+              const rotatedOffsetX = offsetX * Math.cos(l5BaseAngle) - offsetZ * Math.sin(l5BaseAngle);
+              const rotatedOffsetZ = offsetX * Math.sin(l5BaseAngle) + offsetZ * Math.cos(l5BaseAngle);
+              
+              // Final position: current L5 center + halo orbit offset
+              const x = cislunarRadius * Math.cos(l5BaseAngle) + rotatedOffsetX;
+              const y = offsetY;
+              const z = cislunarRadius * Math.sin(l5BaseAngle) + rotatedOffsetZ;
+              
+              // Find corresponding mesh index
+              const meshIndex = satellites.indexOf(sat);
+              if (meshIndex >= 0 && meshIndex < mesh.count) {
+                dummy.position.set(x, y, z);
+                dummy.scale.set(2.0, 2.0, 2.0); // Reduced from 6.0 to 2.0 for cislunar
+                dummy.updateMatrix();
+                mesh.setMatrixAt(meshIndex, dummy.matrix);
+              }
+            });
+            
             mesh.instanceMatrix.needsUpdate = true;
           }
         });
+        
+        // 5. Lunar satellites - stationary relative to Moon (follow Moon's orbit)
+        if (lunarMeshes && lunarMeshes.length > 0) {
+          const EARTH_RADIUS_KM_FOR_LUNAR = 6371;
+          const MOON_DISTANCE_KM = 384400;
+          const moonOrbitalSpeedForLunar = 0.005; // radians per second - Moon's orbit around Earth
+          const moonRadius = 1.0 + (MOON_DISTANCE_KM / EARTH_RADIUS_KM_FOR_LUNAR) * 0.15;
+          
+          lunarMeshes.forEach(({mesh, satellites}) => {
+            if (mesh && satellites) {
+              const dummy = new THREE.Object3D();
+              
+              // Calculate current Moon position (orbiting Earth)
+              const currentMoonAngle = animationTime * moonOrbitalSpeedForLunar;
+              const moonX = moonRadius * Math.cos(currentMoonAngle);
+              const moonZ = moonRadius * Math.sin(currentMoonAngle);
+              const moonY = 0;
+              
+              satellites.forEach((sat, i) => {
+                if (!sat || i >= mesh.count) return;
+                
+                // Get offset relative to Moon (stored in sat.x, sat.y, sat.z)
+                const offsetX = sat.x || 0;
+                const offsetY = sat.y || 0;
+                const offsetZ = sat.z || 0;
+                
+                // Final position: current Moon position + offset (satellites follow Moon)
+                const x = moonX + offsetX;
+                const y = moonY + offsetY;
+                const z = moonZ + offsetZ;
+                
+                dummy.position.set(x, y, z);
+                dummy.scale.set(0.75, 0.75, 0.75); // Lunar satellites slightly smaller (0.75x)
+                dummy.updateMatrix();
+                mesh.setMatrixAt(i, dummy.matrix);
+              });
+              
+              mesh.instanceMatrix.needsUpdate = true;
+            }
+          });
+        }
         
         // 3. Globe day/night cycle (subtle warm/cool color temperature shift)
         if (earthMesh && earthMesh.material && earthMesh.material.uniforms) {

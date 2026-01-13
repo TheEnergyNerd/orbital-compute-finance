@@ -74,10 +74,9 @@ export function getEclipseFraction(params: Params, year: number, shell = 'leo'):
  * High demand accelerates cost reductions through increased production volume.
  */
 export function getLaunchCost(year: number, params: Params, shell = 'leo'): number {
-  // Launch floor depends on Starship availability
-  // Starship: $15/kg (propellant + amortization + ops)
-  // Conventional (Falcon 9, etc.): ~$300/kg
-  const launchFloor = params.starshipOn ? 15 : 300;
+  // Launch floor depends on Starship availability and year
+  // Before starshipYear: conventional ~$300/kg (Falcon 9, etc.)
+  // After starshipYear (if starshipOn): smooth transition to params.launchFloor
 
   let cost = params.launchCost;
   for (let y = 2026; y < year; y++) {
@@ -85,7 +84,16 @@ export function getLaunchCost(year: number, params: Params, shell = 'leo'): numb
     const orbitalLearningMult = Math.pow(demandPressure, 1.5); // 0.09x to 2.83x
     const effectiveLearn = params.launchLearn * orbitalLearningMult;
     cost *= (1 - effectiveLearn);
-    cost = Math.max(launchFloor, cost);
+
+    // Floor transitions SMOOTHLY over 5 years after Starship becomes operational
+    // This prevents discontinuities in cotsBlend calculations
+    let floorForYear = 300;  // Pre-Starship conventional floor
+    if (params.starshipOn && y >= params.starshipYear) {
+      const yearsSinceStarship = y - params.starshipYear;
+      const floorTransition = Math.min(1, yearsSinceStarship / 5);  // 0→1 over 5 years
+      floorForYear = 300 - floorTransition * (300 - params.launchFloor);  // 300 → launchFloor
+    }
+    cost = Math.max(floorForYear, cost);
   }
   return cost * (SHELL_COST_MULT[shell] || 1.0);
 }
@@ -187,7 +195,13 @@ export function getBandwidth(year: number, params: Params): number {
   const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
   const hasPhotonic = params.photonicOn && year >= params.photonicYear;
 
-  let bw = params.bandwidth * Math.pow(1 + params.bwGrowth, year - 2026);
+  // AI LEARNING CORRELATION: Faster AI progress → better compression, smarter protocols
+  // If compute efficiency improves X%/year, bandwidth efficiency improves similarly
+  // This ensures scenarios maintain consistent relative advantage
+  const aiLearnRatio = params.aiLearn / 0.20;  // Relative to baseline (0.20 is default aiLearn)
+  const effectiveBwGrowth = params.bwGrowth * (0.5 + 0.5 * aiLearnRatio);  // Scale growth rate
+
+  let bw = params.bandwidth * Math.pow(1 + effectiveBwGrowth, year - 2026);
 
   // STARSHIP ERA: Bandwidth infrastructure scales with cheap launch
   // - More relay satellite constellations
@@ -224,25 +238,26 @@ export function getBandwidth(year: number, params: Params): number {
  * Calculate effective bandwidth requirement per TFLOP.
  * Uses token-based model for realistic network I/O requirements.
  *
- * Derivation from first principles:
- * - Llama-70B: 140 GFLOPs per token
+ * Derivation from first principles (DeepSeek-V3 class MoE):
+ * - DeepSeek-V3: 671B total params, 37B active per token (MoE architecture)
+ * - ~80 GFLOPs per token (vs 140 GFLOPs for dense Llama-70B)
  * - Average response: 4 bytes per token (output)
  * - Average request: ~16 bytes per token (input context)
  * - Total I/O: ~20 bytes per token round-trip
  *
  * For 1 TFLOP (1e12 FLOPs):
- * - Tokens = 1e12 / 140e9 = 7.14 tokens
- * - Bytes = 7.14 × 20 = 143 bytes
- * - Gbps = 143 × 8 / 1e9 = 1.14e-6 Gbps/TFLOP
+ * - Tokens = 1e12 / 80e9 = 12.5 tokens
+ * - Bytes = 12.5 × 20 = 250 bytes
+ * - Gbps = 250 × 8 / 1e9 = 2.0e-6 Gbps/TFLOP
  *
- * This replaces the deprecated gbpsPerTflop = 0.0001 which was 100× too high.
+ * The gbpsPerTflop slider scales this baseline value (default 1e-6 = 1x).
  */
 export function getEffectiveBwPerTflop(year: number, params: Params): number {
   const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
   const hasPhotonic = params.photonicOn && year >= params.photonicYear;
 
   // Token-based bandwidth calculation
-  const flopsPerToken = params.flopsPerToken || 140e9;
+  const flopsPerToken = params.flopsPerToken || 80e9;
   const bytesPerToken = params.bytesPerToken || 4;
   // Include input context (roughly 4× output tokens for typical inference)
   const totalBytesPerToken = bytesPerToken * 5;  // input + output
@@ -251,6 +266,24 @@ export function getEffectiveBwPerTflop(year: number, params: Params): number {
   // tokens/TFLOP = 1e12 FLOPs / flopsPerToken
   const tokensPerTflop = 1e12 / flopsPerToken;
   let bwPerTflop = (tokensPerTflop * totalBytesPerToken * 8) / 1e9;
+
+  // Apply gbpsPerTflop slider as a multiplier relative to baseline (~1e-6)
+  // Default gbpsPerTflop = 1e-6 = 1x multiplier
+  // User can adjust to model different workload profiles (real-time vs batch)
+  const baselineBwPerTflop = 1e-6;  // ~1 kbps/TFLOP from token-based physics
+  const userMultiplier = (params.gbpsPerTflop || baselineBwPerTflop) / baselineBwPerTflop;
+  bwPerTflop *= userMultiplier;
+
+  // AI LEARNING → SMARTER PROTOCOLS: Higher aiLearn means better compression
+  // Smarter AI systems use more efficient data representations and protocols
+  // This prevents high-efficiency scenarios from being artificially bandwidth-limited
+  // The reduction compounds similarly to how efficiency gains compound
+  const t = year - 2026;
+  const baseAiLearn = 0.20;  // Baseline scenario aiLearn
+  const aiLearnRatio = params.aiLearn / baseAiLearn;
+  // Compression improves at ~10% of the efficiency improvement rate
+  const compressionImprovement = Math.pow(1 + (params.aiLearn - baseAiLearn) * 0.3, t);
+  bwPerTflop /= compressionImprovement;
 
   // Thermo/photonic computing reduces I/O (more computation per token)
   if (hasThermoCompute || hasPhotonic) {
@@ -331,9 +364,10 @@ export function getCommsTflopsLimit(params: Params, year: number): number {
 export function getTokensPerSecond(tflops: number, params: Params): number {
   // flopsPerToken: typical values:
   //   - Llama-7B: ~14 GFLOPs/token
-  //   - Llama-70B: ~140 GFLOPs/token
+  //   - DeepSeek-V3 (37B active MoE): ~80 GFLOPs/token
+  //   - Llama-70B (dense): ~140 GFLOPs/token
   //   - GPT-4 class: ~1800 GFLOPs/token (estimated)
-  const flopsPerToken = params.flopsPerToken || 140e9;  // Default: Llama-70B
+  const flopsPerToken = params.flopsPerToken || 80e9;  // Default: DeepSeek-V3 class
 
   const flopsPerSec = tflops * 1e12;
   return flopsPerSec / flopsPerToken;
@@ -369,81 +403,60 @@ export function getLEOPower(year: number, params: Params): number {
   const hasFusion = params.fusionOn && year >= params.fusionYear;
 
   // Get launch cost to determine platform scaling
+  // Use smooth interpolation to avoid discontinuities
   const launchCost = getLaunchCost(year, params);
-  const isStarshipEra = launchCost < 200;
 
-  // Compact fusion enables 5-50 MWe in LEO
-  // Nuclear has strong economies of scale - a 50 MW plant has much better $/W than 5 MW
-  // This also makes thermal a binding constraint, so radiator sliders work
+  // starshipBlend: 0 at $500/kg → 1 at $100/kg (smooth transition)
+  const starshipBlend = Math.max(0, Math.min(1, (500 - launchCost) / 400));
 
-  // NUCLEAR POWER: Independent of solar - doesn't need panels!
-  // Fission reactors: Kilopower (1-10 kW), KRUSTY heritage → scaled to MW class
-  // Mature fission: 5-50 MW per platform (limited by radiator mass)
-  if (hasFission) {
-    const fissionMaturity = Math.min(1, (year - params.fissionYear) / 10);
-    // Fission: 10 MW starting, scales to 50 MW with maturity
-    // Much higher than solar because reactor mass << solar array mass for same power
-    const fissionPower = 10000 + fissionMaturity * 40000; // 10 MW → 50 MW
+  // Reference year for maturity calculations
+  const starshipRefYear = params.starshipYear || 2028;
 
-    if (hasFusion) {
-      // Fusion: 100-500 MW for LEO platforms
-      // Compact tokamak/stellarator designs scale well once achieved
-      // Limited by radiator mass, not reactor - but fusion radiators more efficient
-      const fusionMaturity = Math.min(1, (year - params.fusionYear) / 10);
-      const fusionPower = 100000 + fusionMaturity * 400000; // 100 MW → 500 MW
-      return Math.max(fusionPower, fissionPower);
-    }
-    return fissionPower;
-  }
+  // Calculate SOLAR power with smooth blending
+  // Pre-Starship baseline: grows with efficiency improvements to maintain smooth specPower
+  // Use exponential growth (10%/year) to match technology improvement rates
+  const preStarshipPower = 50 * Math.pow(1.10, t);  // 50 kW → ~130 kW by year 10
 
-  // SOLAR POWER: Limited by panel area/mass and thermal rejection
-  let solarThermalPower = 0;
-  if (isStarshipEra && hasThermal) {
-    const thermalMaturity = Math.min(1, (year - 2030) / 10);
-    solarThermalPower = 2000 + thermalMaturity * 18000; // 2 MW → 20 MW
-  } else if (isStarshipEra) {
-    const starshipMaturity = Math.min(1, (year - 2030) / 10);
-    solarThermalPower = 1000 + starshipMaturity * 4000; // 1 MW → 5 MW
-  } else if (hasThermal) {
-    const thermalMaturity = Math.min(1, (year - params.thermalYear) / 6);
-    solarThermalPower = 500 + thermalMaturity * 1500; // 500 kW → 2 MW
-  }
+  // Base Starship-era power (without thermal): 1 MW → 5 MW over 10 years
+  const starshipMaturity = Math.min(1, Math.max(0, year - starshipRefYear) / 10);
+  const baseStarshipPower = 1000 + starshipMaturity * 4000;
 
-  if (solarThermalPower > 0) {
-    return solarThermalPower;
-  }
-
-  // STARSHIP ERA: First-principles solar power limits
-  // - Solar irradiance: 1361 W/m² at 1 AU
-  // - Advanced triple-junction efficiency: 28% by 2030s → 381 W/m²
-  // - Lightweight ROSA arrays: 2.5 kg/m²
-  // - Starship payload: 150,000 kg
-  // - With 50% mass for solar: 75,000 kg → 30,000 m² → 11.4 MW
-  // - With in-orbit assembly (2-3 Starships): 20-30 MW achievable
-  if (isStarshipEra) {
-    const maturity = Math.min(1, (year - 2030) / 10);
-    if (hasThermal) {
-      // Thermal breakthrough + Starship: radiators no longer limit power
-      // Single Starship: 2 MW (conservative)
-      // Multi-Starship assembly matures: 2 MW → 20 MW over 10 years
-      return 2000 + maturity * 18000;
-    }
-    // Without thermal: radiator mass limits power (can't dump all the heat)
-    // Even with big arrays, thermal becomes binding ~4-5 MW
-    // Single Starship: 1 MW, scales to 5 MW with larger radiators
-    return 1000 + maturity * 4000;
-  }
-
+  // Thermal BOOST adds to base power, doesn't replace it
+  // This ensures continuity: at thermal year, power continues from where it was
+  let thermalBoost = 0;
   if (hasThermal) {
-    // Thermal breakthrough but no Starship: mass-constrained launches
-    // Can build 500 kW - 2 MW platforms (conventional rockets)
-    const maturity = Math.min(1, (year - params.thermalYear) / 6);
-    return 500 + maturity * 1500; // 500 kW → 2 MW
+    const thermalMaturity = Math.min(1, (year - params.thermalYear) / 10);
+    // Thermal adds 1-45 MW on top of base power (total: 2-50 MW at full maturity)
+    thermalBoost = 1000 + thermalMaturity * 44000;
   }
 
-  // Conventional (no Starship, no thermal): mass AND thermal limited
-  // Can't dump waste heat fast enough, even if you had more panels
-  return Math.min(250, params.basePower * 0.8 + t * 5);
+  const starshipPower = baseStarshipPower + thermalBoost;
+
+  // Smooth blend between pre-Starship and Starship-era power
+  let solarPower = preStarshipPower + starshipBlend * (starshipPower - preStarshipPower);
+
+  // FUSION POWER IN LEO
+  // Compact magneto-electrostatic mirror fusion: 150 W/kg specific power
+  // Only use if it beats solar
+  let fusionPower = 0;
+  if (hasFusion) {
+    const fusionMaturity = Math.min(1, (year - params.fusionYear) / 8);
+    fusionPower = 5000 + fusionMaturity * 45000; // 5 MW → 50 MW
+  }
+
+  // FISSION in LEO: Only makes sense if it beats solar
+  // At ~50 W/kg, fission is generally WORSE than solar in LEO
+  // Solar at ~100 W/kg effective (with batteries) beats fission
+  // So we don't use fission in LEO unless solar is unavailable
+  let fissionPower = 0;
+  if (hasFission && !hasThermal && starshipBlend < 0.5) {
+    // Only use fission if we don't have good solar options
+    const fissionMaturity = Math.min(1, (year - params.fissionYear) / 10);
+    fissionPower = 500 + fissionMaturity * 1500; // Small fission for niche use
+  }
+
+  // Return the BEST power option for LEO
+  return Math.max(solarPower, fusionPower, fissionPower);
 }
 
 /**

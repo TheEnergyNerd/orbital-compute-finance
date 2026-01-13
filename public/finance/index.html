@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" type="image/png" href="/assets/favicon.DHcvlSz2.png">
+  <link rel="icon" type="image/png" href="/favicon.png">
   <title>Orbital Compute Economics</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Load shared model via ES module -->
+  <script type="module" src="/src/finance/main.ts"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     :root {
@@ -18,7 +19,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; -webkit-font-smoothing: antialiased; }
     .app { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
-    .sidebar { background: var(--surface); border-right: 1px solid var(--border); position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); position: sticky; top: 0; height: 100vh; overflow-y: auto; min-width: 280px; overflow-x: hidden; }
     .main { display: flex; flex-direction: column; min-width: 0; }
     .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 10; border-left: 3px solid var(--orbital); }
     .sidebar-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; letter-spacing: -0.01em; }
@@ -261,8 +262,8 @@
           <div class="toggle-effect" id="eff-thermal">50× lighter heat rejection, MW-class platforms</div>
         </div>
         <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">Starship</span><span class="slider-val"><span id="v-starshipYear">2029</span></span></div>
-          <input type="range" id="starshipYear" min="2026" max="2040" value="2029">
+          <div class="slider-header"><span class="slider-lbl">Starship</span><span class="slider-val"><span id="v-starshipYear">2027</span></span></div>
+          <input type="range" id="starshipYear" min="2026" max="2040" value="2027">
           <div class="toggle-effect" id="eff-starship">5-10× larger satellites, $200→$10/kg launch</div>
         </div>
         <div class="toggle-row">
@@ -372,10 +373,7 @@
           <div class="slider-header"><span class="slider-lbl">Solar Learn</span><span class="slider-val"><span id="v-solarLearn">0.8</span><span class="unit">%/yr</span></span></div>
           <input type="range" id="solarLearn" min="0" max="20" value="8">
         </div>
-        <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">Base Power</span><span class="slider-val"><span id="v-basePower">300</span><span class="unit">kW</span></span></div>
-          <input type="range" id="basePower" min="100" max="800" value="300">
-        </div>
+        <!-- basePower removed - power determined by tech state -->
         <div class="slider-row">
           <div class="slider-header"><span class="slider-lbl">Compute %</span><span class="slider-val"><span id="v-computeFrac">68</span><span class="unit">%</span></span></div>
           <input type="range" id="computeFrac" min="50" max="80" value="68">
@@ -413,16 +411,12 @@
           <input type="range" id="launchLearn" min="10" max="50" value="18">
         </div>
         <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">Floor $/kg</span><span class="slider-val">$<span id="v-launchFloor">10</span></span></div>
-          <input type="range" id="launchFloor" min="5" max="200" value="10">
+          <div class="slider-header"><span class="slider-lbl">Floor $/kg</span><span class="slider-val">$<span id="v-launchFloor">15</span></span></div>
+          <input type="range" id="launchFloor" min="5" max="100" value="15">
         </div>
         <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">Prod Mult</span><span class="slider-val"><span id="v-prodMult">2.5</span><span class="unit">×</span></span></div>
-          <input type="range" id="prodMult" min="5" max="50" value="25">
-        </div>
-        <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">Mfg Cost Mult</span><span class="slider-val"><span id="v-mfgCostMult">1.0</span><span class="unit">×</span></span></div>
-          <input type="range" id="mfgCostMult" min="5" max="30" value="10">
+          <div class="slider-header"><span class="slider-lbl">Prod Mult</span><span class="slider-val"><span id="v-prodMult">4.5</span><span class="unit">×</span></span></div>
+          <input type="range" id="prodMult" min="10" max="80" value="45">
         </div>
         <div class="slider-row">
           <div class="slider-header"><span class="slider-lbl">Maint Cost</span><span class="slider-val"><span id="v-maintCost">1.5</span><span class="unit">%/yr</span></span></div>
@@ -445,16 +439,16 @@
           <input type="range" id="bandwidth" min="5" max="100" value="20">
         </div>
         <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">BW Growth</span><span class="slider-val"><span id="v-bwGrowth">25</span><span class="unit">%/yr</span></span></div>
-          <input type="range" id="bwGrowth" min="10" max="40" value="25">
+          <div class="slider-header"><span class="slider-lbl">BW Growth</span><span class="slider-val"><span id="v-bwGrowth">40</span><span class="unit">%/yr</span></span></div>
+          <input type="range" id="bwGrowth" min="10" max="60" value="40">
         </div>
         <div class="slider-row">
           <div class="slider-header"><span class="slider-lbl">BW $/Gbps</span><span class="slider-val">$<span id="v-bwCost">50</span><span class="unit">k</span></span></div>
           <input type="range" id="bwCost" min="10" max="200" value="50">
         </div>
         <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">BW/TFLOP</span><span class="slider-val"><span id="v-gbpsPerTflop">0.5</span><span class="unit">kbps</span></span></div>
-          <input type="range" id="gbpsPerTflop" min="0.1" max="10" step="0.1" value="0.5">
+          <div class="slider-header"><span class="slider-lbl">BW/TFLOP</span><span class="slider-val"><span id="v-gbpsPerTflop">1</span><span class="unit">kbps</span></span></div>
+          <input type="range" id="gbpsPerTflop" min="0.1" max="10" step="0.1" value="1">
         </div>
       </div>
       
@@ -481,9 +475,9 @@
       <div class="section">
         <div class="section-title ground">Market</div>
         <div class="slider-row">
-          <div class="slider-header"><span class="slider-lbl">2026 Demand</span><span class="slider-val ground"><span id="v-demand2025">195</span><span class="unit">Exaflops</span></span></div>
-          <input type="range" class="ground" id="demand2025" min="90" max="450" value="195">
-          <div class="slider-context" id="demand-context">(≈ 307 Petatok/yr | ≈ 65 GW @ baseline)</div>
+          <div class="slider-header"><span class="slider-lbl">2026 Demand</span><span class="slider-val ground"><span id="v-demand2025">65</span><span class="unit">Exaflops</span></span></div>
+          <input type="range" class="ground" id="demand2025" min="30" max="450" value="65">
+          <div class="slider-context" id="demand-context">(≈ 102 Petatok/yr | ≈ 22 GW @ baseline)</div>
         </div>
         <div class="slider-row">
           <div class="slider-header"><span class="slider-lbl">Demand Growth</span><span class="slider-val ground"><span id="v-demandGrowth">55</span><span class="unit">%/yr</span></span></div>
@@ -617,7 +611,8 @@
             <div class="legend">
               <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
               <div class="legend-item"><div class="legend-dot" style="background:rgba(0,102,204,0.3)"></div>Orbital range</div>
-              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (LCOC)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (market)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground); opacity:0.5; border-style:dashed"></div>Ground (base)</div>
             </div>
           </div>
           <div class="chart-card">
@@ -688,7 +683,7 @@
           <div class="chart-card wide">
             <div class="chart-header">
               <div class="chart-title">Shell Utilization (%)</div>
-              <div class="chart-desc">LEO: 300k, MEO: 50k, GEO: 1.8k, Cislunar: 700k capacity</div>
+              <div class="chart-desc">LEO: 500 Tkg mass, GEO: 1.8k slots (ITU), Cislunar: ~unlimited</div>
             </div>
             <div class="chart-box"><canvas id="c-shellUtil"></canvas></div>
             <div class="legend">
@@ -792,7 +787,6 @@
             <div class="chart-box"><canvas id="c-power"></canvas></div>
             <div class="legend">
               <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>LEO</div>
-              <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>MEO</div>
               <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div>GEO</div>
               <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cislunar</div>
             </div>
@@ -903,7 +897,8 @@
             <div class="legend">
               <div class="legend-item"><div class="legend-dot" style="background:var(--orbital)"></div>Orbital (baseline)</div>
               <div class="legend-item"><div class="legend-dot" style="background:rgba(0,102,204,0.3)"></div>Orbital range</div>
-              <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>Ground (LCOC)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground)"></div>Ground (market)</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--ground); opacity:0.5"></div>Ground (base)</div>
             </div>
           </div>
           <div class="chart-card wide">
@@ -933,1273 +928,37 @@
     </div>
   </div>
 <script>
-// BUNDLED MODEL FROM src/model/*.ts - SAME AS MAIN SIMULATOR
-"use strict";
-var Model = (() => {
-  var __defProp = Object.defineProperty;
-  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __export = (target, all) => {
-    for (var name in all)
-      __defProp(target, name, { get: all[name], enumerable: true });
-  };
-  var __copyProps = (to, from, except, desc) => {
-    if (from && typeof from === "object" || typeof from === "function") {
-      for (let key of __getOwnPropNames(from))
-        if (!__hasOwnProp.call(to, key) && key !== except)
-          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-    }
-    return to;
-  };
-  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+// ============================================
+// BRIDGE: Use shared model from window.OrbitalModel
+// ============================================
 
-  // bundle-finance.ts
-  var bundle_finance_exports = {};
-  __export(bundle_finance_exports, {
-    SHELLS: () => SHELLS,
-    SLA: () => SLA,
-    STEFAN_BOLTZMANN: () => STEFAN_BOLTZMANN,
-    YEARS: () => YEARS,
-    calcFleet: () => calcFleet,
-    calcGround: () => calcGround,
-    calcSatellite: () => calcSatellite,
-    defaults: () => defaults,
-    getBandwidth: () => getBandwidth,
-    getBtmShare: () => getBtmShare,
-    getDemand: () => getDemand,
-    getGroundEfficiency: () => getGroundEfficiency,
-    getGroundSupply: () => getGroundSupply,
-    getLaunchCost: () => getLaunchCost,
-    getOrbitalEfficiency: () => getOrbitalEfficiency,
-    getRadiatorMassPerMW: () => getRadiatorMassPerMW,
-    getShellRadiationEffects: () => getShellRadiationEffects,
-    resetFleetTracker: () => resetFleetTracker
+// Model will be loaded from /src/finance/main.ts via window.OrbitalModel
+let Model = null;
+let YEARS, SLA, SHELLS, STEFAN_BOLTZMANN, defaults;
+let P = {};
+
+// Wait for model to load, then initialize
+function waitForModel() {
+  return new Promise((resolve, reject) => {
+    if (window.OrbitalModel) {
+      resolve(window.OrbitalModel);
+    } else {
+      let attempts = 0;
+      const maxAttempts = 500; // 5 seconds max
+      const check = setInterval(() => {
+        attempts++;
+        if (window.OrbitalModel) {
+          clearInterval(check);
+          resolve(window.OrbitalModel);
+        } else if (attempts >= maxAttempts) {
+          clearInterval(check);
+          console.error('waitForModel: Timeout - model never loaded');
+          reject(new Error('OrbitalModel failed to load after 5 seconds'));
+        }
+      }, 10);
+    }
   });
-
-  // src/model/constants.ts
-  var STEFAN_BOLTZMANN = 567e-10;
-  var YEARS = Array.from({ length: 45 }, (_, i) => 2026 + i);
-  var SLA = 0.999;
-  var SHELLS = {
-    leo: { alt: 550, latency: 3.7, tidMult: 1, seuMult: 1, capacity: 2e6 },
-    // Low Earth Orbit - enables 10 TW fleet by 2050
-    meo: { alt: 1e4, latency: 67, tidMult: 3, seuMult: 2.5, capacity: 1e5 },
-    // Van Allen radiation belt
-    geo: { alt: 35786, latency: 120, tidMult: 0.6, seuMult: 0.8, capacity: 1800 },
-    // Geostationary orbit (slot-limited)
-    cislunar: { alt: 384400, latency: 1300, tidMult: 0.4, seuMult: 1.2, capacity: 1e6 }
-    // Earth-Moon space
-  };
-  var SHELL_COST_MULT = {
-    leo: 1,
-    meo: 1.3,
-    geo: 1.6,
-    cislunar: 2.5
-  };
-
-  // src/model/market.ts
-  function getDemand(year, params) {
-    let demand = params.demand2025;
-    for (let y = 2026; y <= year; y++) {
-      const t = y - 2026;
-      const growth = Math.max(0.15, params.demandGrowth + 0.2 - t * 0.02);
-      demand *= 1 + growth;
-    }
-    return demand;
-  }
-  function getBtmShare(year, params) {
-    const t = year - 2026;
-    const queuePain = params.interconnect / 36;
-    const energyPain = params.energyCost / 0.065;
-    const btmIncentive = (queuePain + energyPain) / 2;
-    return Math.min(0.5, params.btmShare * btmIncentive + t * params.btmShareGrowth);
-  }
-  function getGroundSupply(year, params) {
-    const t = year - 2026;
-    const yearBtmShare = getBtmShare(year, params);
-
-    // Grid supply grows with compound rate BUT is delayed by interconnect queue
-    // BTM supply grows faster (shorter delay) but is a fraction of total
-    const gridDelay = params.interconnect / 12; // years
-    const btmDelay = params.btmDelay / 12;      // years
-
-    // Compound growth model (like demand) but with delays
-    // Grid: delayed by interconnect queue, grows at supplyGrowth rate
-    // BTM: faster deployment, grows at 1.5x supplyGrowth rate
-    let gridSupply = params.supply2025 * (1 - yearBtmShare);
-    let btmSupply = params.supply2025 * yearBtmShare;
-
-    for (let y = 2026; y < year; y++) {
-      const yearsSinceStart = y - 2026;
-      // Grid only grows after interconnect delay
-      if (yearsSinceStart >= gridDelay) {
-        gridSupply *= (1 + params.supplyGrowth);
-      }
-      // BTM grows faster after shorter delay
-      if (yearsSinceStart >= btmDelay) {
-        btmSupply *= (1 + params.supplyGrowth * 1.5);
-      }
-    }
-
-    let baseSupply = gridSupply + btmSupply;
-
-    // SMR boost (ground nuclear)
-    if (params.smrOn && year >= params.smrYear) {
-      const smrMaturity = Math.min(1, (year - params.smrYear) / 5);
-      const smrBoost = (10 + smrMaturity * 20) * (year - params.smrYear);
-      baseSupply += smrBoost;
-    }
-    return baseSupply;
-  }
-  function getDemandPressure(year, params) {
-    const demand = getDemand(year, params);
-    const supply = getGroundSupply(year, params);
-    // Allow demand pressure to range from 0.2 (oversupply) to 5.0 (severe scarcity)
-    // This is THE CORE THESIS: massive demand growth creates scarcity that makes space viable
-    return Math.max(0.2, Math.min(5.0, demand / supply));
-  }
-
-  // src/model/physics.ts
-  function getLaunchCost(year, params, shell = "leo") {
-    const scaleFactor = (params.launchCost || 1500) / 1500;
-    const baseLearnRate = params.launchLearn || 0.18;
-    const starshipYear = params.starshipOn ? (params.starshipYear || 2029) : 2100; // Never if disabled
-    let cost;
-    let floor;
-    if (year < starshipYear) {
-      // Pre-Starship: Falcon 9 era - MUCH slower learning, higher floor
-      // Falcon 9 is expendable-derived, limited reuse potential
-      const yearsOfLearning = year - 2026;
-      cost = 2500 * scaleFactor * Math.pow(1 - baseLearnRate * 0.3, yearsOfLearning);
-      floor = 800; // Falcon 9 can't get below ~$800/kg (limited reuse)
-    } else {
-      // Post-Starship: fully reusable, rapid learning to very low floor
-      const yearsOfLearning = year - starshipYear;
-      const starshipBase = 400 * scaleFactor; // Starship starts cheaper
-      cost = starshipBase * Math.pow(1 - baseLearnRate, yearsOfLearning);
-      floor = params.launchFloor; // Can reach $10-15/kg with full reuse
-    }
-    return Math.max(floor, cost) * (SHELL_COST_MULT[shell] || 1);
-  }
-  function getRadiatorMassPerMW(year, powerKw, params) {
-    // FIRST PRINCIPLES DERIVATION:
-    // Stefan-Boltzmann: P = εσT⁴ where σ = 5.67e-8 W/m²K⁴
-    // At 350K: P = 0.85 × 5.67e-8 × 350⁴ = 723 W/m²
-    // Area per MW = 1,000,000 / 723 = 1,383 m²
-    // Conventional heat pipes: 5-10 kg/m² → 6,900-13,800 kg/MW
-    // Droplet radiators: 0.3-0.5 kg/m² → 415-690 kg/MW at 350K
-    // At 500K: ~100 kg/MW with aggressive droplet radiators
-    const tempFactor = Math.pow(350 / params.opTemp, 4);
-    const emissivityFactor = 0.85 / params.emissivity;
-
-    if (!params.thermalOn || year < params.thermalYear) {
-      // Conventional heat pipe radiators: ~5000-7000 kg/MW
-      // Improves slowly with better materials
-      const t = year - 2026;
-      const baseMass = Math.max(800, 6000 * tempFactor * emissivityFactor - t * params.radLearn);
-      const powerPenalty = 1 + (powerKw / 200) * 0.3;
-      return baseMass * powerPenalty;
-    }
-
-    // Advanced thermal (droplet radiators):
-    // Best case: 0.3 kg/m² at 500K → ~100 kg/MW
-    // Conservative: 0.5 kg/m² at 400K → ~200 kg/MW
-    // Model: 100→50 kg/MW over 8 years of maturity (aggressive but physics-based)
-    const maturity = Math.min(1, (year - params.thermalYear) / 8);
-    const advancedBase = 100 - maturity * 50; // 100 kg/MW → 50 kg/MW
-    return advancedBase * tempFactor * emissivityFactor;
-  }
-  function getGroundEfficiency(year, params) {
-    const H100_BASELINE = 2800;  // GFLOPS/W
-    let baseEff = H100_BASELINE;
-    for (let y = 2026; y < year; y++) {
-      const demandPressure = getDemandPressure(y, params);
-      // High demand drives more R&D investment in chip efficiency
-      // At normal demand (1.0): 1.0x learning rate
-      // At 2x demand: 1.3x learning rate
-      // At 5x demand: 2.0x learning rate (massive R&D push)
-      const normalizedPressure = (demandPressure - 1) / 4; // 0 at 1.0, 1 at 5.0
-      const groundLearningMult = 1.0 + Math.max(0, normalizedPressure);
-      const baseLearn = Math.max(0.03, params.aiLearn - (y - 2026) * 0.007);
-      baseEff *= 1 + baseLearn * groundLearningMult;
-    }
-    // No hard cap - let learning continue (matches stable version)
-    // Physical limits (Landauer, memory bandwidth) handled by learning rate floor
-
-    const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
-    const hasPhotonic = params.photonicOn && year >= params.photonicYear;
-    if (hasThermoCompute || hasPhotonic) {
-      const deterministicFrac = 1 - params.workloadProbabilistic;
-      const probFrac = params.workloadProbabilistic;
-      const photonicMult = hasPhotonic ? params.photonicGroundMult : 1;
-      const thermoMult = hasThermoCompute ? params.thermoGroundMult : 1;
-      return baseEff * (photonicMult * deterministicFrac + thermoMult * probFrac);
-    }
-    return baseEff;
-  }
-  function getOrbitalEfficiency(year, params) {
-    let baseEff = 2800;
-    for (let y = 2026; y < year; y++) {
-      const demandPressure = getDemandPressure(y, params);
-      // High demand drives more R&D investment in chip efficiency
-      // Same logic as ground: 1.0x at normal demand, up to 2.0x at 5x demand
-      const normalizedPressure = (demandPressure - 1) / 4; // 0 at 1.0, 1 at 5.0
-      const learningMult = 1.0 + Math.max(0, normalizedPressure);
-      const baseLearn = Math.max(0.03, params.aiLearn - (y - 2026) * 7e-3);
-      baseEff *= 1 + baseLearn * learningMult;
-    }
-    const penalty = params.radPen * Math.pow(0.82, year - 2026);
-    baseEff *= 1 - Math.max(0.02, penalty);
-    const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
-    const hasPhotonic = params.photonicOn && year >= params.photonicYear;
-    if (hasThermoCompute || hasPhotonic) {
-      const deterministicFrac = 1 - params.workloadProbabilistic;
-      const probFrac = params.workloadProbabilistic;
-      const photonicMult = hasPhotonic ? params.photonicSpaceMult : 1;
-      const thermoMult = hasThermoCompute ? params.thermoSpaceMult : 1;
-      return baseEff * (photonicMult * deterministicFrac + thermoMult * probFrac);
-    }
-    return baseEff;
-  }
-  function getBandwidth(year, params) {
-    return params.bandwidth * Math.pow(1 + params.bwGrowth, year - 2026);
-  }
-  function getLEOPower(year, params) {
-    const t = year - 2026;
-    const hasThermal = params.thermalOn && year >= params.thermalYear;
-    const hasFission = params.fissionOn && year >= params.fissionYear;
-    const hasFusion = params.fusionOn && year >= params.fusionYear;
-    const launchCost = getLaunchCost(year, params);
-    const isStarshipEra = launchCost < 200;
-
-    // Nuclear power: independent of solar
-    if (hasFission) {
-      const fissionMaturity = Math.min(1, (year - params.fissionYear) / 10);
-      const fissionPower = 10000 + fissionMaturity * 40000; // 10 MW → 50 MW
-      if (hasFusion) {
-        // Fusion: 100-500 MW for LEO platforms
-        const fusionMaturity = Math.min(1, (year - params.fusionYear) / 10);
-        const fusionPower = 100000 + fusionMaturity * 400000; // 100 MW → 500 MW
-        return Math.max(fusionPower, fissionPower);
-      }
-      return fissionPower;
-    }
-
-    // Solar power: limited by panel area/mass and thermal rejection
-    if (isStarshipEra && hasThermal) {
-      const thermalMaturity = Math.min(1, (year - 2030) / 10);
-      return 2000 + thermalMaturity * 18000; // 2 MW → 20 MW
-    } else if (isStarshipEra) {
-      const starshipMaturity = Math.min(1, (year - 2030) / 10);
-      return 1000 + starshipMaturity * 4000; // 1 MW → 5 MW
-    } else if (hasThermal) {
-      const thermalMaturity = Math.min(1, (year - params.thermalYear) / 6);
-      return 500 + thermalMaturity * 1500; // 500 kW → 2 MW
-    }
-    // Pre-Starship baseline
-    return Math.min(500, params.initPower + t * 15); // 120 kW → 500 kW
-  }
-  function getCislunarPower(year, params) {
-    const hasFission = params.fissionOn && year >= params.fissionYear;
-    const hasFusion = params.fusionOn && year >= params.fusionYear;
-    const hasThermal = params.thermalOn && year >= params.thermalYear;
-    if (hasFusion) {
-      // Fusion: 1 GW → 10 GW cislunar stations (kW)
-      const fusionMaturity = Math.min(1, (year - params.fusionYear) / 10);
-      return 1000000 + fusionMaturity * 9000000;
-    }
-    if (hasFission) {
-      // Fission: 50 MW → 150 MW platforms (kW)
-      return 50000 + Math.min(1, (year - params.fissionYear) / 10) * 100000;
-    }
-    if (hasThermal && year - params.thermalYear >= 5) {
-      // Thermal only: 1 MW → 2 MW (barely viable)
-      const maturity = Math.min(1, (year - params.thermalYear - 5) / 5);
-      return 1000 + maturity * 1000;
-    }
-    return 0;
-  }
-
-  // src/model/orbital.ts
-  function getShellRadiationEffects(shell, year, params) {
-    const shellData = SHELLS[shell];
-    const t = year - 2026;
-    const tidFactor = shellData.tidMult;
-    const effectiveLife = params.satLife / tidFactor;
-    const radHardBase = 0.82 + params.radPen * 0.1;
-    const radHardImprovement = Math.pow(radHardBase, t);
-    const seuPenalty = 1 + (shellData.seuMult - 1) * radHardImprovement;
-    const availabilityFactor = 1 / seuPenalty;
-    const baseReplacement = 1 / effectiveLife;
-    const replacementRate = Math.min(0.3, baseReplacement);
-    return {
-      tidFactor,
-      effectiveLife,
-      seuPenalty,
-      availabilityFactor,
-      replacementRate
-    };
-  }
-
-  // src/model/finance.ts
-  function getCRF(wacc, years) {
-    if (wacc <= 0 || years <= 0) return 1 / Math.max(1, years);
-    const r = wacc;
-    const n = years;
-    const factor = Math.pow(1 + r, n);
-    return r * factor / (factor - 1);
-  }
-
-  // src/model/satellite.ts
-  var H100_TFLOPS = 1979;
-  var H100_WATTS = 700;
-  var H100_GFLOPS_W = H100_TFLOPS * 1e3 / H100_WATTS;
-  function getPlatformMass(year, params, forcedPowerSource = null) {
-    // Platform mass depends on:
-    // 1. Launch vehicle (Starship enables larger platforms)
-    // 2. Thermal capability (droplet radiators enable more power density)
-    // 3. Power source (only if fission/fusion is ACTUALLY selected, not just available)
-    const hasThermal = params.thermalOn && year >= params.thermalYear;
-    const starshipYear = params.starshipOn ? (params.starshipYear || 2029) : 2100;
-    const hasStarship = params.starshipOn && year >= starshipYear;
-    const t = year - 2026;
-
-    // Only use fission/fusion mass if that power source is actually selected
-    if (forcedPowerSource === 'fusion') {
-      const fusionMaturity = Math.min(1, (year - params.fusionYear) / 15);
-      return 2e5 + fusionMaturity * 8e5;  // 200-1000 tonnes for fusion stations
-    }
-    if (forcedPowerSource === 'fission') {
-      const fissionMaturity = Math.min(1, (year - params.fissionYear) / 15);
-      return 5e4 + fissionMaturity * 15e4;  // 50-200 tonnes for fission platforms
-    }
-
-    // Solar platforms - size limited by launch vehicle and thermal rejection
-    if (hasStarship) {
-      const starshipMaturity = Math.min(1, (year - starshipYear) / 3);
-      if (hasThermal) {
-        // THERMAL BREAKTHROUGH IS HUGE:
-        // Without thermal: limited to ~200kW by heat rejection (conventional radiators too heavy)
-        // With thermal: droplet radiators enable MW-class platforms
-        // Starship can lift 100-150t to LEO - thermal is no longer the limit
-        const thermalMaturity = Math.min(1, (year - params.thermalYear) / 5);
-        return 5e3 + starshipMaturity * 15e3 + thermalMaturity * 30e3;  // 5-50 tonnes with thermal
-      }
-      // Without thermal breakthrough: heat rejection limits platform size severely
-      return 3e3 + starshipMaturity * 5e3;  // 3-8 tonnes without thermal (thermally limited)
-    }
-    // Pre-Starship: small satellites (Falcon 9 limited to ~2t useful payload)
-    return Math.min(2e3, 1500 + t * 150);
-  }
-  function getSolarMassPerKw(year, params) {
-    const t = year - 2026;
-    // Solar panel areal density: 2.0 kg/m² (thin-film, Starlink V2 ~2.3 kg/m²)
-    // Specific power = (efficiency * solar_constant) / areal_density
-    // At 20% eff: 0.20 * 1361 / 2.0 = 136 W/kg
-    const arealDensity = 2.0; // kg/m² - realistic thin-film panels
-    const baseWPerKg = (params.solarEff * 1361) / arealDensity;
-    const learningMult = Math.pow(1 + params.solarLearn, t);
-    const wPerKg = Math.min(400, baseWPerKg * learningMult);
-    return 1e3 / wPerKg;
-  }
-  function getFissionMassPerKw(year, params) {
-    // Fission specific power: 50 W/kg (MegaPower-class, includes radiators)
-    // Note: Kilopower is only ~7 W/kg, MegaPower targets ~50 W/kg
-    // Mass per kW = 1000 W/kW / 50 W/kg = 20 kg/kW
-    // Improves to ~33 W/kg over 15 years → 30 kg/kW
-    if (!params.fissionOn || year < params.fissionYear) return Infinity;
-    const maturity = Math.min(1, (year - params.fissionYear) / 15);
-    const specificPower = 50 + maturity * 17; // 50 → 67 W/kg
-    return 1000 / specificPower; // 20 → 15 kg/kW
-  }
-  function getFusionMassPerKw(year, params) {
-    // Fusion specific power: 250 W/kg (theoretical compact reactor)
-    // Mass per kW = 1000 W/kW / 250 W/kg = 4 kg/kW
-    // Improves to ~500 W/kg over 15 years → 2 kg/kW
-    if (!params.fusionOn || year < params.fusionYear) return Infinity;
-    const maturity = Math.min(1, (year - params.fusionYear) / 15);
-    const specificPower = 250 + maturity * 250; // 250 → 500 W/kg
-    return 1000 / specificPower; // 4 → 2 kg/kW
-  }
-  function getRadiatorPhysics(year, params) {
-    // PHYSICS-BASED RADIATOR CALCULATION
-    // Stefan-Boltzmann: P = εσT⁴
-    // At 350K: 723 W/m² per side, ~1200 W/m² two-sided after backside absorption
-    const hasThermal = params.thermalOn && year >= params.thermalYear;
-    const t = year - 2026;
-    const baseTemp = params.opTemp || 365;
-
-    // Temperature: thermal breakthrough enables higher operating temps
-    const opTemp = hasThermal
-      ? Math.min(450, baseTemp + (year - params.thermalYear) * 8)  // Up to 450K with droplet radiators
-      : Math.max(320, baseTemp - 30);  // Limited without thermal tech
-
-    const emittedWPerM2 = params.emissivity * STEFAN_BOLTZMANN * Math.pow(opTemp, 4);
-    const twoSidedEmission = 2 * emittedWPerM2;
-
-    // Backside absorption from Earth IR and albedo
-    const attitudeQuality = hasThermal ? 0.85 : 0.5;
-    const backsideAbsorbed = 350 * (1 - attitudeQuality) + 80 * attitudeQuality;
-    const netWPerM2 = twoSidedEmission - backsideAbsorbed;
-
-    // Areal density (kg/m²) - THIS IS THE KEY DIFFERENCE
-    // Conventional heat pipes: 5-10 kg/m² → 3000-7000 kg/MW
-    // Droplet radiators: 0.3-0.5 kg/m² → 50-200 kg/MW (10-100x lighter!)
-    let kgPerM2;
-    if (hasThermal) {
-      // Droplet radiators: 0.5 kg/m² initially, improving to 0.3 kg/m²
-      const maturity = Math.min(1, (year - params.thermalYear) / 8);
-      kgPerM2 = 0.5 - maturity * 0.2;  // 0.5 → 0.3 kg/m²
-    } else {
-      // Conventional heat pipe radiators: 8-5 kg/m² with slow improvement
-      kgPerM2 = Math.max(5.0, 8.0 - t * 0.15);
-    }
-
-    // kg per kW of thermal rejection
-    const kgPerKwThermal = kgPerM2 / netWPerM2 * 1e3;
-    return { netWPerM2, kgPerM2, kgPerKwThermal };
-  }
-  function getComputeEfficiency(year, params) {
-    const t = year - 2026;
-    const hasThermal = params.thermalOn && year >= params.thermalYear;
-    const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
-    const hasPhotonicCompute = params.photonicOn && year >= params.photonicYear;
-    let baseGflopsW = H100_GFLOPS_W;
-    for (let y = 2026; y < year; y++) {
-      const yearsOut = y - 2026;
-      const annualImprovement = Math.max(0.03, params.aiLearn - yearsOut * 5e-3);
-      baseGflopsW *= 1 + annualImprovement;
-    }
-    const maxMult = Math.min(8, 1 + t * 0.16);
-    baseGflopsW = Math.min(baseGflopsW, H100_GFLOPS_W * maxMult);
-    const startingEfficiency = 1 - params.radPen;
-    const improvement = t * 0.012;
-    const radHardPenalty = Math.min(0.98, startingEfficiency + improvement);
-    let gflopsW = baseGflopsW * radHardPenalty;
-
-    // THERMAL BREAKTHROUGH EFFICIENCY BONUS
-    // Without proper cooling: chips thermal throttle, run at 70-80% of rated power
-    // With droplet radiators: chips run at full rated power, no throttling
-    // This is a ~25-40% efficiency improvement from thermal alone
-    if (hasThermal) {
-      const thermalMaturity = Math.min(1, (year - params.thermalYear) / 5);
-      const thermalBonus = 1.25 + thermalMaturity * 0.15;  // 1.25x → 1.40x efficiency
-      gflopsW *= thermalBonus;
-    }
-
-    if (hasThermoCompute || hasPhotonicCompute) {
-      const deterministicFrac = 1 - params.workloadProbabilistic;
-      const probFrac = params.workloadProbabilistic;
-      const photonicMult = hasPhotonicCompute ? params.photonicSpaceMult : 1;
-      const thermoMult = hasThermoCompute ? params.thermoSpaceMult : 1;
-      gflopsW *= photonicMult * deterministicFrac + thermoMult * probFrac;
-    }
-    return { gflopsW, radHardPenalty };
-  }
-  function getUtilization(year, params) {
-    const t = year - 2026;
-    const hasFission = params.fissionOn && year >= params.fissionYear;
-    const maturityFactor = Math.min(0.92, 0.5 + t * 0.105);
-    const eclipseFactor = hasFission ? 0.95 : 0.88;
-    const opsFactor = 0.95;
-    return maturityFactor * eclipseFactor * opsFactor;
-  }
-  function calcSatellite(year, params, shell = "leo") {
-    const t = year - 2026;
-    const hasThermal = params.thermalOn && year >= params.thermalYear;
-    const hasFission = params.fissionOn && year >= params.fissionYear;
-    const hasFusion = params.fusionOn && year >= params.fusionYear;
-    const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
-    const hasPhotonicCompute = params.photonicOn && year >= params.photonicYear;
-    const targetMassKg = getPlatformMass(year, params);
-    const structureFrac = hasFission ? 0.1 : 0.15;
-    const otherSystemsFrac = hasFission ? 0.08 : Math.max(0.12, 0.18 - t * 6e-3);
-    const avionicsMassKg = 50;
-    const availableMass = targetMassKg * (1 - structureFrac - otherSystemsFrac) - avionicsMassKg;
-    const solarMassPerKw = getSolarMassPerKw(year, params);
-    const fissionMassPerKw = hasFission ? getFissionMassPerKw(year, params) : Infinity;
-    const fusionMassPerKw = hasFusion ? getFusionMassPerKw(year, params) : Infinity;
-
-    // Calculate battery mass needed for solar (fission/fusion don't need batteries)
-    const battDensEst = Math.min(500, params.battDens + t * 15);
-    const eclipseDurationHrs = 0.5;
-    const eclipseComputeFrac = 0.3;
-    const batteryMassPerKwComputeSolar = eclipseComputeFrac * eclipseDurationHrs * 1e3 / battDensEst;
-    // Convert to per-kW-power basis (multiply by computeFrac since batteries serve compute)
-    const batteryMassPerKwPowerSolar = batteryMassPerKwComputeSolar * params.computeFrac;
-
-    // Effective mass per kW including uptime factor AND battery mass for solar
-    // Solar: 88% uptime due to eclipse, needs batteries
-    // Fission: 95% uptime, no batteries needed
-    // Fusion: 95% uptime, no batteries needed
-    const solarTotalMassPerKw = solarMassPerKw + batteryMassPerKwPowerSolar;
-    const solarEffectiveMassPerKw = solarTotalMassPerKw / 0.88;
-    const fissionEffectiveMassPerKw = fissionMassPerKw / 0.95;
-    const fusionEffectiveMassPerKw = fusionMassPerKw / 0.95;
-
-    let powerMassPerKw;
-    let powerSource;
-    if (hasFusion && fusionEffectiveMassPerKw < fissionEffectiveMassPerKw && fusionEffectiveMassPerKw < solarEffectiveMassPerKw) {
-      powerMassPerKw = fusionMassPerKw;
-      powerSource = "fusion";
-    } else if (hasFission && fissionEffectiveMassPerKw < solarEffectiveMassPerKw) {
-      powerMassPerKw = fissionMassPerKw;
-      powerSource = "fission";
-    } else {
-      powerMassPerKw = solarMassPerKw;
-      powerSource = "solar";
-    }
-    const radPhysics = getRadiatorPhysics(year, params);
-    const wasteHeatFrac = 0.95;
-    const radiatorMassPerKwCompute = radPhysics.kgPerKwThermal * wasteHeatFrac;
-
-    // COMPUTE MASS: Thermal breakthrough enables denser packing
-    // Without thermal: spread out chips to avoid hot spots, 35→25 kg/kW
-    // With thermal: efficient cooling allows 30% denser packing, 25→18 kg/kW
-    let computeMassPerKw;
-    if (hasThermal) {
-      const thermalMaturity = Math.min(1, (year - params.thermalYear) / 5);
-      computeMassPerKw = Math.max(18, 25 - thermalMaturity * 7);  // 25→18 kg/kW with thermal
-    } else {
-      computeMassPerKw = Math.max(25, 35 - t * 1);  // 35→25 kg/kW without thermal
-    }
-    const battDens = Math.min(500, params.battDens + t * 15);
-    // eclipseDurationHrs and base eclipseComputeFrac already defined above for power source selection
-    const actualEclipseComputeFrac = hasFission ? 0 : 0.3;  // Fission doesn't need eclipse batteries
-    const batteryMassPerKwCompute = hasFission ? 0 : actualEclipseComputeFrac * eclipseDurationHrs * 1e3 / battDens;
-    const totalMassPerKwCompute = powerMassPerKw / params.computeFrac + // Power system sized for total platform power
-    radiatorMassPerKwCompute + computeMassPerKw + batteryMassPerKwCompute;
-    const computeKw = availableMass / totalMassPerKwCompute;
-    const powerKw = computeKw / params.computeFrac;
-    const powerMass = powerKw * powerMassPerKw;
-    const radiatorMass = computeKw * radiatorMassPerKwCompute;
-    const computeMass = computeKw * computeMassPerKw;
-    const battMass = computeKw * batteryMassPerKwCompute;
-    const structMass = targetMassKg * structureFrac;
-    const otherMass = targetMassKg * otherSystemsFrac;
-    const dryMass = targetMassKg;
-    const powerMassPerKwCompute = powerMassPerKw / params.computeFrac;
-    const thermalMassPerKwCompute = radiatorMassPerKwCompute;
-    let bindingConstraint;
-    if (thermalMassPerKwCompute > powerMassPerKwCompute && thermalMassPerKwCompute > computeMassPerKw) {
-      bindingConstraint = "thermal";
-    } else if (powerMassPerKwCompute > computeMassPerKw) {
-      bindingConstraint = "power";
-    } else {
-      bindingConstraint = "mass";
-    }
-    const efficiency = getComputeEfficiency(year, params);
-    const gflopsW = efficiency.gflopsW;
-    const powerConversionEff = 0.85;
-    const effectiveComputeKw = computeKw * powerConversionEff;
-    const tflopsRaw = effectiveComputeKw * gflopsW;
-    const radEffects = getShellRadiationEffects(shell, year, params);
-    const utilization = getUtilization(year, params);
-    const tflops = tflopsRaw * utilization * radEffects.availabilityFactor;
-    const gpuEq = tflops / H100_TFLOPS;
-
-    // =====================================================
-    // CAPEX CALCULATION - First Principles Component Costs
-    // =====================================================
-    // Each component has its own $/kg based on research:
-    // - Solar panels: $500/kg (Starlink-style mass production)
-    // - Batteries: $200/kg (Li-ion commodity)
-    // - Compute modules: $25,000/kg (rad-hard GPUs, most expensive!)
-    // - Radiators: $3,000/kg (specialized thermal)
-    // - Structure: $1,500/kg (composites)
-    // - Avionics: $80,000/kg (but only 50kg = $4M fixed)
-    // - Other systems: $7,000/kg (propulsion, comm, etc.)
-    //
-    // Learning curves bring these down over time (Wright's Law)
-
-    // Manufacturing learning rate (compounds annually based on demand)
-    // prodMult = initial production inefficiency (2.5 = 2.5× cost premium for early production)
-    // Learning reduces this over time based on demand pressure (Wright's Law)
-    // THE CORE THESIS: High demand drives massive investment -> faster learning
-    const initialProdMult = params.prodMult || 2.5;
-    let learnMult = initialProdMult;
-    for (let y = 2026; y < year; y++) {
-      const demandPressure = getDemandPressure(y, params);
-      // Learning rate scales with demand pressure:
-      // - At demand=supply (1.0): 10% annual learning
-      // - At 2x demand (2.0): 15% annual learning
-      // - At 5x demand (5.0): 25% annual learning (extreme scarcity drives massive R&D)
-      const normalizedPressure = Math.max(0, (demandPressure - 1) / 4); // 0 at 1.0, 1 at 5.0
-      const annualReduction = 0.10 + 0.15 * normalizedPressure;
-      learnMult *= (1 - annualReduction);
-    }
-    // Floor scales with initial prodMult - scenarios with different starting points stay different
-    const learnFloor = 0.15 * (initialProdMult / 2.5);
-    learnMult = Math.max(learnFloor, learnMult);
-
-    // Apply manufacturing cost multiplier from slider (default 1.0)
-    const mfgMult = params.mfgCostMult || 1.0;
-
-    // Component costs ($/kg) - 2026 baseline before learning
-    // These drop with learnMult over time
-    const COMPONENT_COSTS_2026 = {
-      solar: 500,      // $/kg - mass production solar panels
-      battery: 200,    // $/kg - Li-ion commodity pricing
-      compute: 25000,  // $/kg - rad-hard compute (the expensive part!)
-      radiator: 3000,  // $/kg - specialized thermal systems
-      structure: 1500, // $/kg - composite structures
-      avionics: 80000, // $/kg - but only 50kg fixed mass
-      other: 7000      // $/kg - propulsion, comm, etc.
-    };
-
-    // Apply learning curve and slider multiplier to each component
-    // TECHNOLOGY DISCOUNTS:
-    // Thermal breakthrough: droplet radiators are simpler/cheaper than heat pipes
-    //                       AND compute can use simpler thermal packaging
-    // Fission/Fusion: compact reactors reduce power system costs
-    let powerDiscount = 1.0;
-    let thermalDiscount = 1.0;
-    let computeThermalDiscount = 1.0;
-
-    // Thermal breakthrough makes radiators MUCH cheaper (droplets vs heat pipes)
-    // AND compute hardware can use simpler thermal packaging
-    if (hasThermal) {
-      const thermalMaturity = Math.min(1, (year - params.thermalYear) / 5);
-      thermalDiscount = 0.5 - thermalMaturity * 0.3;  // 50% → 20% of conventional radiator cost
-      // Compute can use simpler packaging when thermal isn't the constraint
-      // Don't need exotic materials, vapor chambers, heat spreaders on every chip
-      computeThermalDiscount = 0.7 - thermalMaturity * 0.2;  // 70% → 50% of compute thermal overhead
-    }
-
-    // Nuclear power discounts (override thermal discount if better)
-    if (hasFusion) {
-      powerDiscount = 0.05;   // 95% reduction - fusion is nearly free power
-      thermalDiscount = Math.min(thermalDiscount, 0.10); // 90% reduction - fusion has built-in cooling
-    } else if (hasFission) {
-      powerDiscount = 0.40;   // 60% reduction - fission is compact but not free
-      thermalDiscount = Math.min(thermalDiscount, 0.30); // 70% reduction - fission has integrated cooling
-    }
-
-    const compCosts = {
-      solar: COMPONENT_COSTS_2026.solar * learnMult * mfgMult * powerDiscount,
-      battery: COMPONENT_COSTS_2026.battery * learnMult * mfgMult * powerDiscount,
-      compute: COMPONENT_COSTS_2026.compute * learnMult * mfgMult * computeThermalDiscount,  // Thermal simplifies packaging
-      radiator: COMPONENT_COSTS_2026.radiator * learnMult * mfgMult * thermalDiscount,
-      structure: COMPONENT_COSTS_2026.structure * learnMult * mfgMult,
-      avionics: COMPONENT_COSTS_2026.avionics * learnMult * mfgMult,
-      other: COMPONENT_COSTS_2026.other * learnMult * mfgMult
-    };
-
-    // Calculate manufacturing cost from component masses
-    const mfgCostSolar = powerMass * compCosts.solar;
-    const mfgCostBatt = battMass * compCosts.battery;
-    const mfgCostCompute = computeMass * compCosts.compute;
-    const mfgCostRadiator = radiatorMass * compCosts.radiator;
-    const mfgCostStruct = structMass * compCosts.structure;
-    const mfgCostAvionics = avionicsMassKg * compCosts.avionics;
-    const mfgCostOther = otherMass * compCosts.other;
-
-    const totalMfgCost = mfgCostSolar + mfgCostBatt + mfgCostCompute +
-                         mfgCostRadiator + mfgCostStruct + mfgCostAvionics + mfgCostOther;
-
-    // Launch cost
-    const launchCostPerKg = getLaunchCost(year, params, shell);
-    const launchCost = dryMass * launchCostPerKg;
-
-    // Integration & test (60% of hardware cost - industry standard for space systems)
-    // This includes assembly, environmental testing, quality assurance, launch prep
-    const integrationCost = totalMfgCost * 0.60;
-
-    // Total CAPEX = launch + manufacturing + integration
-    const capex = launchCost + totalMfgCost + integrationCost;
-
-    // LCOC with full operational costs
-    const crf = getCRF(params.waccOrbital, radEffects.effectiveLife);
-    const annualCapex = capex * crf;
-    const annualMaint = capex * params.maintCost;
-
-    // Data rate and bandwidth operational costs
-    const dataRateGbps = tflops * params.gbpsPerTflop;
-    // bwCost is in $k/Gbps/year - this is the cost of laser relay bandwidth backhaul
-    const annualBwCost = dataRateGbps * (params.bwCost || 50) * 1000; // Convert $k to $
-
-    // Total annual cost = capex amortization + maintenance + bandwidth backhaul
-    const annual = annualCapex + annualMaint + annualBwCost;
-    const gpuHrs = gpuEq * 8760 * SLA;
-    const lcoc = gpuHrs > 0 ? annual / gpuHrs : Infinity;
-    const specPower = powerKw * 1e3 / dryMass;
-    const solarWperM2 = Math.min(300, 150 + t * 10);
-    const solarArea = powerSource === "solar" ? powerKw * 1e3 / solarWperM2 : 0;
-    const radPower = params.emissivity * STEFAN_BOLTZMANN * Math.pow(params.opTemp, 4);
-    let manufacturingCarbonKg;
-    if (hasFusion) {
-      const otherMass2 = dryMass - powerMass;
-      manufacturingCarbonKg = powerMass * 300 + otherMass2 * 95;
-    } else if (hasFission) {
-      const otherMass2 = dryMass - powerMass;
-      manufacturingCarbonKg = powerMass * 250 + otherMass2 * 95;
-    } else {
-      const otherMass2 = dryMass - powerMass;
-      manufacturingCarbonKg = powerMass * 80 + otherMass2 * 95;
-    }
-    let launchCarbonPerKg;
-    if (year < 2029) {
-      launchCarbonPerKg = 60;
-    } else {
-      const greenMethaneFrac = Math.min(0.9, (year - 2029) * 0.08);
-      const baseLaunchCarbon = 100;
-      launchCarbonPerKg = baseLaunchCarbon * (1 - greenMethaneFrac);
-    }
-    const launchCarbonKg = dryMass * launchCarbonPerKg;
-    const carbonKg = manufacturingCarbonKg + launchCarbonKg;
-    const carbonPerTflop = carbonKg * 1e3 / Math.max(1, tflops * 8760 * radEffects.effectiveLife * 0.88);
-    const carbonPerDollar = lcoc > 0 ? carbonPerTflop / lcoc : 0;
-    const erol = powerKw * 1e3 * 8760 * 3600 * radEffects.effectiveLife * 0.88 / (dryMass * 4e8);
-    const mass = {
-      power: powerMass,
-      batt: battMass,
-      comp: computeMass,
-      rad: radiatorMass,
-      struct: structMass
-    };
-    return {
-      year,
-      powerKw,
-      dryMass,
-      tflops,
-      gpuEq,
-      capex,
-      lcoc,
-      erol,
-      carbonPerTflop,
-      carbonPerDollar,
-      gflopsW,
-      radPower,
-      specPower,
-      solarArea,
-      dataRateGbps,
-      shell,
-      mass,
-      hasThermal,
-      hasFission,
-      hasFusion,
-      hasThermoCompute,
-      hasPhotonicCompute,
-      powerSource,  // Actual power source selected (solar/fission/fusion)
-      radMassPerMW: radiatorMassPerKwCompute * 1e3,
-      radEffects,
-      bindingConstraint,
-      utilization,
-      computeKw,
-      tflopsRaw
-    };
-  }
-
-  // src/model/ground.ts
-  function calcGround(year, orbitalSupplyGW, params) {
-    const t = year - 2026;
-    const gflopsW = getGroundEfficiency(year, params);
-
-    const hasSmr = params.smrOn && year >= params.smrYear;
-    const hasFusion = params.fusionOn && year >= params.fusionYear;
-
-    // Energy discounts from advanced nuclear (SMR or fusion)
-    // SMR: starts at 70% of grid cost, drops to 40% over 10 years
-    // Fusion: starts at 15% of grid cost, drops to 5% over 10 years (near-free energy!)
-    const smrDiscount = hasSmr ? Math.max(0.4, 0.7 - (year - params.smrYear) * 0.03) : 1;
-    const fusionDiscount = hasFusion ? Math.max(0.05, 0.15 - (year - params.fusionYear) * 0.01) : 1;
-    const nuclearDiscount = Math.min(smrDiscount, fusionDiscount);
-
-    const yearBtmShare = getBtmShare(year, params);
-
-    // Hardware cost with WACC/CRF
-    // GPU price declines ~16%/year (Moore's Law + competition)
-    const gpuPrice = 25000 * Math.pow(0.84, t);
-    // Server overhead (chassis, networking, power supplies) = 1.5x raw GPU cost
-    // Note: CRF handles depreciation, not /3
-    const hwCapex = (gpuPrice * 1.5) / (gflopsW / 2800);
-
-    const btmCapexOverhead = yearBtmShare * (params.btmCapexMult - 1);
-    const hwCapexAdjusted = hwCapex * (1 + btmCapexOverhead);
-    const groundHwLife = 5;
-    const crfGround = getCRF(params.waccGround, groundHwLife);
-    const hwCost = hwCapexAdjusted * crfGround;
-
-    // Blended energy costs (grid vs BTM)
-    // Nuclear discount applies to GRID energy only (BTM is solar+storage, stable cost)
-    const gridEnergy = params.energyCost * Math.pow(1 + params.energyEscal, t) * nuclearDiscount;
-    const btmEnergy = params.btmEnergyCost; // BTM is solar+storage - no nuclear discount
-    const blendedEnergy = gridEnergy * (1 - yearBtmShare) + btmEnergy * yearBtmShare;
-
-    const pue = Math.max(1.08, params.groundPue - t * 0.01);
-    const enCost = 700 * 8760 * SLA * blendedEnergy * pue / 1e3;
-    // Overhead includes: cooling, staffing, land lease, insurance, network, security
-    // $0.50/GPU-hr is realistic for hyperscale operations
-    const overhead = 0.50 * 8760 * SLA;
-    // Utilization factor: datacenters don't run at 100% - typical 60-80%
-    const utilization = 0.70;
-    const base = (hwCost + enCost + overhead) / (8760 * SLA * utilization);
-
-    // Market dynamics - use total supply including orbital
-    const demand = getDemand(year, params);
-    const groundSupply = getGroundSupply(year, params);
-    const totalSupply = groundSupply + orbitalSupplyGW;
-    // Guard against division by zero - if no supply, use high unmet ratio
-    const unmetRatio = totalSupply > 0 ? (demand - totalSupply) / totalSupply : 10;
-
-    // SCARCITY PREMIUM - THE CORE THESIS
-    // When demand >> supply, ground compute prices skyrocket due to scarcity
-    // This is what makes orbital compute viable: ground scarcity drives prices up
-    // unmetRatio = (demand - supply) / supply
-    //   = 0: demand equals supply (baseline pricing)
-    //   = 1: demand is 2x supply (severe shortage)
-    //   = 9: demand is 10x supply (extreme scarcity)
-    let premium;
-    if (unmetRatio <= -0.3) {
-      // Severe oversupply: price war (floor at 0.6x cost)
-      premium = Math.max(0.6, 0.85 + unmetRatio);
-    } else if (unmetRatio <= 0) {
-      // Mild oversupply: slight discount
-      premium = 1.0 + unmetRatio * 0.5;
-    } else if (unmetRatio <= 0.3) {
-      // Moderate scarcity: linear premium
-      premium = 1 + unmetRatio * 4;
-    } else if (unmetRatio <= 1.0) {
-      // High scarcity: slower growth (demand destruction kicks in)
-      premium = 2.2 + (unmetRatio - 0.3) * 2.5;
-    } else {
-      // Extreme scarcity: logarithmic growth (demand destruction slows but doesn't stop price rise)
-      // At 10x demand/supply (unmetRatio=9): ~6x premium
-      // At 100x demand/supply (unmetRatio=99): ~10x premium
-      // Prices keep rising with scarcity - no artificial cap
-      premium = 4 + 2 * Math.log10(unmetRatio);
-    }
-    // Ground carbon intensity - blend of grid (natural gas/coal) and BTM (solar)
-    // Grid: 380 gCO2/kWh in 2026, decaying 3%/year as grid greens
-    // BTM: 30 gCO2/kWh (solar lifecycle emissions)
-    const gridCarbon = 380 * Math.pow(0.97, t);  // gCO2/kWh
-    const btmCarbon = 30;                         // gCO2/kWh (solar)
-    const blendedCarbon = yearBtmShare * btmCarbon + (1 - yearBtmShare) * gridCarbon;
-
-    // Operational carbon per TFLOP-hr:
-    // - 1 TFLOP-hr = 1000 GFLOP-hr
-    // - At gflopsW efficiency, need (1000 / gflopsW) Wh = (1 / gflopsW) kWh per TFLOP-hr
-    // - With PUE overhead: (PUE / gflopsW) kWh per TFLOP-hr
-    // - Carbon = blendedCarbon * (PUE / gflopsW) gCO2 per TFLOP-hr
-    const kWhPerTflopHr = pue * 1000 / gflopsW;  // kWh per TFLOP-hr
-    const operationalCarbon = blendedCarbon * kWhPerTflopHr;  // gCO2 per TFLOP-hr
-
-    // Embodied carbon (manufacturing the hardware)
-    // ~500 kgCO2 per kW of compute capacity, amortized over 5-year life
-    const embodiedCarbonPerKwYear = 500 / 5;  // kgCO2/kW/year
-    const embodiedCarbon = embodiedCarbonPerKwYear * 1e3 / (gflopsW * 8760);  // gCO2 per TFLOP-hr
-
-    const carbonPerTflop = operationalCarbon + embodiedCarbon;
-    const carbonPerDollar = carbonPerTflop / (base * premium);
-    return {
-      year,
-      base,
-      market: base * premium,
-      premium,
-      carbonPerTflop,
-      carbonPerDollar,
-      gflopsW,
-      demand,
-      groundSupply,
-      totalSupply,
-      unmetRatio
-    };
-  }
-
-  // src/model/fleet.ts
-  var TOKENS_PER_GPU_HR = 3600 * 100;
-
-  // Track previous year's platforms for monotonic constraint
-  // Once platforms are built, they stay built (may be underutilized but don't disappear)
-  var prevLeoPlatforms = 0;
-  var prevGeoPlatforms = 0;
-  var prevCisPlatforms = 0;
-  var prevLunarPlatforms = 0;
-
-  function resetFleetTracker() {
-    prevLeoPlatforms = 0;
-    prevGeoPlatforms = 0;
-    prevCisPlatforms = 0;
-    prevLunarPlatforms = 0;
-  }
-
-  function getLunarPowerKw(year, params) {
-    const hasFission = params.fissionOn && year >= params.fissionYear;
-    const hasFusion = params.fusionOn && year >= params.fusionYear;
-    if (!hasFission && !hasFusion) return 0;
-    const maturity = Math.min(1, (year - Math.max(params.fissionYear, 2040)) / 10);
-    if (hasFusion) {
-      return 2e5 + maturity * 8e5;
-    }
-    return 1e5 + maturity * 4e5;
-  }
-  function calcFleet(year, crossoverYear, params) {
-    const sat = calcSatellite(year, params);
-    const cislunarPowerKw = getCislunarPower(year, params);
-    const lunarPowerKw = getLunarPowerKw(year, params);
-    const t = year - 2026;
-    const hasFission = params.fissionOn && year >= params.fissionYear;
-    const hasFusion = params.fusionOn && year >= params.fusionYear;
-    const hasThermal = params.thermalOn && year >= params.thermalYear;
-    let leoPlatforms = 0;
-    let meoPlatforms = 0;
-    let geoPlatforms = 0;
-    let cisPlatforms = 0;
-    let lunarPlatforms = 0;
-    if (!crossoverYear || year < crossoverYear) {
-      const yearsToGo = crossoverYear ? crossoverYear - year : 10;
-      if (yearsToGo <= 3) {
-        const rampYears = 3 - yearsToGo;
-        leoPlatforms = Math.round(500 * Math.pow(2, rampYears));
-      } else {
-        leoPlatforms = Math.min(500, 50 + t * 30);
-      }
-    } else {
-      const yearsPost = year - crossoverYear;
-      // More realistic fleet growth: 2.5 year doubling (like aggressive but not insane infrastructure buildout)
-      const doublingYears = params.fleetDoublingYears || 2.5;
-
-      // Start with 1000 platforms at crossover, grow from there
-      // Cap growth to match demand - don't build more than you can sell
-      const maxFromGrowth = Math.round(1000 * Math.pow(2, yearsPost / doublingYears));
-
-      // Get demand-based cap (don't build more capacity than eligible demand)
-      const totalDemandGW = getDemand(year, params);
-      const eligibleDemandGW = totalDemandGW * params.orbitalEligibleShare;
-      const platformPowerGW = sat.powerKw / 1e6;
-      const demandBasedCap = platformPowerGW > 0 ? Math.ceil(eligibleDemandGW / platformPowerGW * 1.2) : maxFromGrowth; // 20% buffer
-
-      leoPlatforms = Math.min(
-        SHELLS.leo.capacity,
-        maxFromGrowth,
-        demandBasedCap
-      );
-
-      const leoFull = leoPlatforms >= SHELLS.leo.capacity * 0.95;
-      if (yearsPost >= 5) {
-        const geoGrowthYears = yearsPost - 5;
-        geoPlatforms = Math.min(
-          SHELLS.geo.capacity,
-          Math.round(50 * Math.pow(2, geoGrowthYears / 3)) // Slower: 3-year doubling
-        );
-      }
-      if (cislunarPowerKw > 0 && yearsPost >= 4) { // Later start
-        const cislunarGrowthYears = yearsPost - 4;
-        cisPlatforms = Math.min(
-          SHELLS.cislunar.capacity,
-          Math.round(100 * Math.pow(2, cislunarGrowthYears / 2)) // Slower growth
-        );
-      }
-      if (lunarPowerKw > 0 && yearsPost >= 8) { // Later start
-        const lunarGrowthYears = yearsPost - 8;
-        lunarPlatforms = Math.min(
-          1e5,
-          Math.round(20 * Math.pow(2, lunarGrowthYears / 2))
-        );
-      }
-    }
-    const totalDemandGW = getDemand(year, params);
-    const ground = calcGround(year, 0, params);
-    const costRatio = sat.lcoc / Math.max(0.01, ground.market);
-    const eligibleMult = costRatio < 1 ? Math.min(2, 1 / costRatio) : 1;
-    const dynamicEligibleShare = Math.min(0.7, params.orbitalEligibleShare * eligibleMult);
-    const maxOrbitalDemandGW = totalDemandGW * dynamicEligibleShare;
-    // Use physics-driven power (getLEOPower) for fleet calculations
-    // This gives MW-class platforms with thermal/fission/fusion
-    const leoKw = getLEOPower(year, params);
-    // GEO power multiplier: fusion 50x, fission 20x, thermal 10x, baseline 5x (applied to LEO power)
-    const geoKwCalc = hasFusion ? leoKw * 50 : hasFission ? leoKw * 20 : hasThermal ? leoKw * 10 : leoKw * 5;
-    const uncFleetGW = (leoPlatforms * leoKw + geoPlatforms * geoKwCalc + cisPlatforms * cislunarPowerKw + lunarPlatforms * lunarPowerKw) / 1e6;
-
-    // NOTE: Demand constraint removed - platforms are monotonic (once built, stay built)
-    // When supply > demand, utilization drops (sellableUtil) but platforms don't disappear
-    // This is more realistic: you don't scrap satellites just because demand is soft
-
-    // Launch capacity constraint - dynamic scaling matches fleet.ts
-    // Based on Elon's projections: 10k flights/year is reasonable by 2035
-    function getMaxLaunchesPerYear(y) {
-      if (y <= 2026) return 500;
-      if (y <= 2028) return Math.round(500 + ((y - 2026) / 2) * 1500); // 500 → 2000
-      if (y <= 2030) return Math.round(2000 + ((y - 2028) / 2) * 3000); // 2000 → 5000
-      if (y <= 2035) return Math.round(5000 + ((y - 2030) / 5) * 5000); // 5000 → 10000
-      if (y <= 2040) return Math.round(10000 + ((y - 2035) / 5) * 5000); // 10000 → 15000
-      return Math.round(15000 + Math.min(1, (y - 2040) / 10) * 5000); // 15000 → 20000
-    }
-    const MAX_LAUNCHES_PER_YEAR = getMaxLaunchesPerYear(year);
-    const STARSHIP_PAYLOAD_KG = 150000;
-    const totalPlatformsPreLaunch = leoPlatforms + geoPlatforms + cisPlatforms + lunarPlatforms;
-    const annualMassKg = totalPlatformsPreLaunch * sat.dryMass * 0.15; // ~15% fleet replacement + new builds
-    const requiredFlights = annualMassKg / STARSHIP_PAYLOAD_KG;
-    let launchConstrained = false;
-    if (requiredFlights > MAX_LAUNCHES_PER_YEAR) {
-      launchConstrained = true;
-      const launchScale = MAX_LAUNCHES_PER_YEAR / requiredFlights;
-      leoPlatforms = Math.round(leoPlatforms * launchScale);
-      geoPlatforms = Math.round(geoPlatforms * launchScale);
-      cisPlatforms = Math.round(cisPlatforms * launchScale);
-      lunarPlatforms = Math.round(lunarPlatforms * launchScale);
-    }
-
-    // MONOTONIC CONSTRAINT: Platforms once built stay built
-    // Can't have fewer platforms than last year (satellites don't just disappear)
-    // Growth is limited by launch capacity, but existing fleet is preserved
-    leoPlatforms = Math.max(leoPlatforms, prevLeoPlatforms);
-    geoPlatforms = Math.max(geoPlatforms, prevGeoPlatforms);
-    cisPlatforms = Math.max(cisPlatforms, prevCisPlatforms);
-    lunarPlatforms = Math.max(lunarPlatforms, prevLunarPlatforms);
-
-    // Update trackers for next year
-    prevLeoPlatforms = leoPlatforms;
-    prevGeoPlatforms = geoPlatforms;
-    prevCisPlatforms = cisPlatforms;
-    prevLunarPlatforms = lunarPlatforms;
-
-    // GEO power uses same multipliers as above (applied to physics-driven LEO power)
-    const geoPowerKw = geoKwCalc;  // Already calculated above
-    const leoPowerTw = leoPlatforms * leoKw / 1e9;
-    const meoPowerTw = 0;
-    const geoPowerTw = geoPlatforms * geoPowerKw / 1e9;
-    const cisPowerTw = cisPlatforms * cislunarPowerKw / 1e9;
-    const lunarPowerTw = lunarPlatforms * lunarPowerKw / 1e9;
-    const totalPowerTw = leoPowerTw + geoPowerTw + cisPowerTw + lunarPowerTw;
-    // TFLOPS per platform based on physics-driven power
-    const leoTflopsPerPlatform = leoKw * params.computeFrac * sat.gflopsW;
-    const geoTflopsPerPlatform = geoPowerKw * params.computeFrac * sat.gflopsW;
-    const cisTflopsPerPlatform = cislunarPowerKw * params.computeFrac * sat.gflopsW;
-    const lunarTflopsPerPlatform = lunarPowerKw * params.computeFrac * sat.gflopsW;
-    const fleetTflopsRaw = leoPlatforms * leoTflopsPerPlatform + geoPlatforms * geoTflopsPerPlatform + cisPlatforms * cisTflopsPerPlatform + lunarPlatforms * lunarTflopsPerPlatform;
-    const cislunarLocalRatio = 0.97;
-    const lunarLocalRatio = 0.99;
-    const bwNeededLeo = leoPlatforms * leoTflopsPerPlatform * params.gbpsPerTflop;
-    const bwNeededGeo = geoPlatforms * geoTflopsPerPlatform * params.gbpsPerTflop;
-    const bwNeededCis = cisPlatforms * cisTflopsPerPlatform * params.gbpsPerTflop * (1 - cislunarLocalRatio);
-    const bwNeededLunar = lunarPlatforms * lunarTflopsPerPlatform * params.gbpsPerTflop * (1 - lunarLocalRatio);
-    const bwNeededGbps = bwNeededLeo + bwNeededGeo + bwNeededCis + bwNeededLunar;
-    const bwAvailTbps = getBandwidth(year, params);
-    const bwAvailGbps = bwAvailTbps * 1e3;
-    const bwSell = bwNeededGbps <= 0 ? 1 : Math.min(1, bwAvailGbps / bwNeededGbps);
-    const eligibleDemandGW = maxOrbitalDemandGW;
-    const fleetPowerGW = totalPowerTw * 1e3;
-    const demandSell = fleetPowerGW <= 0 ? 1 : Math.min(1, eligibleDemandGW / fleetPowerGW);
-    const sellableUtil = Math.min(bwSell, demandSell);
-    const lcocEffective = sat.lcoc / Math.max(0.01, sellableUtil);
-    const deliveredTflops = fleetTflopsRaw * sellableUtil;
-    const deliveredGpuEq = deliveredTflops / 1979;
-    const deliveredPetaflopsEffective = deliveredTflops / 1e3;
-    const deliveredGpuHrsPerYear = deliveredGpuEq * 8760 * 0.999;
-    const deliveredTokensPerYear = deliveredGpuHrsPerYear * TOKENS_PER_GPU_HR;
-    const bwUtil = bwAvailGbps > 0 ? Math.min(1, bwNeededGbps / bwAvailGbps) : 1;
-    const demandUtil = eligibleDemandGW > 0 ? Math.min(1, fleetPowerGW / eligibleDemandGW) : 0;
-    const leoUtil = leoPlatforms / SHELLS.leo.capacity;
-    const meoUtil = 0;
-    const geoUtil = geoPlatforms / SHELLS.geo.capacity;
-    const cisUtil = cisPlatforms / Math.max(1, SHELLS.cislunar.capacity);
-    const lunarUtil = lunarPlatforms / 1e4;
-    // Bottleneck detection: identify the tightest constraint
-    // Pre-thermal-breakthrough: no advanced heat rejection → thermal limits compute
-    const preThermalBreakthrough = !sat.hasThermal && !sat.hasFission && !sat.hasFusion;
-    let bottleneck = "power";
-    if (preThermalBreakthrough) {
-      // Before 2030 (thermal breakthrough): thermal rejection is the binding constraint
-      bottleneck = "thermal";
-    } else if (!crossoverYear || year < crossoverYear) {
-      // Post-breakthrough but pre-crossover: use satellite's binding constraint
-      bottleneck = sat.bindingConstraint || "power";
-    } else {
-      // Post-crossover: check constraints
-      // BANDWIDTH check comes FIRST - it directly affects delivered tokens (revenue)
-      if (bwSell < 0.95) {
-        bottleneck = "bandwidth";
-      } else if (launchConstrained) {
-        // Launch capacity is limiting fleet growth (but not revenue from existing fleet)
-        bottleneck = "launch_capacity";
-      } else if (demandSell < 0.9) {
-        bottleneck = "demand";
-      } else if (leoUtil > 0.95 && geoUtil > 0.9) {
-        bottleneck = "slots";
-      } else {
-        bottleneck = sat.bindingConstraint || "power";
-      }
-    }
-    const leoRadEffects = getShellRadiationEffects("leo", year, params);
-    const replacementRate = leoRadEffects.replacementRate;
-    return {
-      year,
-      leoPlatforms,
-      meoPlatforms,
-      geoPlatforms,
-      cisPlatforms,
-      lunarPlatforms,
-      leoPowerTw,
-      meoPowerTw,
-      geoPowerTw,
-      cisPowerTw,
-      lunarPowerTw,
-      totalPowerTw,
-      lcocEffective,
-      bwUtil,
-      bwAvailGbps,
-      bwNeededGbps,
-      bwSell,
-      demandUtil,
-      demandSell,
-      eligibleDemandGW,
-      fleetTflops: fleetTflopsRaw,
-      fleetGpuEq: fleetTflopsRaw / 1979,
-      sellableUtil,
-      satPowerKw: sat.powerKw,
-      cislunarPowerKw,
-      lunarPowerKw,
-      leoUtil,
-      meoUtil,
-      geoUtil,
-      cisUtil,
-      lunarUtil,
-      bottleneck,
-      replacementRate,
-      // Delivered compute
-      deliveredTflops,
-      deliveredGpuEq,
-      deliveredTokensPerYear,
-      deliveredPetaflopsEffective
-    };
-  }
-
-  // src/state/params.ts
-  var defaults = {
-    // Breakthroughs
-    thermalOn: true,
-    thermalYear: 2029,
-    // Thermal breakthrough coincides with Starship
-    starshipOn: true,
-    starshipYear: 2029,
-    // Starship enables 5-10× larger satellites and $200→$10/kg launch
-    fissionOn: true,
-    fissionYear: 2035,
-    // Space nuclear enables cislunar operations
-    fusionOn: false,
-    // Fusion power - speculative, disabled by default
-    fusionYear: 2050,
-    // Fusion power for GW-class stations (if enabled)
-    smrOn: true,
-    smrYear: 2032,
-    // Ground SMR deployment
-    thermoOn: false,
-    thermoYear: 2029,
-    // Thermodynamic computing availability
-    thermoGroundMult: 1e3,
-    // Room-temp TSU efficiency multiplier
-    thermoSpaceMult: 1e4,
-    // Superconducting TSU efficiency multiplier (passive cryo)
-    photonicOn: false,
-    photonicYear: 2035,
-    // Photonic computing availability
-    photonicGroundMult: 50,
-    // Ground photonic efficiency multiplier
-    photonicSpaceMult: 100,
-    // Space photonic efficiency multiplier (vacuum optics)
-    workloadProbabilistic: 0.15,
-    // Fraction of workloads that are sampling-heavy
-    // Thermal
-    emissivity: 0.85,
-    // Radiator surface emissivity
-    opTemp: 365,
-    // Operating temperature (K)
-    radLearn: 50,
-    // kg/MW/year improvement for conventional radiators
-    // Power
-    solarEff: 0.2,
-    // Silicon baseline (SpaceX/Starlink approach)
-    solarLearn: 8e-3,
-    // +0.8%/yr absolute improvement (reaches ~30% by 2038)
-    basePower: 300,
-    // Platform power before breakthroughs (kW)
-    computeFrac: 0.68,
-    // Fraction of power to compute
-    battDens: 280,
-    // Battery density (Wh/kg)
-    // Compute
-    satLife: 10,
-    // Satellite lifetime (years)
-    radPen: 0.30,
-    // Radiation efficiency penalty (30% of commercial - matches reference)
-    aiLearn: 0.20,
-    // Annual compute efficiency improvement (20% - matches reference)
-    // Launch economics
-    launchCost: 1500,
-    // Current launch cost ($/kg)
-    launchLearn: 0.18,
-    // Learning rate per doubling (18% - historical aerospace)
-    launchFloor: 15,
-    // Physical floor: propellant (~$8/kg) + vehicle amortization (~$4-13/kg) + ground ops (~$2-5/kg)
-    prodMult: 2.5,
-    // Manufacturing cost multiplier (matches reference, reduces via learning)
-    mfgCostMult: 1.0,
-    // Manufacturing cost multiplier (slider: 0.5 = optimistic, 1.0 = baseline, 2.0 = conservative)
-    maintCost: 0.015,
-    // Annual maintenance as fraction of capex (1.5%)
-    // Bandwidth
-    bandwidth: 20,
-    // Total capacity in 2026 (Tbps) - realistic for early space optical networks
-    bwGrowth: 0.25,
-    // Annual bandwidth growth rate (laser links) - 25% is aggressive but realistic
-    gbpsPerTflop: 0.0001,
-    // Bandwidth per TFLOP (Gbps) - 0.1 Mbps per TFLOP (batch inference)
-    // Market
-    orbitalEligibleShare: 0.35,
-    // Fraction of demand that is latency-tolerant
-    fleetDoublingYears: 2.5,
-    // Years for fleet to double (realistic infrastructure buildout pace)
-    // Cost of capital
-    waccOrbital: 0.1,
-    // Orbital WACC (SpaceX track record reduces risk)
-    waccGround: 0.08,
-    // Ground WACC
-    // Ground constraints
-    groundPue: 1.3,
-    // Power Usage Effectiveness
-    energyCost: 0.065,
-    // Energy cost ($/kWh) - matches reference
-    energyEscal: 0.04,
-    // Annual energy cost escalation (4%/yr - matches reference)
-    interconnect: 48,
-    // Interconnection queue (months) - US grid queues now 4-5+ years
-    // Demand
-    demand2025: 65,
-    // 2025 demand (GW)
-    demandGrowth: 0.55,
-    // AI boom: 55% annual demand growth (decays over time - matches reference)
-    supply2025: 60,
-    // 2025 ground supply (GW) - actual global AI-ready DC capacity
-    supplyGrowth: 0.08,
-    // 8% annual growth (constrained by interconnect, chips, fabs - matches reference)
-    // Behind-the-meter generation
-    btmShare: 0.15,
-    // 15% of new ground capacity is BTM in 2026
-    btmShareGrowth: 0.02,
-    // Base growth rate per year
-    btmDelay: 12,
-    // Months to deploy BTM (vs interconnect for grid)
-    btmCapexMult: 1.35,
-    // 35% higher capex for on-site generation
-    btmEnergyCost: 0.04,
-    // $/kWh LCOS for solar+storage
-    bwCost: 50
-    // Bandwidth cost $50k/Gbps/year (laser relay network operating cost)
-  };
-  return __toCommonJS(bundle_finance_exports);
-})();
-
-// ============================================
-// BRIDGE: Use bundled model with local params
-// ============================================
-
-// Import constants from model
-const { YEARS, SLA, SHELLS, STEFAN_BOLTZMANN, defaults } = Model;
-
-// Create mutable params object from defaults
-let P = { ...defaults };
+}
 
 // Helper functions that delegate to model
 function calcSatellite(year, params = P, shell = 'leo') {
@@ -2238,106 +997,15 @@ function getBtmShare(year, params = P) {
   return Model.getBtmShare(year, params);
 }
 
-// Scenario parameter generation - wider bands to capture true uncertainty
-// Include long-term divergence factors (prodMult, launchFloor, wacc) not just timing
-const SCENARIOS = {
-  aggressive:   { learnMult: 2.0, techYearOffset: -5, demandMult: 1.5, launchLearnMult: 1.5, prodMult: 0.6, launchFloorMult: 0.5, waccMult: 0.8 },
-  baseline:     { learnMult: 1.0, techYearOffset: 0,  demandMult: 1.0, launchLearnMult: 1.0, prodMult: 1.0, launchFloorMult: 1.0, waccMult: 1.0 },
-  conservative: { learnMult: 0.4, techYearOffset: 8,  demandMult: 0.5, launchLearnMult: 0.5, prodMult: 1.8, launchFloorMult: 2.0, waccMult: 1.3 }
-};
-
-// Mid-timeline architectural uncertainty factor
-// Captures: optical vs RF backhaul, GEO vs LEO vs cislunar, nuclear vs solar, regulatory/debris uncertainty
-// Returns a multiplier that WIDENS bands during 2035-2045 transition period
-function getArchitecturalUncertainty(year, scenario) {
-  if (scenario === 'baseline') return 1.0;
-
-  // Uncertainty shape: starts high, narrows, RE-WIDENS mid-timeline, then stabilizes
-  // 2026-2030: High initial uncertainty (1.0x)
-  // 2030-2035: Narrowing as early tech matures (0.7x)
-  // 2035-2045: RE-WIDENS for architectural forks (1.3x peak at 2040)
-  // 2045+: Stabilizes as winning architectures emerge (0.8x)
-
-  let factor = 1.0;
-  if (year < 2030) {
-    factor = 1.0;
-  } else if (year < 2035) {
-    // Narrowing phase
-    factor = 1.0 - 0.3 * (year - 2030) / 5;
-  } else if (year < 2040) {
-    // Re-widening phase (rising)
-    factor = 0.7 + 0.6 * (year - 2035) / 5;
-  } else if (year < 2045) {
-    // Re-widening phase (falling)
-    factor = 1.3 - 0.5 * (year - 2040) / 5;
-  } else {
-    // Stabilization
-    factor = 0.8;
-  }
-
-  return factor;
+function resetFleetTracker() {
+  return Model.resetFleetTracker();
 }
 
-function getScenarioParams(scenario) {
-  const s = SCENARIOS[scenario] || SCENARIOS.baseline;
-  return {
-    ...P,
-    aiLearn: P.aiLearn * s.learnMult,
-    launchLearn: P.launchLearn * s.launchLearnMult,
-    thermalYear: P.thermalYear + s.techYearOffset,
-    fissionYear: P.fissionYear + s.techYearOffset,
-    fusionYear: P.fusionYear + s.techYearOffset,
-    demandGrowth: P.demandGrowth * s.demandMult,
-    prodMult: P.prodMult * s.prodMult,           // Manufacturing cost uncertainty
-    launchFloor: P.launchFloor * s.launchFloorMult, // Launch cost floor uncertainty
-    waccOrbital: P.waccOrbital * s.waccMult      // Cost of capital uncertainty
-  };
-}
-
+// Use shared model's scenario functions
 function runScenario(scenario) {
-  const params = getScenarioParams(scenario);
-  const sats = YEARS.map(y => calcSatellite(y, params));
-
-  // Reset fleet tracker for preFleets calculation
-  Model.resetFleetTracker();
-  const preFleets = YEARS.map(y => calcFleet(y, null, params));
-  const preGnds = YEARS.map(y => calcGround(y, 0, params));
-
-  // Debug logging for baseline - LCOC verification table
-  if (scenario === 'baseline') {
-    console.log('=== LCOC VERIFICATION TABLE ===');
-    console.log('Year | Sat LCOC (chart) | Fleet LCOC (effective) | Ground Base | Ground Market');
-    [2026, 2030, 2035, 2040, 2050, 2060, 2070].forEach(y => {
-      const idx = YEARS.indexOf(y);
-      if (idx >= 0) {
-        const sat = sats[idx];
-        const fleet = preFleets[idx];
-        const gnd = preGnds[idx];
-        // sat.lcoc is what the chart shows, fleet.lcocEffective accounts for utilization
-        console.log(`${y} | $${sat.lcoc.toFixed(2)} | $${fleet.lcocEffective.toFixed(2)} | $${gnd.base.toFixed(2)} | $${gnd.market.toFixed(2)}`);
-      }
-    });
-    console.log('=== ARCHITECTURAL UNCERTAINTY FACTOR ===');
-    console.log('Year | Factor | Effect');
-    [2026, 2030, 2035, 2040, 2045, 2050, 2060, 2070].forEach(y => {
-      const factor = getArchitecturalUncertainty(y, 'aggressive');
-      let effect = factor > 1.0 ? 'WIDENING' : factor < 1.0 ? 'narrowing' : 'baseline';
-      console.log(`${y} | ${factor.toFixed(2)}x | ${effect}`);
-    });
-  }
-
-  // Crossover: when orbital production LCOC beats ground LCOC
-  // Use sat.lcoc (production cost) not lcocEffective (which depends on sellability)
-  // This gives a stable crossover point that matches what the chart shows
-  const crossIdx = sats.findIndex((sat, i) => sat.lcoc < preGnds[i].base);
-  const crossoverYear = crossIdx >= 0 ? YEARS[crossIdx] : null;
-
-  // Reset fleet tracker for final fleets calculation (with crossover)
-  Model.resetFleetTracker();
-  const fleets = YEARS.map(y => calcFleet(y, crossoverYear, params));
-  const gnds = YEARS.map((y, i) => calcGround(y, fleets[i].totalPowerTw * 1000, params));
-  
-  return { sats, fleets, gnds, crossoverYear };
+  // Use the shared model's runScenario with local params P
+  const result = Model.runScenario(scenario, P);
+  return result;
 }
 
 function formatPrice(p) {
@@ -2355,6 +1023,33 @@ function formatTokens(t) {
   if (t >= 1e9) return (t / 1e9).toFixed(1) + ' Gtok';
   if (t >= 1e6) return (t / 1e6).toFixed(1) + ' Mtok';
   return t.toFixed(0);
+}
+
+// Architectural uncertainty factor for scenario bands
+// Returns 0-1 factor for blending baseline with aggressive/conservative
+function getArchitecturalUncertainty(year, scenario) {
+  // Early years (2026-2032): high uncertainty, scenarios diverge
+  // Mid years (2033-2045): uncertainty peaks as architecture choices crystallize
+  // Late years (2046+): uncertainty decreases as dominant designs emerge
+  const t = year - 2026;
+  
+  // Base uncertainty curve (peaks around 2040)
+  let uncertainty;
+  if (t < 7) {
+    uncertainty = 0.3 + t * 0.07;  // 0.3 → 0.79
+  } else if (t < 20) {
+    uncertainty = 0.79 + (t - 7) * 0.015;  // 0.79 → 0.985
+  } else {
+    uncertainty = Math.max(0.5, 0.985 - (t - 20) * 0.02);  // Slowly decreases
+  }
+  
+  // Aggressive scenarios have higher early uncertainty (optimistic tech bets)
+  // Conservative scenarios have higher late uncertainty (slower adoption)
+  if (scenario === 'aggressive') {
+    return uncertainty * (t < 15 ? 1.2 : 0.9);
+  } else {
+    return uncertainty * (t < 15 ? 0.8 : 1.1);
+  }
 }
 
 let fleetResults = [];
@@ -2389,8 +1084,10 @@ function initCharts() {
       { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
       // Conservative bound (lower)
       { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 },
-      // Ground market
-      { data: [], borderColor: '#cc3333', borderWidth: 2, tension: 0.3, pointRadius: 0 }
+      // Ground market price (solid)
+      { data: [], borderColor: '#cc3333', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+      // Ground base cost (dotted)
+      { data: [], borderColor: '#cc3333', borderWidth: 2, borderDash: [5, 5], tension: 0.3, pointRadius: 0 }
     ]}, options: opts('$/GPU-hr', true)
   });
   
@@ -2503,8 +1200,7 @@ function initCharts() {
   // Physics - all 4 shells
   charts.power = new Chart(document.getElementById('c-power'), {
     type: 'line', data: { labels: YEARS, datasets: [
-      { data: [], borderColor: '#1a8a6a', tension: 0.1, borderWidth: 2 }, // LEO
-      { data: [], borderColor: '#0066cc', tension: 0.1, borderWidth: 2 }, // MEO
+      { data: [], borderColor: '#0066cc', tension: 0.1, borderWidth: 2 }, // LEO
       { data: [], borderColor: '#cc8800', tension: 0.1, borderWidth: 2 }, // GEO
       { data: [], borderColor: '#6633cc', tension: 0.1, borderWidth: 2 }  // Cislunar
     ]}, options: opts('MW', true)
@@ -2565,8 +1261,10 @@ function initCharts() {
       { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
       // Conservative bound (lower)
       { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 },
-      // Ground market
-      { data: [], borderColor: '#7a7a88', borderDash: [4,4], borderWidth: 2, tension: 0.3, pointRadius: 0 }
+      // Ground market (solid)
+      { data: [], borderColor: '#cc3333', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+      // Ground base (dotted)
+      { data: [], borderColor: '#cc3333', borderDash: [5, 5], borderWidth: 2, tension: 0.3, pointRadius: 0 }
     ]}, options: opts('$/GPU-hr', true)
   });
   
@@ -2595,18 +1293,6 @@ function initCharts() {
 
 function update() {
   try {
-    // DEBUG: Log key params at update time
-    console.log('=== UPDATE CALLED ===');
-  console.log('Key slider params:', {
-    radLearn: P.radLearn,
-    solarEff: P.solarEff,
-    prodMult: P.prodMult,
-    maintCost: P.maintCost,
-    bwCost: P.bwCost
-  });
-  console.log('Thermo:', { on: P.thermoOn, mult: P.thermoSpaceMult, workloadProb: P.workloadProbabilistic });
-  console.log('Fusion:', { on: P.fusionOn, year: P.fusionYear });
-
   // Run all scenarios
   const agg = runScenario('aggressive');
   const base = runScenario('baseline');
@@ -2620,17 +1306,6 @@ function update() {
 
   const i30 = 4, i35 = 9, i40 = 14, i50 = 24;
 
-  // DEBUG: Log key results
-  console.log('2035 Results:', {
-    satTflops: sats[i35].tflops,
-    satGflopsW: sats[i35].gflopsW,
-    satPowerKw: sats[i35].powerKw,
-    fleetDelivered: fleetResults[i35].deliveredTokensPerYear,
-    fleetLcoc: fleetResults[i35].lcocEffective,
-    leoPlatforms: fleetResults[i35].leoPlatforms,
-    sellableUtil: fleetResults[i35].sellableUtil
-  });
-  
   // Header badges
   document.getElementById('badge-crossover').textContent = crossoverYear || 'Never';
   document.getElementById('badge-fleet50').textContent = fleetResults[i50].totalPowerTw.toFixed(1) + ' TW';
@@ -2638,12 +1313,12 @@ function update() {
   // Hero LCOC display
   document.getElementById('hero-crossover').textContent = crossoverYear || 'Never';
   document.getElementById('hero-orb35').textContent = '$' + formatPrice(fleetResults[i35].lcocEffective);
-  document.getElementById('hero-gnd35').textContent = '$' + formatPrice(gnds[i35].base);  // LCOC = cost basis
+  document.getElementById('hero-gnd35').textContent = '$' + formatPrice(gnds[i35].market);  // Market price
   // Core KPIs - just 2035 and 2050
   document.getElementById('kpi-orb35').textContent = '$' + formatPrice(fleetResults[i35].lcocEffective);
-  document.getElementById('kpi-gnd35').textContent = '$' + formatPrice(gnds[i35].base);  // LCOC = cost basis
+  document.getElementById('kpi-gnd35').textContent = '$' + formatPrice(gnds[i35].market);  // Market price
   document.getElementById('kpi-orb50').textContent = '$' + formatPrice(fleetResults[i50].lcocEffective);
-  document.getElementById('kpi-gnd50').textContent = '$' + formatPrice(gnds[i50].base);  // LCOC = cost basis
+  document.getElementById('kpi-gnd50').textContent = '$' + formatPrice(gnds[i50].market);  // Market price
   document.getElementById('kpi-tokens35').textContent = formatTokens(fleetResults[i35].deliveredTokensPerYear);
   document.getElementById('kpi-tokens50').textContent = formatTokens(fleetResults[i50].deliveredTokensPerYear);
 
@@ -2683,6 +1358,27 @@ function update() {
   document.getElementById('kpi-crossBase').textContent = base.crossoverYear || 'Never';
   document.getElementById('kpi-crossCons').textContent = cons.crossoverYear || 'Never';
   
+  // Fleet (2040) KPIs
+  const f40 = fleetResults[i40];
+  const sat40 = sats[i40];
+  document.getElementById('kpi-leoCapacity40').textContent = (f40.leoPlatforms / 1000).toFixed(1) + 'k';
+  document.getElementById('kpi-fleetMass40').textContent = ((f40.leoPlatforms * sat40.dryMass) / 1e9).toFixed(1) + ' Mt';
+  document.getElementById('kpi-starshipFlights40').textContent = Math.ceil((f40.leoPlatforms * sat40.dryMass) / (150 * 1000)).toLocaleString();  // Starship 150t payload
+  document.getElementById('kpi-annualFlights40').textContent = Math.ceil(f40.leoPlatforms * sat40.dryMass * 0.1 / (150 * 1000)).toLocaleString();  // ~10% replacement
+  
+  // AI Acceleration (2040) KPIs
+  document.getElementById('kpi-globalCompute40').textContent = (gnds[i40].demand / 1000).toFixed(0) + ' TW';
+  document.getElementById('kpi-rndStock40').textContent = '--';  // R&D stock not tracked currently
+  document.getElementById('kpi-launchLearnBoost').textContent = '--';  // Launch learning not exposed
+  
+  // Lunar Infrastructure KPIs - use precomputed from scenario result
+  const lunarReadinessDetails = base.lunarReadinessDetails?.[i40];
+  const lunarReadiness = lunarReadinessDetails?.overallReadiness ?? null;
+  // Use lunarUnlockYear from scenario result (already computed by runScenario)
+  const lunarUnlock = base.lunarUnlockYear || '--';
+  document.getElementById('kpi-lunarReadiness').textContent = typeof lunarReadiness === 'number' ? (lunarReadiness * 100).toFixed(0) + '%' : '--';
+  document.getElementById('kpi-lunarUnlock').textContent = lunarUnlock;
+  
   // Toggle effects - thermal is always on
   document.getElementById('eff-thermal').className = 'toggle-effect active';
   document.getElementById('eff-fission').className = 'toggle-effect' + (P.fissionOn ? ' active' : '');
@@ -2691,29 +1387,34 @@ function update() {
   document.getElementById('eff-thermo').className = 'toggle-effect' + (P.thermoOn ? ' active' : '');
   
   // Core charts - LCOC with uncertainty
-  // Use sat.lcoc (production cost) for cleaner curves that match crossover detection
-  // Apply mid-timeline architectural uncertainty (bands re-widen 2035-2045)
-  // Clamp LCOC to displayable range for log chart (max $500/GPU-hr, min $0.001)
-  const clampLcoc = (val) => {
-    if (!isFinite(val) || val <= 0) return 500;  // Infinity/NaN/0 → cap
-    return Math.min(500, Math.max(0.001, val));
+  // Use fleet.lcocEffective directly like main page
+  // Interpolate Infinity/invalid values to maintain continuous fill
+  const sanitizeLcocArray = (arr) => {
+    const result = arr.map(v => (isFinite(v) && v > 0) ? v : null);
+    // Interpolate any null values
+    for (let i = 0; i < result.length; i++) {
+      if (result[i] === null) {
+        // Find prev and next valid values
+        let prev = null, next = null, prevIdx = i - 1, nextIdx = i + 1;
+        while (prevIdx >= 0 && prev === null) { prev = result[prevIdx]; prevIdx--; }
+        while (nextIdx < result.length && next === null) { next = result[nextIdx]; nextIdx++; }
+        // Interpolate (geometric mean for log scale)
+        if (prev !== null && next !== null) {
+          result[i] = Math.sqrt(prev * next);
+        } else if (prev !== null) {
+          result[i] = prev;
+        } else if (next !== null) {
+          result[i] = next;
+        }
+      }
+    }
+    return result;
   };
-  charts.lcoc.data.datasets[0].data = agg.sats.map((sat, i) => {
-    const year = YEARS[i];
-    const baseLcoc = clampLcoc(base.sats[i].lcoc);
-    const aggLcoc = clampLcoc(sat.lcoc);
-    const factor = getArchitecturalUncertainty(year, 'aggressive');
-    return baseLcoc + (aggLcoc - baseLcoc) * factor;
-  });
-  charts.lcoc.data.datasets[1].data = base.sats.map(s => clampLcoc(s.lcoc));  // Production cost
-  charts.lcoc.data.datasets[2].data = cons.sats.map((sat, i) => {
-    const year = YEARS[i];
-    const baseLcoc = clampLcoc(base.sats[i].lcoc);
-    const consLcoc = clampLcoc(sat.lcoc);
-    const factor = getArchitecturalUncertainty(year, 'conservative');
-    return baseLcoc + (consLcoc - baseLcoc) * factor;
-  });
-  charts.lcoc.data.datasets[3].data = gnds.map(g => clampLcoc(g.base));  // Ground production cost
+  charts.lcoc.data.datasets[0].data = sanitizeLcocArray(agg.fleets.map(f => f.lcocEffective));   // Aggressive
+  charts.lcoc.data.datasets[1].data = sanitizeLcocArray(base.fleets.map(f => f.lcocEffective));  // Baseline
+  charts.lcoc.data.datasets[2].data = sanitizeLcocArray(cons.fleets.map(f => f.lcocEffective));  // Conservative
+  charts.lcoc.data.datasets[3].data = sanitizeLcocArray(gnds.map(g => g.market));  // Ground market price (solid)
+  charts.lcoc.data.datasets[4].data = sanitizeLcocArray(gnds.map(g => g.base));    // Ground base cost (dotted)
 
   charts.lcoc.update();
   
@@ -2771,17 +1472,16 @@ function update() {
   charts.bottleneck.data.datasets[5].data = fleetResults.map(f => f.bottleneck === 'launch_capacity' ? 1 : 0);
   charts.bottleneck.update();
   
-  // Physics charts - all 4 shells
+  // Physics charts - LEO, GEO, Cislunar (MEO not deployed due to Van Allen belt)
   charts.power.data.datasets[0].data = sats.map(s => s.powerKw / 1000); // LEO
-  charts.power.data.datasets[1].data = sats.map(s => s.powerKw * 0.8 / 1000); // MEO (80% of LEO)
-  charts.power.data.datasets[2].data = sats.map((s, i) => {
+  charts.power.data.datasets[1].data = sats.map((s, i) => {
     const year = 2026 + i;
     const hasFission = P.fissionOn && year >= P.fissionYear;
-    const hasThermal = P.thermalOn && year >= P.thermalYear;
-    const mult = hasFission ? 20 : hasThermal ? 10 : 5;
-    return s.powerKw * mult / 1000; // GEO
+    // GEO gets ~1.2x LEO power (constant sunlight, no eclipse)
+    // With fission, same power increase as LEO
+    return s.powerKw * 1.2 / 1000; // GEO
   });
-  charts.power.data.datasets[3].data = fleetResults.map(f => f.cislunarPowerKw / 1000); // Cislunar
+  charts.power.data.datasets[2].data = fleetResults.map(f => f.cislunarPowerKw / 1000); // Cislunar
   charts.power.update();
   
   charts.specPower.data.datasets[0].data = sats.map(s => s.specPower);
@@ -2794,14 +1494,47 @@ function update() {
   charts.mass.data.datasets[4].data = sats.map(s => s.mass.struct);
   charts.mass.update();
   
-  // Power budget: compute (68%), thermal management (~22%), housekeeping (~10%)
   // Power budget: compute, thermal management, housekeeping
-  const compPct = P.computeFrac * 100;
-  const thermalPct = (1 - P.computeFrac) * 0.7 * 100; // ~70% of non-compute goes to thermal
-  const housePct = 100 - compPct - thermalPct;
-  charts.powerBudget.data.datasets[0].data = YEARS.map(() => compPct);
-  charts.powerBudget.data.datasets[1].data = YEARS.map(() => thermalPct);
-  charts.powerBudget.data.datasets[2].data = YEARS.map(() => housePct);
+  // Changes with breakthroughs:
+  // - Pre-thermal: Higher thermal overhead (active cooling)
+  // - Post-thermal: Lower thermal (efficient passive radiators)
+  // - Fission: Reactor systems replace battery/solar overhead
+  // - Fusion: Even more efficient thermal profile
+  const powerBudgetData = YEARS.map((y, i) => {
+    const hasThermal = P.thermalOn && y >= P.thermalYear;
+    const hasFission = P.fissionOn && y >= P.fissionYear;
+    const hasFusion = P.fusionOn && y >= P.fusionYear;
+    
+    // Base compute fraction
+    let computePct = P.computeFrac * 100;
+    
+    // Thermal management varies with technology
+    let thermalPct;
+    if (hasFusion) {
+      thermalPct = 8;  // Fusion runs hotter, more efficient cooling
+    } else if (hasFission) {
+      thermalPct = 12; // Reactor cooling systems
+    } else if (hasThermal) {
+      thermalPct = 15; // Efficient passive radiators
+    } else {
+      thermalPct = 22; // Active cooling needed
+    }
+    
+    // Housekeeping = everything else (avionics, comms, propulsion, AOCS)
+    let housePct = 100 - computePct - thermalPct;
+    
+    // Clamp and normalize
+    const total = computePct + thermalPct + Math.max(0, housePct);
+    return {
+      compute: (computePct / total) * 100,
+      thermal: (thermalPct / total) * 100,
+      house: (Math.max(0, housePct) / total) * 100
+    };
+  });
+  
+  charts.powerBudget.data.datasets[0].data = powerBudgetData.map(d => d.compute);
+  charts.powerBudget.data.datasets[1].data = powerBudgetData.map(d => d.thermal);
+  charts.powerBudget.data.datasets[2].data = powerBudgetData.map(d => d.house);
   charts.powerBudget.update();
   
   charts.launch.data.datasets[0].data = YEARS.map(y => getLaunchCost(y));
@@ -2826,24 +1559,13 @@ function update() {
   charts.powerPerTflop.data.datasets[1].data = gnds.map(g => 1 / g.gflopsW);  // Ground
   charts.powerPerTflop.update();
 
-  // Futures charts - use sat.lcoc (production cost) for consistency with main LCOC chart
-  // Apply same clamping as main LCOC chart
-  charts.lcocScenarios.data.datasets[0].data = agg.sats.map((sat, i) => {
-    const year = YEARS[i];
-    const baseLcoc = clampLcoc(base.sats[i].lcoc);
-    const aggLcoc = clampLcoc(sat.lcoc);
-    const factor = getArchitecturalUncertainty(year, 'aggressive');
-    return baseLcoc + (aggLcoc - baseLcoc) * factor;
-  });
-  charts.lcocScenarios.data.datasets[1].data = base.sats.map(s => clampLcoc(s.lcoc));
-  charts.lcocScenarios.data.datasets[2].data = cons.sats.map((sat, i) => {
-    const year = YEARS[i];
-    const baseLcoc = clampLcoc(base.sats[i].lcoc);
-    const consLcoc = clampLcoc(sat.lcoc);
-    const factor = getArchitecturalUncertainty(year, 'conservative');
-    return baseLcoc + (consLcoc - baseLcoc) * factor;
-  });
-  charts.lcocScenarios.data.datasets[3].data = base.gnds.map(g => clampLcoc(g.base));  // Ground production cost
+  // Futures charts - use fleet.lcocEffective directly like main page
+  // Use same sanitizeLcocArray function defined above
+  charts.lcocScenarios.data.datasets[0].data = sanitizeLcocArray(agg.fleets.map(f => f.lcocEffective));   // Aggressive
+  charts.lcocScenarios.data.datasets[1].data = sanitizeLcocArray(base.fleets.map(f => f.lcocEffective));  // Baseline
+  charts.lcocScenarios.data.datasets[2].data = sanitizeLcocArray(cons.fleets.map(f => f.lcocEffective));  // Conservative
+  charts.lcocScenarios.data.datasets[3].data = sanitizeLcocArray(base.gnds.map(g => g.market));  // Ground market price (solid)
+  charts.lcocScenarios.data.datasets[4].data = sanitizeLcocArray(base.gnds.map(g => g.base));    // Ground base cost (dotted)
   charts.lcocScenarios.update();
 
   charts.carbonScenarios.data.datasets[0].data = agg.sats.map((s, i) => {
@@ -2875,7 +1597,6 @@ function update() {
     return baseEff + (s.gflopsW - baseEff) * factor;
   });
   charts.effScenarios.update();
-    console.log('=== UPDATE COMPLETE ===');
   } catch (e) {
     console.error('UPDATE ERROR:', e);
   }
@@ -2885,14 +1606,32 @@ function update() {
 // EVENTS
 // ============================================
 
-document.addEventListener('DOMContentLoaded', () => {
-  initCharts();
-  
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    // Wait for model to load from window.OrbitalModel
+    Model = await waitForModel();
+
+    // Initialize constants from model
+    YEARS = Model.YEARS;
+    SLA = Model.SLA;
+    SHELLS = Model.SHELLS;
+    STEFAN_BOLTZMANN = Model.STEFAN_BOLTZMANN;
+    defaults = Model.defaults;
+    P = { ...defaults };
+
+    // Reset fleet tracker
+    Model.resetFleetTracker();
+
+    initCharts();
+    
   // Thermal is always on - just handle the year slider
   P.thermalOn = true;
   const thermalYearSlider = document.getElementById('thermalYear');
   const thermalYearVal = document.getElementById('v-thermalYear');
   if (thermalYearSlider) {
+    // Init slider from P
+    thermalYearSlider.value = P.thermalYear;
+    if (thermalYearVal) thermalYearVal.textContent = P.thermalYear;
     thermalYearSlider.addEventListener('input', () => {
       P.thermalYear = parseInt(thermalYearSlider.value);
       if (thermalYearVal) thermalYearVal.textContent = P.thermalYear;
@@ -2905,6 +1644,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const starshipYearSlider = document.getElementById('starshipYear');
   const starshipYearVal = document.getElementById('v-starshipYear');
   if (starshipYearSlider) {
+    // Init slider from P
+    starshipYearSlider.value = P.starshipYear;
+    if (starshipYearVal) starshipYearVal.textContent = P.starshipYear;
     starshipYearSlider.addEventListener('input', () => {
       P.starshipYear = parseInt(starshipYearSlider.value);
       if (starshipYearVal) starshipYearVal.textContent = P.starshipYear;
@@ -2958,12 +1700,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   
   const sliders = {
-    emissivity: { p: 'emissivity', s: 0.01, f: v => v.toFixed(2) },
-    opTemp: { p: 'opTemp', s: 1, f: v => v },
+    emissivity: { p: 'radEmissivity', s: 0.01, f: v => v.toFixed(2) },
+    opTemp: { p: 'radTempK', s: 1, f: v => v },
     radLearn: { p: 'radLearn', s: 1, f: v => v },
     solarEff: { p: 'solarEff', s: 0.01, f: v => Math.round(v * 100) },
     solarLearn: { p: 'solarLearn', s: 0.001, f: v => (v * 1000).toFixed(1) },
-    basePower: { p: 'basePower', s: 1, f: v => v },
     computeFrac: { p: 'computeFrac', s: 0.01, f: v => Math.round(v * 100) },
     battDens: { p: 'battDens', s: 1, f: v => v },
     satLife: { p: 'satLife', s: 1, f: v => v },
@@ -2973,7 +1714,6 @@ document.addEventListener('DOMContentLoaded', () => {
     launchLearn: { p: 'launchLearn', s: 0.01, f: v => Math.round(v * 100) },
     launchFloor: { p: 'launchFloor', s: 1, f: v => v },
     prodMult: { p: 'prodMult', s: 0.1, f: v => v.toFixed(1) },
-    mfgCostMult: { p: 'mfgCostMult', s: 0.1, f: v => v.toFixed(1) },
     maintCost: { p: 'maintCost', s: 0.01, f: v => Math.round(v * 100) },
     waccOrbital: { p: 'waccOrbital', s: 0.01, f: v => Math.round(v * 100) },
     waccGround: { p: 'waccGround', s: 0.01, f: v => Math.round(v * 100) },
@@ -3008,8 +1748,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id);
     const val = document.getElementById('v-' + id);
     if (!el) return;
-    // INITIALIZE from slider value on page load
-    P[cfg.p] = Math.pow(10, parseFloat(el.value));
+    // INITIALIZE slider value FROM P (which has defaults)
+    // P[cfg.p] = 10^slider_value, so slider_value = log10(P[cfg.p])
+    el.value = Math.log10(P[cfg.p]).toString();
     if (val) val.textContent = Math.round(P[cfg.p]);
     // Also update on change
     el.addEventListener('input', () => {
@@ -3023,8 +1764,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id);
     const val = document.getElementById('v-' + id);
     if (!el) return;
-    // INITIALIZE from slider value on page load
-    P[cfg.p] = parseFloat(el.value) * cfg.s;
+    // INITIALIZE slider value FROM P (which has defaults)
+    el.value = (P[cfg.p] / cfg.s).toString();
     if (val) val.textContent = cfg.f(P[cfg.p]);
     // Also update on change
     el.addEventListener('input', () => {
@@ -3049,32 +1790,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // DEBUG: Log params after initialization
-  console.log('=== PARAMS AFTER INIT ===');
-  console.log('Sliders:', {
-    radLearn: P.radLearn,
-    solarEff: P.solarEff,
-    solarLearn: P.solarLearn,
-    prodMult: P.prodMult,
-    maintCost: P.maintCost,
-    bwCost: P.bwCost,
-    gbpsPerTflop: P.gbpsPerTflop
-  });
-  console.log('Thermo/Photonic:', {
-    thermoOn: P.thermoOn,
-    thermoSpaceMult: P.thermoSpaceMult,
-    photonicOn: P.photonicOn,
-    photonicSpaceMult: P.photonicSpaceMult,
-    workloadProbabilistic: P.workloadProbabilistic
-  });
-  console.log('Fusion/Fission:', {
-    fusionOn: P.fusionOn,
-    fusionYear: P.fusionYear,
-    fissionOn: P.fissionOn,
-    fissionYear: P.fissionYear
-  });
-
   update();
+  } catch (error) {
+    console.error('Finance page initialization error:', error);
+    alert('Error initializing finance page: ' + error.message);
+  }
 });
 </script>
 </body>
