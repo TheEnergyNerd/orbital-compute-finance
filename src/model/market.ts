@@ -1,14 +1,32 @@
 import type { Params } from './types';
 
+/**
+ * Calculate global AI compute demand for a given year (in GW).
+ * Uses exponential growth model with an early-years boost that tapers off.
+ * 
+ * @param year - Simulation year
+ * @param params - Model parameters (uses demand2025, demandGrowth)
+ * @returns Demand in GW
+ */
 export function getDemand(year: number, params: Params): number {
+  // Exponential growth model using params.demandGrowth
+  // Default 55% matches historical AI compute growth (~4x/year)
   const t = year - 2026;
-  const growth = Math.max(0.25, params.demandGrowth + 0.20 - t * 0.015);
+  const baseGrowth = params.demandGrowth;  // Use param instead of hardcoded
+  // Add early-years boost that tapers off
+  const earlyBoost = Math.max(0, 0.10 * Math.exp(-t / 8));  // 10% extra initially, decays
+  const growth = baseGrowth + earlyBoost;
   return params.demand2025 * Math.pow(1 + growth, t);
 }
 
 /**
- * Calculate BTM share for a given year.
+ * Calculate BTM (behind-the-meter) share for a given year.
  * BTM share responds dynamically to interconnection pain and energy costs.
+ * Higher interconnect delays and energy costs push more capacity to BTM.
+ * 
+ * @param year - Simulation year
+ * @param params - Model parameters
+ * @returns BTM share as fraction (0-0.5)
  */
 export function getBtmShare(year: number, params: Params): number {
   const t = year - 2026;
@@ -18,6 +36,17 @@ export function getBtmShare(year: number, params: Params): number {
   return Math.min(0.5, params.btmShare * btmIncentive + t * params.btmShareGrowth);
 }
 
+/**
+ * Calculate ground datacenter supply for a given year (in GW).
+ * Combines grid-connected capacity (slow, delayed by interconnect queue)
+ * and BTM capacity (fast, only btmDelay).
+ * 
+ * SMR deployment provides multiplicative boost after smrYear.
+ * 
+ * @param year - Simulation year
+ * @param params - Model parameters
+ * @returns Ground supply in GW
+ */
 export function getGroundSupply(year: number, params: Params): number {
   const t = year - 2026;
   const yearBtmShare = getBtmShare(year, params);
@@ -36,10 +65,13 @@ export function getGroundSupply(year: number, params: Params): number {
   let baseSupply = params.supply2025 + gridCapacity + btmCapacity;
 
   // SMR boost independent of space fission
+  // SMRs provide reliable, fast-to-deploy baseload power
+  // Significantly accelerates datacenter buildout by eliminating grid bottlenecks
   if (params.smrOn && year >= params.smrYear) {
-    const smrMaturity = Math.min(1, (year - params.smrYear) / 5);
-    const smrBoost = (10 + smrMaturity * 15) * (year - params.smrYear);
-    baseSupply += smrBoost;
+    const smrMaturity = Math.min(1, (year - params.smrYear) / 8);
+    // Multiplicative boost: 20% → 100% extra supply capacity as SMRs mature
+    const smrMultiplier = 1 + (0.2 + 0.8 * smrMaturity);
+    baseSupply *= smrMultiplier;
   }
 
   return baseSupply;

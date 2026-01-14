@@ -43,7 +43,7 @@ export function getShellRadiationEffects(
   // seuMult of 1.0 = baseline (LEO), higher = worse (MEO, Cislunar)
   // Improves over time with rad-hard tech
   // Note: GEO has seuMult=0.8 (less than LEO) but we clamp penalty >= 1.0
-  const radHardBase = 0.82 + params.radPen * 0.1;
+  const radHardBase = 0.92 - params.radPen * 0.1;  // Higher radPen = slower improvement
   const radHardImprovement = Math.pow(radHardBase, t);
   // Clamp seuMult to 1.0 minimum - can't have better-than-baseline availability
   const effectiveSeuMult = Math.max(1.0, shellData.seuMult);

@@ -8,6 +8,7 @@ export const defaults: Params = {
   // Breakthroughs
   thermalOn: true,
   thermalYear: 2030,     // Thermal breakthrough enables MW-class heat rejection
+  starshipYear: 2027,    // Year Starship becomes operational (if starshipOn)
   fissionOn: true,
   fissionYear: 2035,     // Space nuclear enables cislunar operations
   fusionOn: false,
@@ -39,8 +40,9 @@ export const defaults: Params = {
   workloadProbabilistic: 0.15, // Fraction of workloads that are sampling-heavy
 
   // Thermal - first principles radiative balance
-  emissivity: 0.85,      // Radiator surface emissivity (deprecated, use radEmissivity)
-  opTemp: 365,           // Operating temperature (K) (deprecated, use radTempK)
+  // NOTE: emissivity and opTemp are legacy aliases, model uses radEmissivity and radTempK
+  emissivity: 0.85,      // Legacy alias for radEmissivity
+  opTemp: 365,           // Legacy alias for radTempK (unused, kept for API compat)
   radLearn: 50,          // kg/MW/year improvement for conventional radiators
   radTempK: 350,         // Radiator operating temperature (K)
   radEmissivity: 0.85,   // Radiator surface emissivity (0-1)
@@ -56,8 +58,7 @@ export const defaults: Params = {
   // Power
   solarEff: 0.20,        // Silicon baseline (SpaceX/Starlink approach)
   solarLearn: 0.008,     // +0.8%/yr absolute improvement (reaches ~30% by 2038)
-  basePower: 300,        // Platform power before breakthroughs (kW)
-  computeFrac: 0.68,     // Fraction of power to compute
+  computeFrac: 0.68,     // Fraction of power to compute (power determined by tech state)
   battDens: 280,         // Battery density (Wh/kg)
 
   // Compute
@@ -70,15 +71,15 @@ export const defaults: Params = {
   launchCost: 1500,      // Current launch cost ($/kg)
   launchLearn: 0.18,     // Learning rate per doubling (18% - historical aerospace)
   launchFloor: 15,       // Physical floor with Starship (conventional is ~$300/kg)
-  prodMult: 2.5,         // Manufacturing cost multiplier
+  prodMult: 4.5,         // Manufacturing cost multiplier (higher = more expensive early satellites)
 
   maintCost: 0.015,      // Annual maintenance as fraction of capex (1.5%)
 
   // Bandwidth - goodput model
-  bandwidth: 20,         // Total capacity in 2026 (Tbps) - realistic for early space optical networks
-  bwGrowth: 0.25,        // Annual bandwidth growth rate (25% is aggressive but realistic for space laser links)
+  bandwidth: 50,         // Total capacity in 2025 (Tbps)
+  bwGrowth: 0.40,        // Annual bandwidth growth rate (aggressive with Starlink V3)
   bwCost: 50,            // Annual cost per Gbps ($k/Gbps/year) - ground station + spectrum
-  gbpsPerTflop: 0.0001,  // DEPRECATED: Bandwidth per TFLOP (Gbps)
+  gbpsPerTflop: 0.000001,  // Bandwidth per TFLOP (Gbps) - physics: ~1 kbps from token-based calc
   terminalGoodputGbps: 20,   // Baseline per-platform terminal capacity (Gbps)
   contactFraction: 0.25,     // Fraction of time in contact (0-1)
   protocolOverhead: 0.15,    // Protocol/FEC overhead (0-1)

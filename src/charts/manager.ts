@@ -1,12 +1,50 @@
 import Chart from 'chart.js/auto';
 import { YEARS } from '../model/constants';
 import { getLineOptions, getStackedOptions, COLORS } from './config';
-import type { ScenarioResult, SatelliteResult, FleetResult, GroundResult } from '../model/types';
+import type { ScenarioResult } from '../model/types';
 import type { Params } from '../model/types';
 import { getRadiatorMassPerMW, getLaunchCost } from '../model/physics';
 import { getShellRadiationEffects } from '../model/orbital';
 
 const charts: Record<string, Chart | null> = {};
+
+/**
+ * Sanitize LCOC array by interpolating Infinity values using geometric mean.
+ * This prevents Chart.js fill artifacts when one scenario has Infinity.
+ */
+function sanitizeLcocArray(arr: number[]): number[] {
+  const result = arr.map(v => (isFinite(v) && v > 0) ? v : null);
+  for (let i = 0; i < result.length; i++) {
+    if (result[i] === null) {
+      let prev: number | null = null, next: number | null = null;
+      let prevIdx = i - 1, nextIdx = i + 1;
+      while (prevIdx >= 0 && prev === null) { prev = result[prevIdx]; prevIdx--; }
+      while (nextIdx < result.length && next === null) { next = result[nextIdx]; nextIdx++; }
+      if (prev !== null && next !== null) {
+        result[i] = Math.sqrt(prev * next); // Geometric mean for log scale
+      } else if (prev !== null) {
+        result[i] = prev;
+      } else if (next !== null) {
+        result[i] = next;
+      }
+    }
+  }
+  return result as number[];
+}
+
+/**
+ * Conversion factor: Million tokens per GPU-hour
+ * 
+ * Derivation (Llama-70B class model):
+ * - H100 GPU: ~1979 TFLOPS effective
+ * - FLOPs per token: 140 GFLOPs (Llama-70B)
+ * - Tokens/sec = 1979e12 / 140e9 ≈ 14,136 tokens/sec
+ * - Tokens/hour = 14,136 × 3600 ≈ 50.9M tokens/hr
+ * 
+ * Simplified to 50 for display purposes.
+ * To get $/M-tokens from $/GPU-hr: divide LCOC by this value.
+ */
+const M_TOKENS_PER_GPU_HR = 50;
 
 // Set Chart.js defaults
 Chart.defaults.color = '#6b5d4a';
@@ -30,7 +68,8 @@ export function initCharts(): void {
             { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '+1', tension: 0.3, pointRadius: 0 },
             { data: [], borderColor: COLORS.orbital, borderWidth: 2, tension: 0.3, pointRadius: 0 },
             { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '-1', tension: 0.3, pointRadius: 0 },
-            { data: [], borderColor: COLORS.ground, borderWidth: 2, tension: 0.3, pointRadius: 0 }
+            { data: [], borderColor: COLORS.ground, borderWidth: 2, tension: 0.3, pointRadius: 0 },
+            { data: [], borderColor: COLORS.ground, borderWidth: 1.5, borderDash: [4, 4], tension: 0.3, pointRadius: 0, label: 'Ground (base)' }
           ]
         },
         options: opts('$/GPU-hr', true)
@@ -51,7 +90,8 @@ export function initCharts(): void {
             { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '+1', tension: 0.3, pointRadius: 0 },
             { data: [], borderColor: COLORS.orbital, borderWidth: 2, tension: 0.3, pointRadius: 0 },
             { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '-1', tension: 0.3, pointRadius: 0 },
-            { data: [], borderColor: COLORS.ground, borderWidth: 2, tension: 0.3, pointRadius: 0 }
+            { data: [], borderColor: COLORS.ground, borderWidth: 2, tension: 0.3, pointRadius: 0 },
+            { data: [], borderColor: COLORS.ground, borderWidth: 1.5, borderDash: [4, 4], tension: 0.3, pointRadius: 0 }
           ]
         },
         options: opts('$/M tokens', true)
@@ -388,7 +428,8 @@ export function initCharts(): void {
           { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '+1', tension: 0.3, pointRadius: 0 },
           { data: [], borderColor: COLORS.orbital, borderWidth: 2, tension: 0.3, pointRadius: 0 },
           { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '-1', tension: 0.3, pointRadius: 0 },
-          { data: [], borderColor: COLORS.muted, borderDash: [4, 4], borderWidth: 2, tension: 0.3, pointRadius: 0 }
+          { data: [], borderColor: COLORS.ground, borderWidth: 2, tension: 0.3, pointRadius: 0 },
+          { data: [], borderColor: COLORS.ground, borderWidth: 1.5, borderDash: [4, 4], tension: 0.3, pointRadius: 0 }
         ]
       },
       options: opts('$/GPU-hr', true)
@@ -444,10 +485,11 @@ export function updateCharts(
   ['c-lcoc', 'c-lcoc-world', 'c-lcoc-sandbox'].forEach((id) => {
     const chart = charts[id];
     if (chart) {
-      chart.data.datasets[0].data = agg.fleets.map((f) => f.lcocEffective);
-      chart.data.datasets[1].data = base.fleets.map((f) => f.lcocEffective);
-      chart.data.datasets[2].data = cons.fleets.map((f) => f.lcocEffective);
-      chart.data.datasets[3].data = gnds.map((g) => g.market);
+      chart.data.datasets[0].data = sanitizeLcocArray(agg.fleets.map((f) => f.lcocEffective));
+      chart.data.datasets[1].data = sanitizeLcocArray(base.fleets.map((f) => f.lcocEffective));
+      chart.data.datasets[2].data = sanitizeLcocArray(cons.fleets.map((f) => f.lcocEffective));
+      chart.data.datasets[3].data = sanitizeLcocArray(gnds.map((g) => g.market));
+      chart.data.datasets[4].data = sanitizeLcocArray(gnds.map((g) => g.base));
       chart.update('none');
     }
   });
@@ -456,11 +498,11 @@ export function updateCharts(
   ['c-inference', 'c-inference-world'].forEach((id) => {
     const chart = charts[id];
     if (chart) {
-      const tokensPerGpuHr = 10;
-      chart.data.datasets[0].data = agg.fleets.map((f) => f.lcocEffective / tokensPerGpuHr);
-      chart.data.datasets[1].data = base.fleets.map((f) => f.lcocEffective / tokensPerGpuHr);
-      chart.data.datasets[2].data = cons.fleets.map((f) => f.lcocEffective / tokensPerGpuHr);
-      chart.data.datasets[3].data = gnds.map((g) => g.market / tokensPerGpuHr);
+      chart.data.datasets[0].data = sanitizeLcocArray(agg.fleets.map((f) => f.lcocEffective / M_TOKENS_PER_GPU_HR));
+      chart.data.datasets[1].data = sanitizeLcocArray(base.fleets.map((f) => f.lcocEffective / M_TOKENS_PER_GPU_HR));
+      chart.data.datasets[2].data = sanitizeLcocArray(cons.fleets.map((f) => f.lcocEffective / M_TOKENS_PER_GPU_HR));
+      chart.data.datasets[3].data = sanitizeLcocArray(gnds.map((g) => g.market / M_TOKENS_PER_GPU_HR));
+      chart.data.datasets[4].data = sanitizeLcocArray(gnds.map((g) => g.base / M_TOKENS_PER_GPU_HR));
       chart.update('none');
     }
   });
@@ -627,10 +669,11 @@ export function updateCharts(
 
   // LCOC scenarios
   if (charts.lcocScenarios) {
-    charts.lcocScenarios.data.datasets[0].data = agg.fleets.map((f) => f.lcocEffective);
-    charts.lcocScenarios.data.datasets[1].data = base.fleets.map((f) => f.lcocEffective);
-    charts.lcocScenarios.data.datasets[2].data = cons.fleets.map((f) => f.lcocEffective);
-    charts.lcocScenarios.data.datasets[3].data = base.gnds.map((g) => g.market);
+    charts.lcocScenarios.data.datasets[0].data = sanitizeLcocArray(agg.fleets.map((f) => f.lcocEffective));
+    charts.lcocScenarios.data.datasets[1].data = sanitizeLcocArray(base.fleets.map((f) => f.lcocEffective));
+    charts.lcocScenarios.data.datasets[2].data = sanitizeLcocArray(cons.fleets.map((f) => f.lcocEffective));
+    charts.lcocScenarios.data.datasets[3].data = sanitizeLcocArray(base.gnds.map((g) => g.market));
+    charts.lcocScenarios.data.datasets[4].data = sanitizeLcocArray(base.gnds.map((g) => g.base));
     charts.lcocScenarios.update('none');
   }
 

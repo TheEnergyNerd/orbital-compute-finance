@@ -13,9 +13,12 @@ export function calcGround(
   const gflopsW = getGroundEfficiency(year, params);
 
   // SMR synergy: DECOUPLED from space fission - independent ground policy
+  // SMRs provide abundant, cheap, clean baseload power
+  // Major impact: reduces energy costs significantly as fleet scales
   const hasSmr = params.smrOn && year >= params.smrYear;
+  const smrMaturity = hasSmr ? Math.min(1, (year - params.smrYear) / 8) : 0;
   const smrDiscount = hasSmr
-    ? 0.7 - Math.min(0.3, (year - params.smrYear) * 0.03)
+    ? 0.6 - 0.4 * smrMaturity  // 40% discount initially → 80% discount at maturity (8 years)
     : 1.0;
 
   // BTM share for this year
@@ -37,16 +40,29 @@ export function calcGround(
   const hwCost = hwCapexAdjusted * crfGround;
 
   // Blended energy costs (grid vs BTM)
-  const gridEnergy = params.energyCost * Math.pow(1 + params.energyEscal, t) * smrDiscount;
-  const btmEnergy = params.btmEnergyCost; // Stable, no escalation
+  // Fusion: If fusion is available, it provides ultra-cheap baseload power
+  // This benefits ground datacenters significantly (abundant clean power)
+  // Even before full commercial fusion, R&D spillovers reduce energy tech costs
+  const hasFusion = params.fusionOn && year >= params.fusionYear;
+  const fusionMaturity = hasFusion ? Math.min(1, (year - params.fusionYear) / 8) : 0;
+  const fusionDiscount = hasFusion ? (0.4 - 0.3 * fusionMaturity) : 1.0;  // 60% → 90% discount at maturity
+  
+  // Combined energy technology discount (SMRs + fusion both reduce energy costs)
+  const energyTechDiscount = smrDiscount * fusionDiscount;
+  
+  const gridEnergy = params.energyCost * Math.pow(1 + params.energyEscal, t) * energyTechDiscount;
+  const btmEnergy = params.btmEnergyCost * energyTechDiscount; // BTM also benefits from cheaper energy tech
   const blendedEnergy = gridEnergy * (1 - yearBtmShare) + btmEnergy * yearBtmShare;
 
   const pue = Math.max(1.08, params.groundPue - t * 0.01);
   const enCost = (700 * 8760 * SLA * blendedEnergy * pue) / 1000;
 
   // Overhead: datacenter opex, staff, networking, real estate, profit margin
-  // $0.50/hr baseline reflects real cloud GPU pricing overhead
-  const overhead = 0.50 * 8760 * SLA;
+  // Declines over time as AI compute becomes commoditized
+  // 2026: $0.50/hr (cloud premium) → 2050: $0.15/hr (commodity)
+  const overheadBase = 0.50 * Math.pow(0.95, t);  // 5% annual decline
+  const overheadFloor = 0.15;  // Minimum overhead (physical limits)
+  const overhead = Math.max(overheadFloor, overheadBase) * 8760 * SLA;
 
   // Utilization factor: datacenters don't run at 100% - typical 60-80%
   const utilization = 0.70;
@@ -56,8 +72,7 @@ export function calcGround(
   const demand = getDemand(year, params);
   const groundSupply = getGroundSupply(year, params);
   const totalSupply = groundSupply + orbitalSupplyGW;
-  // Guard against division by zero - if no supply, use high unmet ratio
-  const unmetRatio = totalSupply > 0 ? (demand - totalSupply) / totalSupply : 10;
+  const unmetRatio = (demand - totalSupply) / totalSupply;
 
   // Revised scarcity premium with demand destruction and oversupply discount
   let premium: number;

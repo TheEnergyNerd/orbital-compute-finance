@@ -64,16 +64,6 @@ import {
 
 import { defaults } from '../state/params';
 
-import type {
-  Params,
-  SatelliteResult,
-  GroundResult,
-  FleetResult,
-  ScenarioResult,
-  SimulationState,
-  LunarReadinessDetails
-} from '../model';
-
 // Export to window for finance page inline JS
 declare global {
   interface Window {
@@ -139,6 +129,3 @@ const OrbitalModel = {
 };
 
 window.OrbitalModel = OrbitalModel;
-
-// Log that model is loaded
-console.log('OrbitalModel loaded - shared model functions available');

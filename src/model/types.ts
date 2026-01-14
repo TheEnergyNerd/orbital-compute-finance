@@ -38,7 +38,6 @@ export interface Params {
   // Power
   solarEff: number;
   solarLearn: number;
-  basePower: number;
   computeFrac: number;
   battDens: number;
 
@@ -49,6 +48,7 @@ export interface Params {
 
   // Economics
   starshipOn: boolean;  // Starship available ($15/kg floor) vs conventional ($300/kg floor)
+  starshipYear: number; // Year Starship becomes operational
   launchCost: number;
   launchLearn: number;
   launchFloor: number;  // Base floor, overridden by starshipOn
@@ -61,7 +61,7 @@ export interface Params {
   bandwidth: number;
   bwGrowth: number;
   bwCost: number;  // Annual cost per Gbps ($k/Gbps/year)
-  gbpsPerTflop: number;  // DEPRECATED - kept for backwards compatibility
+  gbpsPerTflop: number;  // Bandwidth per TFLOP multiplier (1e-6 = 1x baseline, ~1 kbps/TFLOP)
   terminalGoodputGbps: number;  // Baseline per-platform terminal capacity
   contactFraction: number;       // Fraction of time in contact (0-1)
   protocolOverhead: number;      // Protocol/FEC overhead (0-1)
@@ -101,7 +101,8 @@ export interface Shell {
   latency: number;
   tidMult: number;
   seuMult: number;
-  capacity: number;
+  capacity: number;        // Platform count capacity (for GEO slot-limited)
+  massCapacityKg: number;  // Mass capacity in kg (for LEO/cislunar)
 }
 
 export interface RadiationEffects {

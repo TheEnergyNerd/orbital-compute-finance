@@ -13,11 +13,11 @@ const sliderConfigs: SliderConfig[] = [
   // Thermal
   {
     id: 'emissivity',
-    param: 'emissivity',
+    param: 'radEmissivity',  // Use actual param, not deprecated
     valueId: 'v-emissivity',
     transform: (v) => v / 100
   },
-  { id: 'opTemp', param: 'opTemp', valueId: 'v-opTemp' },
+  { id: 'opTemp', param: 'radTempK', valueId: 'v-opTemp' },  // Use actual param
   { id: 'radLearn', param: 'radLearn', valueId: 'v-radLearn' },
 
   // Power
@@ -34,7 +34,7 @@ const sliderConfigs: SliderConfig[] = [
     transform: (v) => v / 1000,
     format: (v) => (v * 1000).toFixed(1)
   },
-  { id: 'basePower', param: 'basePower', valueId: 'v-basePower' },
+  // basePower removed - not used in model (power determined by tech state)
   {
     id: 'computeFrac',
     param: 'computeFrac',
@@ -184,6 +184,24 @@ export function initSliders(): void {
 
     if (!slider) return;
 
+    // Initialize slider value FROM params (defaults)
+    const paramVal = params[config.param] as number;
+    // Reverse the transform to get the raw slider value
+    const rawVal = config.transform 
+      ? paramVal / (config.transform(1) || 1)
+      : paramVal;
+    slider.value = rawVal.toString();
+    
+    // Update display value
+    if (valueEl) {
+      const displayVal = config.format
+        ? config.format(paramVal)
+        : config.transform
+          ? rawVal.toString()
+          : paramVal.toString();
+      valueEl.textContent = displayVal;
+    }
+
     slider.addEventListener('input', () => {
       const rawVal = parseFloat(slider.value);
       const val = config.transform ? config.transform(rawVal) : rawVal;
@@ -192,7 +210,7 @@ export function initSliders(): void {
         const displayVal = config.format
           ? config.format(val)
           : config.transform
-            ? (rawVal / (config.transform(1) || 1)).toString()
+            ? rawVal.toString()  // Show slider value (e.g., 35 for 35%), not computed param
             : rawVal.toString();
         valueEl.textContent = displayVal;
       }
@@ -201,9 +219,8 @@ export function initSliders(): void {
     });
   });
 
-  // Technology toggles
+  // Technology toggles (thermal is always on, handled by slider)
   const toggleConfigs = [
-    { togId: 'tog-thermal', yearId: 'year-thermal', onParam: 'thermalOn', yearParam: 'thermalYear' },
     { togId: 'tog-fission', yearId: 'year-fission', onParam: 'fissionOn', yearParam: 'fissionYear' },
     { togId: 'tog-fusion', yearId: 'year-fusion', onParam: 'fusionOn', yearParam: 'fusionYear' },
     { togId: 'tog-smr', yearId: 'year-smr', onParam: 'smrOn', yearParam: 'smrYear' },
@@ -217,6 +234,12 @@ export function initSliders(): void {
     const slidersDiv = cfg.slidersId ? document.getElementById(cfg.slidersId) : null;
 
     if (toggle) {
+      // Initialize toggle from params
+      const isOn = params[cfg.onParam as keyof Params] as boolean;
+      toggle.checked = isOn;
+      if (yearInput) yearInput.disabled = !isOn;
+      if (slidersDiv) slidersDiv.style.display = isOn ? 'block' : 'none';
+      
       toggle.addEventListener('change', () => {
         setParams({ [cfg.onParam]: toggle.checked } as Partial<Params>);
         if (yearInput) {
@@ -229,8 +252,37 @@ export function initSliders(): void {
     }
 
     if (yearInput) {
+      // Initialize year input from params
+      const year = params[cfg.yearParam as keyof Params] as number;
+      yearInput.value = year.toString();
+      
       yearInput.addEventListener('change', () => {
         setParams({ [cfg.yearParam]: parseInt(yearInput.value) } as Partial<Params>);
+      });
+    }
+  });
+
+  // Key Timeline year sliders (thermal and starship are always on)
+  const yearSliders = [
+    { sliderId: 'thermalYearSlider', sliderValId: 'v-thermalYearSlider', yearParam: 'thermalYear', onParam: 'thermalOn' },
+    { sliderId: 'starshipYearSlider', sliderValId: 'v-starshipYearSlider', yearParam: 'starshipYear', onParam: 'starshipOn' }
+  ];
+
+  yearSliders.forEach(({ sliderId, sliderValId, yearParam, onParam }) => {
+    const slider = document.getElementById(sliderId) as HTMLInputElement | null;
+    const sliderVal = document.getElementById(sliderValId);
+
+    if (slider) {
+      // Initialize from params
+      const val = params[yearParam as keyof Params] as number;
+      slider.value = val.toString();
+      if (sliderVal) sliderVal.textContent = val.toString();
+      
+      slider.addEventListener('input', () => {
+        const val = parseInt(slider.value);
+        if (sliderVal) sliderVal.textContent = val.toString();
+        // Set both the year and ensure the feature is on
+        setParams({ [yearParam]: val, [onParam]: true } as Partial<Params>);
       });
     }
   });

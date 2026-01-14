@@ -41,12 +41,15 @@ export function calcSatellite(
   const launchCost = getLaunchCost(year, params, shell);
 
   // =====================================================
-  // SMOOTH COTS BLEND - Avoids discontinuities
+  // GOLD-PLATED PAYLOAD FIX - SMOOTH COTS BLEND
   // =====================================================
   // When launch is cheap, we use COTS hardware with shielding instead of
-  // expensive rad-hard hardware. Smooth interpolation avoids kinks:
-  // cotsBlend: 0 at $500/kg (fully rad-hard) → 1 at $100/kg (fully COTS)
+  // expensive rad-hard hardware. Uses smooth interpolation to avoid kinks:
+  // - cotsBlend = 0 at $500/kg (fully rad-hard)
+  // - cotsBlend = 1 at $100/kg (fully COTS)
+  // - Linear blend between
   const cotsBlend = Math.max(0, Math.min(1, (500 - launchCost) / 400));
+  const isStarshipEra = cotsBlend > 0.5;  // For backward compatibility
 
   // Demand-coupled manufacturing learning (Wright's Law)
   // Research: 15-20% reduction per doubling of production
@@ -84,9 +87,15 @@ export function calcSatellite(
   // Fission only used if it beats solar (rarely true in LEO)
   // Fusion at 150 W/kg beats both and can be used in LEO
   
-  // Calculate what solar would provide - smooth blend based on launch cost
-  // Legacy: ~30 W/kg, Advanced (Starship era): ~50 W/kg
-  const solarSpecPower = 30 + cotsBlend * 20;  // 30 → 50 W/kg
+  // Calculate what solar would provide
+  let solarSpecPower = 0;  // Effective W/kg for solar including batteries
+  if (isStarshipEra) {
+    // Advanced solar: ~50 W/kg effective (panels + batteries + thermal)
+    solarSpecPower = 50;
+  } else {
+    // Legacy solar: ~30 W/kg effective
+    solarSpecPower = 30;
+  }
   
   // Determine which power source is actually used
   const fissionSpecPower = 50;  // W/kg for fission
@@ -172,21 +181,23 @@ export function calcSatellite(
   const qNetEclGpu = Math.max(1, qEmitGpu - qAbsEcl);
   const qNetAvgCompute = (1 - eclipseFrac) * qNetSunGpu + eclipseFrac * qNetEclGpu;
   
-  // Fusion radiator efficiency - use same temperature as GPU for combined radiator synergy
-  // Advanced SCO2 cycles with recuperation can operate at higher sink temps (350K+)
-  // This enables shared radiator infrastructure between fusion and compute
-  let qNetAvgFusion = qNetAvgCompute;  // Same as GPU - shared 350K radiator
+  // Fusion radiator efficiency at 293K (SCO2 cycle requirement)
+  let qNetAvgFusion = qNetAvgCompute;
+  if (hasFusion) {
+    const fusionRadTempK = 293;  // 20°C - SCO2 compressor inlet requirement
+    const qEmitFusion = sides * eps * sigma * Math.pow(fusionRadTempK, 4);
+    const qNetSunFusion = Math.max(1, qEmitFusion - qAbsSun);
+    const qNetEclFusion = Math.max(1, qEmitFusion - qAbsEcl);
+    qNetAvgFusion = (1 - eclipseFrac) * qNetSunFusion + eclipseFrac * qNetEclFusion;
+  }
 
-  // Radiator areal density (kg/m²) - advanced breakthroughs enable lightweight radiators
-  // Thermal/Fission/Fusion all imply access to advanced radiator tech (droplet, liquid metal, etc.)
-  // With any breakthrough: 1.0 kg/m², without: 3.0 kg/m² (conventional panels)
-  const hasAdvancedRadiators = hasThermal || hasFission || hasFusion;
-  const radKgPerM2 = hasAdvancedRadiators ? 1.0 : (params.radKgPerM2 || 3.0);
+  // Radiator areal density (kg/m²) - varies with tech
+  const radKgPerM2 = params.radKgPerM2 || (hasThermal ? 1.0 : 3.0);
 
   // Radiator mass budget as fraction of dry mass
-  // With fusion: shared 350K radiators handle both GPU and fusion waste
-  // Key synergies: no batteries needed, continuous power, shared thermal infrastructure!
-  const radMassFrac = hasFusion ? 0.20 : (params.radMassFrac || 0.15);
+  // With fusion: separate radiators for GPU (350K) and fusion (293K)
+  // The synergy: no batteries needed, continuous power!
+  const radMassFrac = hasFusion ? 0.30 : (params.radMassFrac || 0.15);
 
   // Waste heat fraction
   const wasteHeatFrac = params.wasteHeatFrac || 0.90;
@@ -212,7 +223,7 @@ export function calcSatellite(
   let compMass = 0;
   let commsMass = 0;
 
-  // Calculate fusion radiator mass (shared 350K radiator with GPU)
+  // Calculate fusion radiator mass FIRST (fixed, based on fusion waste at 293K)
   if (hasFusion && fusionWasteKw > 0) {
     const fusionRejectW = fusionWasteKw * 1000;
     const fusionRadArea = fusionRejectW / qNetAvgFusion;
@@ -241,7 +252,7 @@ export function calcSatellite(
     const propulsionMass = propulsionMassBase + (powerMass + battMass + compMass) * 0.03;
     const otherMass = avionicsMassBase + propulsionMass + commsMass + aocsMassBase;
 
-    // Total radiator mass = GPU radiators + fusion radiators (both at 350K, shared infrastructure)
+    // Total radiator mass = GPU radiators (350K) + fusion radiators (293K, fixed)
     const totalRadMass = radMass + fusionRadMass;
 
     // Estimate dry mass with current radiator mass
@@ -250,7 +261,7 @@ export function calcSatellite(
     const structMass = (baseMass + shieldMass) * 0.1;
     const estDryMass = baseMass + shieldMass + structMass;
 
-    // GPU radiator budget (fusion uses separate allocation from same 350K infrastructure)
+    // GPU radiator budget (separate from fusion radiators)
     const gpuRadBudget = Math.max(50, radMassFrac * estDryMass);
     const maxGpuRadArea = gpuRadBudget / radKgPerM2;
     const maxGpuRejectKw = (qNetAvgCompute * maxGpuRadArea) / 1000;
@@ -320,23 +331,29 @@ export function calcSatellite(
   const baseMass = powerMass + battMass + compMass + radMass + otherSystemsMass;
 
   // Radiation shielding mass
-  // As launch gets cheaper, we transition to COTS shielding (water/polyethylene)
-  // This trades expensive rad-hardening for cheap mass - smooth transition via cotsBlend
+  // In Starship era, we add COTS shielding (water/polyethylene)
+  // This is where cheap launch pays off - trading expensive rad-hardening for cheap mass
+  // IMPORTANT: Use smooth blend to avoid discontinuities in specific power
   let shieldMass = 0;
 
-  // COTS shielding scales with compute mass (what you're actually protecting)
-  // At full COTS (cotsBlend=1), shielding is ~40% of compute mass (water/polyethylene enclosure)
-  // This ensures shield mass scales naturally with power/compute, maintaining specific power
-  const cotsShieldFraction = 0.40;  // 40% of compute mass in shielding at full COTS
-  const cotsShieldMass = cotsBlend * compMass * cotsShieldFraction;
-
+  // Base shield fraction (thermal/micrometeoroid protection)
+  const baseShieldFrac = 0.02;
+  
+  // COTS adds incremental shielding, but not as much as before since:
+  // 1. COTS components are getting more rad-tolerant over time
+  // 2. Shielding efficiency improves with mass
+  // 3. We want monotonic specific power improvement
+  // Target: 8% total at full COTS (vs 2% rad-hard) - reasonable for water/PE shielding
+  const maxCotsShieldFrac = 0.08;
+  const cotsIncrementalFrac = cotsBlend * (maxCotsShieldFrac - baseShieldFrac);
+  
   if (shell === 'leo') {
-    // LEO: Minimal additional shielding (mostly thermal/micrometeoroid)
-    shieldMass = baseMass * 0.02 + cotsShieldMass;
+    // LEO: base shield + COTS increment
+    shieldMass = baseMass * (baseShieldFrac + cotsIncrementalFrac);
   } else {
     // MEO/Cislunar: Van Allen belts require heavy shielding even for rad-hard
     const structureArea = Math.pow(baseMass / 100, 0.66) * 6;
-    shieldMass = structureArea * 50 + cotsShieldMass;
+    shieldMass = structureArea * 50 + baseMass * cotsIncrementalFrac;
   }
 
   // Final dry mass

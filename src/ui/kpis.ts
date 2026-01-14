@@ -1,4 +1,4 @@
-import type { ScenarioResult, GroundResult, FleetResult, SatelliteResult, SimulationState, LunarReadinessDetails } from '../model/types';
+import type { ScenarioResult, GroundResult, FleetResult, SatelliteResult } from '../model/types';
 import type { Params } from '../model/types';
 import { STEFAN_BOLTZMANN, SHELLS } from '../model/constants';
 import { getLaunchCost } from '../model/physics';
@@ -9,18 +9,15 @@ function setText(id: string, text: string): void {
 }
 
 /**
- * Format delivered tokens per year in Petatokens for consistency
+ * Format delivered tokens per year in human-readable format
  */
 function formatDeliveredTokens(tokens: number): string {
-  const peta = tokens / 1e15;
-  if (peta >= 100) {
-    return peta.toFixed(0) + ' Peta';
-  } else if (peta >= 10) {
-    return peta.toFixed(1) + ' Peta';
-  } else if (peta >= 1) {
-    return peta.toFixed(2) + ' Peta';
-  }
-  return peta.toFixed(3) + ' Peta';
+  if (tokens >= 1e18) return (tokens / 1e18).toFixed(1) + ' Etok';
+  if (tokens >= 1e15) return (tokens / 1e15).toFixed(1) + ' Ptok';
+  if (tokens >= 1e12) return (tokens / 1e12).toFixed(1) + ' Ttok';
+  if (tokens >= 1e9) return (tokens / 1e9).toFixed(1) + ' Gtok';
+  if (tokens >= 1e6) return (tokens / 1e6).toFixed(1) + ' Mtok';
+  return tokens.toFixed(0);
 }
 
 export function updateKPIs(
@@ -35,8 +32,6 @@ export function updateKPIs(
   const i35 = 9; // 2035
   const i40 = 14; // 2040
   const i50 = 24; // 2050
-  const i60 = 34; // 2060
-  const i70 = 44; // 2070
 
   // Header badges
   setText('badge-crossover', result.crossoverYear?.toString() ?? 'Never');
@@ -47,10 +42,16 @@ export function updateKPIs(
   setText('kpi-gnd25', '$' + gnds[i26].market.toFixed(2));
   setText('kpi-orb30', '$' + fleets[i30].lcocEffective.toFixed(2));
   setText('kpi-gnd30', '$' + gnds[i30].market.toFixed(2));
+  setText('kpi-orb35', '$' + fleets[i35].lcocEffective.toFixed(3));
+  setText('kpi-gnd35', '$' + gnds[i35].base.toFixed(3));
   setText('kpi-orb40', '$' + fleets[i40].lcocEffective.toFixed(2));
   setText('kpi-gnd40', '$' + gnds[i40].market.toFixed(2));
   setText('kpi-orb50', '$' + fleets[i50].lcocEffective.toFixed(3));
-  setText('kpi-gnd50', '$' + gnds[i50].market.toFixed(2));
+  setText('kpi-gnd50', '$' + gnds[i50].base.toFixed(3));
+  
+  // Delivered tokens (World tab KPI panel)
+  setText('kpi-delivered35', formatDeliveredTokens(fleets[i35].deliveredTokensPerYear));
+  setText('kpi-delivered50', formatDeliveredTokens(fleets[i50].deliveredTokensPerYear));
 
   // Derived values
   const radPower = params.emissivity * STEFAN_BOLTZMANN * Math.pow(params.opTemp, 4);

@@ -10,15 +10,19 @@
     "build": "vite build && cp public/simple-orbit-controls.js public/orbital-visualization.js public/favicon.png dist/ && cp -r public/assets dist/",
     "preview": "vite preview",
     "test": "vitest run",
-    "lint": "eslint src/",
-    "export:audit": "node scripts/export-audit.js"
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "export:audit": "node scripts/export-audit.js",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@eslint/js": "^9.18.0",
     "@types/node": "^25.0.3",
-    "eslint": "^8.56.0",
+    "eslint": "^9.18.0",
     "terser": "^5.44.1",
     "typescript": "^5.9.3",
-    "vite": "^5.0.0",
+    "typescript-eslint": "^8.21.0",
+    "vite": "^6.2.0",
     "vitest": "^4.0.16"
   },
   "dependencies": {
