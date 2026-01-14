@@ -51,10 +51,30 @@ export function getGroundSupply(year: number, params: Params): number {
   const t = year - 2026;
   const yearBtmShare = getBtmShare(year, params);
 
+  // SMR boost: accelerates buildout by eliminating grid bottlenecks
+  // Affects GROWTH RATE, not just level - compounds over time
+  let supplyGrowthMult = 1.0;
+  if (params.smrOn && year >= params.smrYear) {
+    const smrMaturity = Math.min(1, (year - params.smrYear) / 8);
+    // Growth rate boost: 50% faster buildout initially → 150% faster at maturity
+    supplyGrowthMult *= 1 + (0.5 + 1.0 * smrMaturity);
+  }
+
+  // Fusion boost: abundant cheap power removes ALL energy constraints
+  // Even bigger growth acceleration - can build datacenters anywhere
+  if (params.fusionOn && year >= params.fusionYear) {
+    const fusionMaturity = Math.min(1, (year - params.fusionYear) / 10);
+    // Growth rate boost: 50% faster initially → 200% faster at maturity
+    supplyGrowthMult *= 1 + (0.5 + 1.5 * fusionMaturity);
+  }
+
+  // Apply growth multiplier to annual growth rate
+  const boostedGrowth = params.supplyGrowth * supplyGrowthMult;
+  const annualGrowth = boostedGrowth * params.supply2025;
+
   // Grid-connected capacity (slow - subject to interconnect delays)
   const gridDelay = params.interconnect / 12;
   const gridEffectiveT = Math.max(0, t - gridDelay);
-  const annualGrowth = params.supplyGrowth * params.supply2025;
   const gridCapacity = (1 - yearBtmShare) * annualGrowth * gridEffectiveT;
 
   // BTM capacity (fast - only btmDelay)
@@ -62,19 +82,7 @@ export function getGroundSupply(year: number, params: Params): number {
   const btmEffectiveT = Math.max(0, t - btmDelay);
   const btmCapacity = yearBtmShare * annualGrowth * btmEffectiveT;
 
-  let baseSupply = params.supply2025 + gridCapacity + btmCapacity;
-
-  // SMR boost independent of space fission
-  // SMRs provide reliable, fast-to-deploy baseload power
-  // Significantly accelerates datacenter buildout by eliminating grid bottlenecks
-  if (params.smrOn && year >= params.smrYear) {
-    const smrMaturity = Math.min(1, (year - params.smrYear) / 8);
-    // Multiplicative boost: 20% → 100% extra supply capacity as SMRs mature
-    const smrMultiplier = 1 + (0.2 + 0.8 * smrMaturity);
-    baseSupply *= smrMultiplier;
-  }
-
-  return baseSupply;
+  return params.supply2025 + gridCapacity + btmCapacity;
 }
 
 /**

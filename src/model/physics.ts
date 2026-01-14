@@ -136,6 +136,21 @@ export function getGroundEfficiency(year: number, params: Params): number {
     baseEff *= (1 + baseLearn * groundLearningMult);
   }
 
+  // SMR/Fusion efficiency boost: abundant cheap power enables
+  // - More aggressive liquid cooling
+  // - Higher power density without thermal throttling
+  // - Always-on operation (no demand response throttling)
+  let energyEffBoost = 1.0;
+  if (params.smrOn && year >= params.smrYear) {
+    const smrMaturity = Math.min(1, (year - params.smrYear) / 8);
+    energyEffBoost *= 1 + 0.15 * smrMaturity;  // Up to 15% efficiency boost
+  }
+  if (params.fusionOn && year >= params.fusionYear) {
+    const fusionMaturity = Math.min(1, (year - params.fusionYear) / 10);
+    energyEffBoost *= 1 + 0.25 * fusionMaturity;  // Up to 25% efficiency boost
+  }
+  baseEff *= energyEffBoost;
+
   const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
   const hasPhotonic = params.photonicOn && year >= params.photonicYear;
 

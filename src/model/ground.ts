@@ -65,14 +65,38 @@ export function calcGround(
   const overhead = Math.max(overheadFloor, overheadBase) * 8760 * SLA;
 
   // Utilization factor: datacenters don't run at 100% - typical 60-80%
-  const utilization = 0.70;
+  // SMR/fusion improve utilization by:
+  // - No demand response curtailment
+  // - Better cooling allows sustained high loads
+  // - More locations = better load distribution
+  let utilization = 0.70;
+  if (hasSmr) {
+    utilization += 0.10 * smrMaturity;  // +10% at maturity
+  }
+  if (hasFusion) {
+    utilization += 0.12 * fusionMaturity;  // +12% at maturity
+  }
+  utilization = Math.min(0.95, utilization);  // Cap at 95%
+  
   const base = (hwCost + enCost + overhead) / (8760 * SLA * utilization);
 
   // Market dynamics
   const demand = getDemand(year, params);
   const groundSupply = getGroundSupply(year, params);
   const totalSupply = groundSupply + orbitalSupplyGW;
-  const unmetRatio = (demand - totalSupply) / totalSupply;
+  
+  // Effective supply is boosted by better utilization
+  // SMR/fusion allow existing capacity to serve more demand
+  let effectiveSupplyMult = 1.0;
+  if (hasSmr) {
+    effectiveSupplyMult *= 1 + 0.20 * smrMaturity;  // 20% more effective at maturity
+  }
+  if (hasFusion) {
+    effectiveSupplyMult *= 1 + 0.30 * fusionMaturity;  // 30% more effective at maturity
+  }
+  const effectiveSupply = totalSupply * effectiveSupplyMult;
+  
+  const unmetRatio = (demand - effectiveSupply) / effectiveSupply;
 
   // Revised scarcity premium with demand destruction and oversupply discount
   let premium: number;
