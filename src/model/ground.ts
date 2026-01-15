@@ -55,7 +55,14 @@ export function calcGround(
   const blendedEnergy = gridEnergy * (1 - yearBtmShare) + btmEnergy * yearBtmShare;
 
   const pue = Math.max(1.08, params.groundPue - t * 0.01);
-  const enCost = (700 * 8760 * SLA * blendedEnergy * pue) / 1000;
+  
+  // Energy scales with efficiency: more efficient chips need less power per GPU-equivalent
+  // GPU_eq is defined as H100-equivalent throughput (1,979 TFLOPS)
+  // As chips improve, fewer watts needed to deliver same throughput
+  const baselinePowerW = 700;   // H100 TDP
+  const baselineGflopsW = 2800; // H100 efficiency (GFLOPS/W)
+  const equivPowerW = baselinePowerW * (baselineGflopsW / gflopsW);
+  const enCost = (equivPowerW * 8760 * SLA * blendedEnergy * pue) / 1000;
 
   // Overhead: datacenter opex, staff, networking, real estate, profit margin
   // Declines over time as AI compute becomes commoditized
