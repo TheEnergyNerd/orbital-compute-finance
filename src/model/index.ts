@@ -8,6 +8,10 @@ export {
   SOLAR_CONSTANT,
   YEARS,
   SLA,
+  SLA_BY_INFRASTRUCTURE,
+  SLA_BY_WORKLOAD,
+  WORKLOAD_MIX,
+  CHECKPOINT_DEFAULTS,
   SHELLS,
   STARSHIP_PAYLOAD_KG,
   SHELL_COST_MULT,
@@ -87,3 +91,14 @@ export {
   getLunarUnlockYear,
   getCislunarLaunchCost
 } from './lunar';
+
+// Reliability and SLA
+export {
+  calculateEffectiveUptime,
+  calculateCheckpointEfficiency,
+  getSLAAdjustedLCOC,
+  getSLACostMultiplier,
+  getServableWorkloads,
+  getAddressableMarketFraction,
+  getOrbitalMTBF
+} from './reliability';

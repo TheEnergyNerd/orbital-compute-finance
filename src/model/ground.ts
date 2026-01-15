@@ -1,8 +1,9 @@
-import { SLA } from './constants';
+import { SLA, SLA_BY_INFRASTRUCTURE } from './constants';
 import type { Params, GroundResult } from './types';
 import { getGroundEfficiency } from './physics';
 import { getDemand, getGroundSupply, getBtmShare } from './market';
 import { getCRF } from './finance';
+import { calculateEffectiveUptime, calculateCheckpointEfficiency } from './reliability';
 
 export function calcGround(
   year: number,
@@ -23,6 +24,22 @@ export function calcGround(
 
   // BTM share for this year
   const yearBtmShare = getBtmShare(year, params);
+
+  // Ground SLA and reliability
+  // Hyperscaler ground achieves 99.9%, stranded/BTM assets may have lower SLA
+  // Blended SLA based on BTM share (BTM has lower reliability)
+  const hyperscalerSLA = SLA_BY_INFRASTRUCTURE.hyperscalerGround;
+  const strandedSLA = SLA_BY_INFRASTRUCTURE.strandedGround;
+  const targetSLA = params.groundSLA ?? (hyperscalerSLA * (1 - yearBtmShare) + strandedSLA * yearBtmShare);
+  
+  // Calculate effective uptime with checkpoint recovery for training workloads
+  const groundMTBF = params.groundMTBFHours ?? 8760;  // Default ~1 failure per year
+  const effectiveUptime = calculateEffectiveUptime(
+    targetSLA,
+    groundMTBF,
+    params.checkpointIntervalSec ?? 600,
+    params.recoveryTimeSec ?? 300
+  );
 
   // Hardware cost with WACC/CRF
   // GPU price declines ~16%/year (Moore's Law + competition)
@@ -141,6 +158,9 @@ export function calcGround(
     demand,
     groundSupply,
     totalSupply,
-    unmetRatio
+    unmetRatio,
+    // SLA and reliability
+    targetSLA,
+    effectiveUptime
   };
 }

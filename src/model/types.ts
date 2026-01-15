@@ -94,6 +94,14 @@ export interface Params {
 
   // Satellite manufacturing
   satBuildDelay: number;  // months to build a satellite (affects carrying costs)
+  
+  // SLA and reliability parameters
+  groundSLA: number;           // Ground datacenter SLA target (e.g., 0.999 = 99.9%)
+  orbitalSLA: number;          // Orbital infrastructure SLA target (e.g., 0.99 = 99%)
+  checkpointIntervalSec: number;  // Checkpoint interval for training workloads (seconds)
+  groundMTBFHours: number;     // Mean time between failures for ground (hours)
+  orbitalMTBFHours: number;    // Mean time between failures for orbital (hours)
+  recoveryTimeSec: number;     // Time to recover from failure and resume (seconds)
 }
 
 export interface Shell {
@@ -171,6 +179,10 @@ export interface SatelliteResult {
   binding: 'power' | 'thermal' | 'comms';
   margins: ConstraintMargins;
   invalidReason?: string;       // If design is physically impossible
+  // SLA and reliability
+  targetSLA: number;             // Target SLA for this shell
+  effectiveUptime: number;       // Effective uptime after checkpoint recovery
+  checkpointEfficiency: number;  // Fraction of compute not lost to checkpointing overhead
 }
 
 export interface GroundResult {
@@ -184,6 +196,9 @@ export interface GroundResult {
   groundSupply: number;
   totalSupply: number;
   unmetRatio: number;
+  // SLA and reliability
+  targetSLA: number;             // Target SLA for ground
+  effectiveUptime: number;       // Effective uptime after checkpoint recovery
 }
 
 export interface FleetResult {

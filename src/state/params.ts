@@ -117,5 +117,15 @@ export const defaults: Params = {
   btmEnergyCost: 0.04,   // $/kWh LCOS for solar+storage
 
   // Satellite manufacturing
-  satBuildDelay: 24      // Months to build a satellite (affects carrying costs via IDC)
+  satBuildDelay: 24,      // Months to build a satellite (affects carrying costs via IDC)
+  
+  // SLA and reliability parameters
+  // Ground: Hyperscaler standard is 99.9%, but training workloads can tolerate less
+  // Orbital: Conservative 99% target - training is checkpoint-resilient
+  groundSLA: 0.999,           // 99.9% uptime target for ground
+  orbitalSLA: 0.99,           // 99% uptime target for orbital (training-focused)
+  checkpointIntervalSec: 600, // 10 minutes between checkpoints (standard for large training)
+  groundMTBFHours: 8760,      // ~1 failure per year for well-run ground DC
+  orbitalMTBFHours: 2190,     // ~4 failures per year for orbital (radiation, thermal cycles)
+  recoveryTimeSec: 300        // 5 minutes to recover from failure and resume training
 };

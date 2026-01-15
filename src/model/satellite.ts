@@ -1,4 +1,4 @@
-import { SLA, SOLAR_CONSTANT } from './constants';
+import { SLA, SOLAR_CONSTANT, SLA_BY_INFRASTRUCTURE } from './constants';
 import type { Params, SatelliteResult, ConstraintLimits, ConstraintMargins } from './types';
 import {
   getLEOPower,
@@ -14,6 +14,11 @@ import {
 import { getShellRadiationEffects } from './orbital';
 import { getCRF } from './finance';
 import { getDemandPressure } from './market';
+import { 
+  calculateEffectiveUptime, 
+  calculateCheckpointEfficiency,
+  getOrbitalMTBF 
+} from './reliability';
 
 /**
  * Calculate satellite economics including LCOC (Levelized Cost of Compute).
@@ -30,6 +35,26 @@ export function calcSatellite(
   const hasFusion = params.fusionOn && year >= params.fusionYear;
   const hasThermoCompute = params.thermoOn && year >= params.thermoYear;
   const hasPhotonicCompute = params.photonicOn && year >= params.photonicYear;
+
+  // Shell-specific SLA (from constants or params)
+  // Different shells have different reliability profiles
+  const shellSLAMap: Record<string, number> = {
+    leo: SLA_BY_INFRASTRUCTURE.leoOrbital,
+    meo: SLA_BY_INFRASTRUCTURE.leoOrbital * 0.9, // Van Allen belts harsh
+    geo: SLA_BY_INFRASTRUCTURE.geoOrbital,
+    cislunar: SLA_BY_INFRASTRUCTURE.cislunarOrbital
+  };
+  const targetSLA = params.orbitalSLA ?? shellSLAMap[shell] ?? SLA_BY_INFRASTRUCTURE.leoOrbital;
+  
+  // Calculate effective uptime with checkpoint recovery for training workloads
+  const orbitalMTBF = getOrbitalMTBF(year, shell, params);
+  const effectiveUptime = calculateEffectiveUptime(
+    targetSLA,
+    orbitalMTBF,
+    params.checkpointIntervalSec ?? 600,
+    params.recoveryTimeSec ?? 300
+  );
+  const checkpointEfficiency = calculateCheckpointEfficiency(params.checkpointIntervalSec ?? 600);
 
   // Platform specifications - use correct power function based on shell
   const powerKw = (shell === 'cislunar')
@@ -559,9 +584,19 @@ export function calcSatellite(
   const fissionBwDiscount = useFission ? 0.5 : 1.0;
   const annualBwCost = dataRateGbps * params.bwCost * 1000 * bwCostLearn * fissionBwDiscount;
   const annual = annualCapex + annualMaint + annualBwCost;
-  const gpuHrs = gpuEq * 8760 * SLA;
-  // LCOC (Levelized Cost of Compute): production cost per GPU-hr assuming 100% sellability
-  // This is the marginal production cost. For delivered cost accounting for unsold capacity
+  
+  // GPU-hours calculation using shell-specific SLA and effective uptime
+  // effectiveUptime accounts for checkpoint recovery (training workloads can recover from failures)
+  // checkpointEfficiency accounts for time spent checkpointing vs computing
+  const combinedEfficiency = effectiveUptime * checkpointEfficiency;
+  const gpuHrs = gpuEq * 8760 * targetSLA * combinedEfficiency;
+  
+  // LCOC (Levelized Cost of Compute): production cost per GPU-hr
+  // This accounts for:
+  // 1. Shell-specific SLA (different reliability by orbit)
+  // 2. Effective uptime (checkpoint recovery for training)
+  // 3. Checkpoint efficiency (overhead from periodic saves)
+  // For delivered cost accounting for unsold capacity
   // (demand/bandwidth/slot constraints), see fleet.lcocEffective which divides by sellableUtil
   const lcoc = gpuHrs > 0 ? annual / gpuHrs : Infinity;
 
@@ -627,6 +662,10 @@ export function calcSatellite(
     limits,
     binding,
     margins,
-    invalidReason
+    invalidReason,
+    // SLA and reliability
+    targetSLA,
+    effectiveUptime,
+    checkpointEfficiency
   };
 }
