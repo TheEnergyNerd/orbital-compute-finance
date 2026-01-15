@@ -91,9 +91,51 @@ export function calcGround(
   // Overhead: datacenter opex, staff, real estate, profit margin
   // Based on SemiAnalysis: hosting subtotal = $2,807/yr/GPU = ~$0.32/hr
   // Declines over time as AI compute becomes commoditized
-  // 2026: $0.32/hr → 2050: $0.15/hr (commodity infrastructure)
-  const overheadBase = 0.32 * Math.pow(0.96, t);  // 4% annual decline
-  const overheadFloor = 0.15;  // Minimum overhead (physical limits)
+  // 
+  // OVERHEAD BREAKDOWN ($/hr):
+  //   Automatable by robots ($0.17):
+  //     - Security guards: $0.05 → robots/drones
+  //     - NOC staff: $0.05 → remote ops + AI monitoring
+  //     - Cooling maintenance: $0.03 → predictive maint + robot repair
+  //     - Provider margin (half): $0.04 → competition compresses
+  //   Irreducible real estate ($0.15):
+  //     - Building lease: $0.08 → physical space has inherent cost
+  //     - Property tax/insurance: $0.04 → required for physical assets
+  //     - Network transit: $0.02 → fiber/peering contracts
+  //     - Provider margin (half): $0.01 → minimum viable margin
+  //
+  // With robot automation: floor drops from $0.15/hr to $0.08/hr
+  // Timeline: gradual over robotsMaturityYears as fleet scales
+  
+  const AUTOMATABLE_OVERHEAD = 0.17;   // Security, NOC, cooling OPEX, half margin
+  const REAL_ESTATE_OVERHEAD = 0.15;   // Building, network, insurance, half margin
+  const BASE_OVERHEAD = AUTOMATABLE_OVERHEAD + REAL_ESTATE_OVERHEAD;  // $0.32/hr
+  
+  // Robot automation reduces labor-dependent overhead
+  const hasRobots = params.robotsOn && year >= params.robotsYear;
+  const robotMaturity = hasRobots 
+    ? Math.min(1, (year - params.robotsYear) / params.robotsMaturityYears) 
+    : 0;
+  
+  // Gradual reduction: S-curve adoption (slow start, fast middle, slow end)
+  // Uses logistic function for realistic technology adoption
+  const robotAdoptionCurve = robotMaturity > 0 
+    ? 1 / (1 + Math.exp(-10 * (robotMaturity - 0.5)))  // S-curve centered at 50% maturity
+    : 0;
+  
+  const autoReduction = robotAdoptionCurve * params.robotsMaxReduction;
+  const effectiveAutoOverhead = AUTOMATABLE_OVERHEAD * (1 - autoReduction);
+  
+  // Total overhead with robot impact
+  const overheadBase = (effectiveAutoOverhead + REAL_ESTATE_OVERHEAD) * Math.pow(0.96, t);
+  
+  // Floor depends on robot deployment
+  // Without robots: $0.15/hr (real estate + minimal ops)
+  // With robots at maturity: $0.08/hr (just real estate)
+  const baseFloor = 0.15;
+  const robotFloor = 0.08;
+  const overheadFloor = baseFloor - (baseFloor - robotFloor) * robotAdoptionCurve;
+  
   const overhead = Math.max(overheadFloor, overheadBase) * 8760 * SLA;
 
   // Utilization factor: datacenters don't run at 100% - typical 60-80%
@@ -156,6 +198,9 @@ export function calcGround(
   const gridCarbon = 380 * Math.pow(0.97, t);
   const carbonPerTflop = gridCarbon * (pue / gflopsW) + 5;
 
+  // Calculate actual hourly overhead for reporting
+  const overheadPerHr = Math.max(overheadFloor, overheadBase);
+
   return {
     year,
     base,
@@ -169,6 +214,10 @@ export function calcGround(
     unmetRatio,
     // SLA and reliability
     targetSLA,
-    effectiveUptime
+    effectiveUptime,
+    // Robot automation impact
+    overheadPerHr,
+    overheadFloor,
+    robotMaturity
   };
 }

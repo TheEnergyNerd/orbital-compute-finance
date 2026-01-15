@@ -92,6 +92,12 @@ export interface Params {
   btmCapexMult: number;
   btmEnergyCost: number;
 
+  // Humanoid robot automation
+  robotsOn: boolean;           // Humanoid robots deployed in datacenters
+  robotsYear: number;          // Year robot automation begins
+  robotsMaturityYears: number; // Years to full maturity
+  robotsMaxReduction: number;  // Max reduction in automatable overhead (0-1)
+
   // Satellite manufacturing
   satBuildDelay: number;  // months to build a satellite (affects carrying costs)
   
@@ -199,6 +205,10 @@ export interface GroundResult {
   // SLA and reliability
   targetSLA: number;             // Target SLA for ground
   effectiveUptime: number;       // Effective uptime after checkpoint recovery
+  // Robot automation impact
+  overheadPerHr: number;         // Current overhead $/hr
+  overheadFloor: number;         // Current floor $/hr (drops with robots)
+  robotMaturity: number;         // Robot deployment maturity (0-1)
 }
 
 export interface FleetResult {

@@ -94,8 +94,8 @@ export const defaults: Params = {
   orbitalEligibleShare: 0.35,  // Fraction of demand that is latency-tolerant
 
   // Cost of capital
-  waccOrbital: 0.18,     // Orbital WACC (high-risk space infrastructure)
-  waccGround: 0.13,      // Ground WACC (datacenter capital)
+  waccOrbital: 0.18,     // Orbital WACC (maturing industry, SpaceX routine access)
+  waccGround: 0.13,      // Ground WACC (SemiAnalysis: 13% IRR for datacenter capital)
 
   // Ground constraints
   groundPue: 1.3,        // Power Usage Effectiveness
@@ -108,6 +108,15 @@ export const defaults: Params = {
   demandGrowth: 0.55,    // Annual demand growth rate (AI compute ~4x/yr historically)
   supply2025: 60,        // 2025 ground supply (GW) - actual global AI-ready DC capacity
   supplyGrowth: 0.08,    // 8% annual growth (constrained by interconnect, chips, fabs)
+
+  // Humanoid robot automation
+  // Tesla Optimus, Figure, Boston Dynamics - datacenter operations automation
+  // Reduces labor-dependent overhead (security, NOC, maintenance)
+  // Does NOT reduce real estate costs (leases, property tax, insurance)
+  robotsOn: false,       // Humanoid robots deployed in datacenters
+  robotsYear: 2032,      // Year robot automation begins (conservative)
+  robotsMaturityYears: 8, // Years to full maturity (gradual rollout)
+  robotsMaxReduction: 0.70, // Max reduction in automatable overhead (70%)
 
   // Behind-the-meter generation
   // Behind-the-meter / stranded assets (Gulf gas, Nordic wind/hydro)
