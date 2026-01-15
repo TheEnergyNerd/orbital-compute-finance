@@ -110,11 +110,15 @@ export const defaults: Params = {
   supplyGrowth: 0.08,    // 8% annual growth (constrained by interconnect, chips, fabs)
 
   // Behind-the-meter generation
+  // Behind-the-meter / stranded assets (Gulf gas, Nordic wind/hydro)
+  // SemiAnalysis: These offer ~$1/GPU-hr but limited capacity and 99% SLA
+  // Two types: (1) New BTM solar+storage, (2) Existing stranded power
+  // Model blends toward stranded assets which have lower CAPEX premium
   btmShare: 0.15,        // 15% of new ground capacity is BTM in 2026
   btmShareGrowth: 0.02,  // Base growth rate per year
   btmDelay: 12,          // Months to deploy BTM (vs interconnect for grid)
-  btmCapexMult: 1.35,    // 35% higher capex for on-site generation
-  btmEnergyCost: 0.04,   // $/kWh LCOS for solar+storage
+  btmCapexMult: 1.15,    // 15% higher capex (stranded needs less infra than new BTM)
+  btmEnergyCost: 0.025,  // $/kWh blended stranded (Gulf gas ~$0.02, Nordic ~$0.03)
 
   // Satellite manufacturing
   satBuildDelay: 24,      // Months to build a satellite (affects carrying costs via IDC)

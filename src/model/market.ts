@@ -24,16 +24,22 @@ export function getDemand(year: number, params: Params): number {
  * BTM share responds dynamically to interconnection pain and energy costs.
  * Higher interconnect delays and energy costs push more capacity to BTM.
  * 
+ * IMPORTANT: BTM/stranded assets are LIMITED by definition.
+ * Gulf gas flaring, Nordic curtailed wind, etc. are finite resources.
+ * Cap at 25% of new capacity (was 50% - too aggressive)
+ * 
  * @param year - Simulation year
  * @param params - Model parameters
- * @returns BTM share as fraction (0-0.5)
+ * @returns BTM share as fraction (0-0.25)
  */
 export function getBtmShare(year: number, params: Params): number {
   const t = year - 2026;
   const queuePain = params.interconnect / 36;  // normalized to 36-month baseline
   const energyPain = params.energyCost / 0.065; // normalized to baseline
   const btmIncentive = (queuePain + energyPain) / 2;
-  return Math.min(0.5, params.btmShare * btmIncentive + t * params.btmShareGrowth);
+  // Cap at 25% - stranded power is stranded because it's LIMITED
+  // Gulf gas flaring + Nordic curtailed wind + other stranded = maybe 20-30 GW globally
+  return Math.min(0.25, params.btmShare * btmIncentive + t * params.btmShareGrowth);
 }
 
 /**
