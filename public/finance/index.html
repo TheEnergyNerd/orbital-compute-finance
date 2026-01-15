@@ -1079,11 +1079,11 @@ function initCharts() {
   charts.lcoc = new Chart(document.getElementById('c-lcoc'), {
     type: 'line', data: { labels: YEARS, datasets: [
       // Aggressive bound (upper for uncertainty)
-      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '+1', tension: 0.3, pointRadius: 0 },
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: false, tension: 0.3, pointRadius: 0 },
       // Baseline orbital
       { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
       // Conservative bound (lower)
-      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 },
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: false, tension: 0.3, pointRadius: 0 },
       // Ground market price (solid)
       { data: [], borderColor: '#cc3333', borderWidth: 2, tension: 0.3, pointRadius: 0 },
       // Ground base cost (dotted)
@@ -1256,11 +1256,11 @@ function initCharts() {
   charts.lcocScenarios = new Chart(document.getElementById('c-lcocScenarios'), {
     type: 'line', data: { labels: YEARS, datasets: [
       // Aggressive bound (upper)
-      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '+1', tension: 0.3, pointRadius: 0 },
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: false, tension: 0.3, pointRadius: 0 },
       // Baseline orbital
       { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
       // Conservative bound (lower)
-      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 },
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: false, tension: 0.3, pointRadius: 0 },
       // Ground market (solid)
       { data: [], borderColor: '#cc3333', borderWidth: 2, tension: 0.3, pointRadius: 0 },
       // Ground base (dotted)
@@ -1271,22 +1271,22 @@ function initCharts() {
   charts.carbonScenarios = new Chart(document.getElementById('c-carbonScenarios'), {
     type: 'line', data: { labels: YEARS, datasets: [
       // Aggressive bound
-      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '+1', tension: 0.3, pointRadius: 0 },
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: false, tension: 0.3, pointRadius: 0 },
       // Baseline
       { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
       // Conservative bound
-      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 }
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: false, tension: 0.3, pointRadius: 0 }
     ]}, options: opts('gCO₂/TFLOP-hr')
   });
   
   charts.effScenarios = new Chart(document.getElementById('c-effScenarios'), {
     type: 'line', data: { labels: YEARS, datasets: [
       // Aggressive bound
-      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '+1', tension: 0.3, pointRadius: 0 },
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: false, tension: 0.3, pointRadius: 0 },
       // Baseline
       { data: [], borderColor: '#0066cc', borderWidth: 2, tension: 0.3, pointRadius: 0 },
       // Conservative bound
-      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: '-1', tension: 0.3, pointRadius: 0 }
+      { data: [], borderColor: 'transparent', backgroundColor: 'rgba(0,102,204,0.2)', fill: false, tension: 0.3, pointRadius: 0 }
     ]}, options: opts('GFLOPS/W', true)
   });
 }
