@@ -65,9 +65,9 @@ export function initCharts(): void {
         data: {
           labels: YEARS,
           datasets: [
-            { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '+1', tension: 0.3, pointRadius: 0 },
+            { data: [], borderColor: COLORS.transparent, fill: false, tension: 0.3, pointRadius: 0 },
             { data: [], borderColor: COLORS.orbital, borderWidth: 2, tension: 0.3, pointRadius: 0 },
-            { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '-1', tension: 0.3, pointRadius: 0 },
+            { data: [], borderColor: COLORS.transparent, fill: false, tension: 0.3, pointRadius: 0 },
             { data: [], borderColor: COLORS.ground, borderWidth: 2, tension: 0.3, pointRadius: 0 },
             { data: [], borderColor: COLORS.ground, borderWidth: 1.5, borderDash: [4, 4], tension: 0.3, pointRadius: 0, label: 'Ground (base)' }
           ]
@@ -87,9 +87,9 @@ export function initCharts(): void {
         data: {
           labels: YEARS,
           datasets: [
-            { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '+1', tension: 0.3, pointRadius: 0 },
+            { data: [], borderColor: COLORS.transparent, fill: false, tension: 0.3, pointRadius: 0 },
             { data: [], borderColor: COLORS.orbital, borderWidth: 2, tension: 0.3, pointRadius: 0 },
-            { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '-1', tension: 0.3, pointRadius: 0 },
+            { data: [], borderColor: COLORS.transparent, fill: false, tension: 0.3, pointRadius: 0 },
             { data: [], borderColor: COLORS.ground, borderWidth: 2, tension: 0.3, pointRadius: 0 },
             { data: [], borderColor: COLORS.ground, borderWidth: 1.5, borderDash: [4, 4], tension: 0.3, pointRadius: 0 }
           ]
@@ -425,9 +425,9 @@ export function initCharts(): void {
       data: {
         labels: YEARS,
         datasets: [
-          { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '+1', tension: 0.3, pointRadius: 0 },
+          { data: [], borderColor: COLORS.transparent, fill: false, tension: 0.3, pointRadius: 0 },
           { data: [], borderColor: COLORS.orbital, borderWidth: 2, tension: 0.3, pointRadius: 0 },
-          { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '-1', tension: 0.3, pointRadius: 0 },
+          { data: [], borderColor: COLORS.transparent, fill: false, tension: 0.3, pointRadius: 0 },
           { data: [], borderColor: COLORS.ground, borderWidth: 2, tension: 0.3, pointRadius: 0 },
           { data: [], borderColor: COLORS.ground, borderWidth: 1.5, borderDash: [4, 4], tension: 0.3, pointRadius: 0 }
         ]
@@ -444,9 +444,9 @@ export function initCharts(): void {
       data: {
         labels: YEARS,
         datasets: [
-          { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '+1', tension: 0.3, pointRadius: 0 },
+          { data: [], borderColor: COLORS.transparent, fill: false, tension: 0.3, pointRadius: 0 },
           { data: [], borderColor: COLORS.orbital, borderWidth: 2, tension: 0.3, pointRadius: 0 },
-          { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '-1', tension: 0.3, pointRadius: 0 }
+          { data: [], borderColor: COLORS.transparent, fill: false, tension: 0.3, pointRadius: 0 }
         ]
       },
       options: opts('gCO₂/TFLOP-hr')
@@ -461,9 +461,9 @@ export function initCharts(): void {
       data: {
         labels: YEARS,
         datasets: [
-          { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '+1', tension: 0.3, pointRadius: 0 },
+          { data: [], borderColor: COLORS.transparent, fill: false, tension: 0.3, pointRadius: 0 },
           { data: [], borderColor: COLORS.orbital, borderWidth: 2, tension: 0.3, pointRadius: 0 },
-          { data: [], borderColor: COLORS.transparent, backgroundColor: COLORS.orbitalFill, fill: '-1', tension: 0.3, pointRadius: 0 }
+          { data: [], borderColor: COLORS.transparent, fill: false, tension: 0.3, pointRadius: 0 }
         ]
       },
       options: opts('GFLOPS/W', true)
