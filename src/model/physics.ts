@@ -126,14 +126,32 @@ export function getRadiatorPower(params: Params): number {
  * Calculate ground compute efficiency (GFLOPS/W) for a given year.
  * Applies demand-coupled Wright's Law learning and workload-weighted
  * multipliers for photonic (deterministic) and thermodynamic (probabilistic) computing.
+ * 
+ * PHYSICAL LIMITS:
+ * - Silicon: ~100,000 GFLOPS/W theoretical max (Landauer limit + real losses)
+ * - Current H100: 2,800 GFLOPS/W (2023)
+ * - Learning rate slows as we approach limits
  */
 export function getGroundEfficiency(year: number, params: Params): number {
+  // Physical ceiling for silicon-based compute (GFLOPS/W)
+  // Beyond this requires fundamentally new physics (photonic, quantum, etc.)
+  const SILICON_EFFICIENCY_CEILING = 100000;
+  
   let baseEff = 2800; // H100 baseline: 2800 GFLOPS/W
   for (let y = 2026; y < year; y++) {
     const demandPressure = getDemandPressure(y, params);
     const groundLearningMult = 0.7 + 0.3 * demandPressure; // 0.76x to 1.3x
+    
+    // Learning rate decays as we approach ceiling (S-curve)
+    // At 50% of ceiling, learning is halved; at 90%, learning is 10%
+    const ceilingProximity = baseEff / SILICON_EFFICIENCY_CEILING;
+    const ceilingPenalty = Math.max(0.05, 1 - ceilingProximity);
+    
     const baseLearn = Math.max(0.03, params.aiLearn - (y - 2026) * 0.007);
-    baseEff *= (1 + baseLearn * groundLearningMult);
+    baseEff *= (1 + baseLearn * groundLearningMult * ceilingPenalty);
+    
+    // Hard cap at ceiling
+    baseEff = Math.min(baseEff, SILICON_EFFICIENCY_CEILING);
   }
 
   // SMR/Fusion efficiency boost: abundant cheap power enables
@@ -170,15 +188,28 @@ export function getGroundEfficiency(year: number, params: Params): number {
  * Calculate orbital compute efficiency (GFLOPS/W) for a given year.
  * Applies radiation penalty and workload-weighted multipliers.
  * Space benefits from vacuum optics (photonic) and passive cryo cooling (thermodynamic).
+ * 
+ * PHYSICAL LIMITS: Same silicon ceiling as ground (~100k GFLOPS/W)
  */
 export function getOrbitalEfficiency(year: number, params: Params): number {
+  // Physical ceiling for silicon-based compute
+  const SILICON_EFFICIENCY_CEILING = 100000;
+  
   // Get base efficiency with demand-coupled learning (without paradigm multipliers)
   let baseEff = 2800;
   for (let y = 2026; y < year; y++) {
     const demandPressure = getDemandPressure(y, params);
     const groundLearningMult = 0.7 + 0.3 * demandPressure; // 0.76x to 1.3x
+    
+    // Learning rate decays as we approach ceiling (S-curve)
+    const ceilingProximity = baseEff / SILICON_EFFICIENCY_CEILING;
+    const ceilingPenalty = Math.max(0.05, 1 - ceilingProximity);
+    
     const baseLearn = Math.max(0.03, params.aiLearn - (y - 2026) * 0.007);
-    baseEff *= (1 + baseLearn * groundLearningMult);
+    baseEff *= (1 + baseLearn * groundLearningMult * ceilingPenalty);
+    
+    // Hard cap at ceiling
+    baseEff = Math.min(baseEff, SILICON_EFFICIENCY_CEILING);
   }
 
   // NOTE: Radiation penalty is now applied in satellite.ts via radDirectPenalty
@@ -402,8 +433,16 @@ export function getTokensPerYear(tflops: number, params: Params, availability = 
  * - More mass → more solar panels → more power → more compute
  * - At $15/kg, a 100-ton satellite is economically viable
  * - At $1500/kg, you optimize for mass → 20-ton satellites
+ * 
+ * PHYSICAL LIMITS:
+ * - Structural: ~50 MW max for deployable solar arrays (ISS-derived)
+ * - Orbital mechanics: massive platforms have drag/debris concerns
+ * - Manufacturing: Even SpaceX-scale production has limits
  */
 export function getLEOPower(year: number, params: Params): number {
+  // Maximum LEO platform power (kW) - physical/practical limit
+  const MAX_LEO_SOLAR_POWER = 20000;  // 20 MW - very aggressive but theoretically achievable
+  
   const t = year - 2026;
   const hasThermal = params.thermalOn && year >= params.thermalYear;
   const hasFission = params.fissionOn && year >= params.fissionYear;
@@ -430,8 +469,8 @@ export function getLEOPower(year: number, params: Params): number {
     thermalMult = 1.0 + thermalMaturity * 4.0; // 1x → 5x over 20 years
   }
   
-  // Final solar power combines all multipliers smoothly
-  let solarPower = basePower * starshipMult * thermalMult;
+  // Final solar power combines all multipliers smoothly, capped at physical limit
+  let solarPower = Math.min(MAX_LEO_SOLAR_POWER, basePower * starshipMult * thermalMult);
 
   // FUSION POWER IN LEO
   let fusionPower = 0;

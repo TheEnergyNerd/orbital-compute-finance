@@ -43,7 +43,10 @@ export function calcGround(
 
   // Hardware cost with WACC/CRF
   // GPU price declines ~16%/year (Moore's Law + competition)
-  const gpuPrice = 25000 * Math.pow(0.84, t);
+  // BUT has a floor: wafer costs, packaging, testing, R&D amortization
+  // Even commodity chips cost $50-100, high-perf compute has $500-2000 floor
+  const GPU_PRICE_FLOOR = 1000;  // Minimum viable GPU-eq price
+  const gpuPrice = Math.max(GPU_PRICE_FLOOR, 25000 * Math.pow(0.84, t));
   // Server overhead (chassis, power supplies) = 1.4x raw GPU cost
   const serverOverhead = gpuPrice * 1.4;
   // Networking (InfiniBand fabric, NDR switches, transceivers) = ~$3k/GPU in 2026
