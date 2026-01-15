@@ -95,7 +95,7 @@ export const defaults: Params = {
 
   // Cost of capital
   waccOrbital: 0.10,     // Orbital WACC (maturing industry, SpaceX routine access)
-  waccGround: 0.08,      // Ground WACC
+  waccGround: 0.12,      // Ground WACC (SemiAnalysis: 13% IRR for datacenter capital)
 
   // Ground constraints
   groundPue: 1.3,        // Power Usage Effectiveness

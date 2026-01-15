@@ -44,9 +44,13 @@ export function calcGround(
   // Hardware cost with WACC/CRF
   // GPU price declines ~16%/year (Moore's Law + competition)
   const gpuPrice = 25000 * Math.pow(0.84, t);
-  // Server overhead (chassis, networking, power supplies) = 1.5x raw GPU cost
-  // Note: /3 was wrong - that's depreciation, which CRF already handles
-  const hwCapex = (gpuPrice * 1.5) / (gflopsW / 2800);
+  // Server overhead (chassis, power supplies) = 1.4x raw GPU cost
+  const serverOverhead = gpuPrice * 1.4;
+  // Networking (InfiniBand fabric, NDR switches, transceivers) = ~$3k/GPU in 2026
+  // Declines with GPU price due to shared learning curves (NVLink/InfiniBand integration)
+  // SemiAnalysis: InfiniBand is 15-20% of cluster CAPEX for 100k GPU systems
+  const networkingPerGpu = 3000 * Math.pow(0.84, t);
+  const hwCapex = (serverOverhead + networkingPerGpu) / (gflopsW / 2800);
 
   // Apply capex premium for BTM portion
   const btmCapexOverhead = yearBtmShare * (params.btmCapexMult - 1);
@@ -81,10 +85,11 @@ export function calcGround(
   const equivPowerW = baselinePowerW * (baselineGflopsW / gflopsW);
   const enCost = (equivPowerW * 8760 * SLA * blendedEnergy * pue) / 1000;
 
-  // Overhead: datacenter opex, staff, networking, real estate, profit margin
+  // Overhead: datacenter opex, staff, real estate, profit margin
+  // Based on SemiAnalysis: hosting subtotal = $2,807/yr/GPU = ~$0.32/hr
   // Declines over time as AI compute becomes commoditized
-  // 2026: $0.50/hr (cloud premium) → 2050: $0.15/hr (commodity)
-  const overheadBase = 0.50 * Math.pow(0.95, t);  // 5% annual decline
+  // 2026: $0.32/hr → 2050: $0.15/hr (commodity infrastructure)
+  const overheadBase = 0.32 * Math.pow(0.96, t);  // 4% annual decline
   const overheadFloor = 0.15;  // Minimum overhead (physical limits)
   const overhead = Math.max(overheadFloor, overheadBase) * 8760 * SLA;
 
