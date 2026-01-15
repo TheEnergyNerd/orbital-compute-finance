@@ -94,8 +94,8 @@ export const defaults: Params = {
   orbitalEligibleShare: 0.35,  // Fraction of demand that is latency-tolerant
 
   // Cost of capital
-  waccOrbital: 0.10,     // Orbital WACC (maturing industry, SpaceX routine access)
-  waccGround: 0.12,      // Ground WACC (SemiAnalysis: 13% IRR for datacenter capital)
+  waccOrbital: 0.18,     // Orbital WACC (high-risk space infrastructure)
+  waccGround: 0.13,      // Ground WACC (datacenter capital)
 
   // Ground constraints
   groundPue: 1.3,        // Power Usage Effectiveness
