@@ -466,15 +466,44 @@ export function calcSatellite(
   // Component costs with SMOOTH COTS blend (no discontinuities)
   // Uses cotsBlend to interpolate between rad-hard ($500/kg) and COTS ($100/kg)
   const COMPONENT_COSTS_PER_KG = {
-    battery: 500,     // $/kg - space-rated Li-ion (not commodity!)
+    battery: 10000,   // $/kg - space-grade Li-ion (~$50k/kWh at 200 Wh/kg density)
     compute: 50000 - cotsBlend * 42000,     // 50k→8k smoothly
-    radiator: 5000,   // $/kg - deployable radiator systems
+    radiator: 1000,   // $/kg - radiator panel mass only (heat transport costed separately)
     shield: 1000 - cotsBlend * 800,         // 1k→200 smoothly
     structure: 3000,  // $/kg - composite bus structure
     avionics: 100000 - cotsBlend * 80000,   // 100k→20k smoothly
     propulsion: 8000, // $/kg - electric propulsion + propellant
     aocs: 15000 - cotsBlend * 10000,        // 15k→5k smoothly
   };
+
+  // =====================================================
+  // THERMAL SUBSYSTEM COSTING (per kW rejected basis)
+  // =====================================================
+  // Reference: Spacecraft Thermal Control Handbook, ISS ATCS
+  // Flight radiator subsystem is NOT just sheet metal - includes:
+  //   - Radiator panels (honeycomb aluminum, coatings)
+  //   - Heat transport (LHPs, heat pipes, pumped loops)
+  //   - Deployment mechanisms (hinges, motors, latches)
+  //   - Thermal control electronics (sensors, valves, software)
+  //   - Integration & qualification (TVAC, thermal balance)
+  //
+  // Pricing ranges ($/kW rejected):
+  //   - Aggressive (Starlink-style): $50k-$100k/kW
+  //   - Base case (first-of-kind): $300k-$400k/kW
+  //   - Traditional (GEO comsat): $500k-$1.2M/kW
+  //
+  // Learning curve: 15%/yr as volume production kicks in
+  const thermalLearnRate = 0.15;
+  const thermalBaseCostPerKw = 400000;  // $400k/kW base case (2026)
+  const thermalFloorPerKw = 50000;      // $50k/kW floor (Starlink-style at scale)
+  const thermalCostPerKw = Math.max(
+    thermalFloorPerKw,
+    thermalBaseCostPerKw * prodMult * Math.pow(1 - thermalLearnRate, t)
+  );
+  
+  // Total thermal waste to reject = GPU waste + fusion waste (if applicable)
+  const totalThermalRejectKw = actualGpuWasteKwFinal + (hasFusion ? fusionWasteKw : 0);
+  const thermalSubsystemCost = totalThermalRejectKw * thermalCostPerKw;
 
   // OPTICAL COMMUNICATION TERMINALS
   // High-bandwidth laser links: $5-20M per terminal in 2026, improving with volume
@@ -526,8 +555,10 @@ export function calcSatellite(
   }
   const mfgCostBatt = battMass * COMPONENT_COSTS_PER_KG.battery * prodMult;
   const mfgCostCompute = compMass * COMPONENT_COSTS_PER_KG.compute * prodMult;
-  // Radiator cost with area scaling
-  const mfgCostRadiator = radMass * COMPONENT_COSTS_PER_KG.radiator * prodMult * radAreaScaleFactor;
+  // Thermal: Use per-kW-rejected pricing (includes panels, heat transport, deployment, electronics)
+  // This replaces the old per-kg radiator costing which significantly underpriced thermal systems
+  // Reference: Flight radiator subsystem = $40M for 100 kW rejection (base case 2026)
+  const mfgCostThermal = thermalSubsystemCost * radAreaScaleFactor;
   const mfgCostShield = shieldMass * COMPONENT_COSTS_PER_KG.shield * prodMult;
   const mfgCostStruct = structMass * COMPONENT_COSTS_PER_KG.structure * prodMult;
   // Avionics: FIXED cost, not per-kg (economies of scale)
@@ -536,7 +567,7 @@ export function calcSatellite(
   const mfgCostAocs = aocsMass * COMPONENT_COSTS_PER_KG.aocs * prodMult;
 
   const hardwareCost = mfgCostPower + mfgCostBatt + mfgCostCompute +
-                       mfgCostRadiator + mfgCostShield + mfgCostStruct +
+                       mfgCostThermal + mfgCostShield + mfgCostStruct +
                        mfgCostAvionics + mfgCostPropulsion + mfgCostAocs + opticalCommsCost;
 
   // INTEGRATION & TEST: Sub-linear scaling with hardware cost
